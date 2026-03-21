@@ -1,0 +1,15 @@
+meta {
+  name: Current Weather
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/weather/current
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

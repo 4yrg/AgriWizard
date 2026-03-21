@@ -1,0 +1,15 @@
+meta {
+  name: Decision Summary
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/analytics/decisions/summary
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
