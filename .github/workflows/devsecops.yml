@@ -8,10 +8,7 @@ on:
       - "docker-compose.yml"
       - ".github/workflows/devsecops.yml"
   pull_request:
-    branches: ["main", "development"]
-    paths:
-      - "services/**"
-      - "docker-compose.yml"
+    branches: [ "main", "development" ]
 
   workflow_dispatch:
 
@@ -25,6 +22,13 @@ jobs:
   lint-and-fmt:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service_path:
+          - services/iam-service
+          - services/hardware-service
+          - services/analytics-service
+          - services/weather-service
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -39,6 +43,7 @@ jobs:
         with:
           version: v1.64.8
           install-mode: goinstall
+          working-directory: ${{ matrix.service_path }}
           args: --timeout=5m --enable-all
 
   # Security scanning with Trivy
