@@ -1,0 +1,195 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────
+#  AgriWizard — Smart Greenhouse Monorepo
+#  docker-compose.yml
+# ─────────────────────────────────────────────
+
+x-common-env: &common-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: agriwizard
+  DB_PASSWORD: agriwizard_secret
+  DB_NAME: agriwizard
+  JWT_SECRET: super-secret-jwt-key-change-in-production
+  GIN_MODE: release
+
+networks:
+  agriwizard-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+
+services:
+
+  # ────────────────────────────────────────────
+  #  Infrastructure
+  # ────────────────────────────────────────────
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: agriwizard-swagger-ui
+    restart: unless-stopped
+    environment:
+      SWAGGER_JSON: /app/swagger.yaml
+    volumes:
+      - ./swagger.yaml:/app/swagger.yaml:ro
+    networks:
+      - agriwizard-net
+    ports:
+      - "${SWAGGER_UI_PORT:-8090}:8080"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: agriwizard-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agriwizard
+      POSTGRES_PASSWORD: agriwizard_secret
+      POSTGRES_DB: agriwizard
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - agriwizard-net
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agriwizard -d agriwizard"]
+      interval: 100s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────
+  #  Microservices
+  # ────────────────────────────────────────────
+
+  iam-service:
+    build:
+      context: ./services/iam-service
+      dockerfile: Dockerfile
+    container_name: agriwizard-iam
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8081"
+      JWT_TTL_HOURS: "24"
+    networks:
+      - agriwizard-net
+    ports:
+      - "${IAM_PORT}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 1000s
+      timeout: 5s
+      retries: 5
+
+  hardware-service:
+    build:
+      context: ./services/hardware-service
+      dockerfile: Dockerfile
+    container_name: agriwizard-hardware
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8082"
+      MQTT_BROKER: "${MQTT_BROKER}"
+      MQTT_USERNAME: "${MQTT_USERNAME:-}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
+      ANALYTICS_SERVICE_URL: "http://analytics-service:8083"
+    networks:
+      - agriwizard-net
+    ports:
+      - "${HARDWARE_PORT}:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      iam-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
+      interval: 1000s
+      timeout: 5s
+      retries: 5
+
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: agriwizard-analytics
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8083"
+      HARDWARE_SERVICE_URL: "http://hardware-service:8082"
+      WEATHER_SERVICE_URL: "http://weather-service:8084"
+    networks:
+      - agriwizard-net
+    ports:
+      - "${ANALYTICS_PORT}:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      iam-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
+      interval: 1000s
+      timeout: 5s
+      retries: 5
+
+  weather-service:
+    build:
+      context: ./services/weather-service
+      dockerfile: Dockerfile
+    container_name: agriwizard-weather
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8084"
+      USE_MOCK: "true"          # Set to "false" and provide OWM_API_KEY for live data
+      OWM_API_KEY: ""           # Replace with your OpenWeatherMap API key
+      OWM_BASE_URL: "https://api.openweathermap.org/data/2.5"
+      LOCATION_LAT: "6.9271"
+      LOCATION_LON: "79.8612"
+      LOCATION_CITY: "Colombo"
+    networks:
+      - agriwizard-net
+    ports:
+      - "${WEATHER_PORT}:8084"
+    depends_on:
+      iam-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
+      interval: 1000s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────
+  #  API Gateway (KrakenD)
+  # ────────────────────────────────────────────
+
+  gateway:
+    image: devopsfaith/krakend:2.7
+    container_name: agriwizard-gateway
+    restart: unless-stopped
+    volumes:
+      - ./gateway/krakend.json:/etc/krakend/krakend.json:ro
+    networks:
+      - agriwizard-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      iam-service:
+        condition: service_healthy
+      hardware-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      weather-service:
+        condition: service_healthy
+    command: ["run", "-c", "/etc/krakend/krakend.json"]
