@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -219,14 +218,6 @@ func makeInternalRequest(method, url string, body []byte) (*http.Response, error
 	req.Header.Set("X-Internal-Service", "hardware-service")
 	client := &http.Client{Timeout: 5 * time.Second}
 	return client.Do(req)
-}
-
-// discardBody closes and discards the body to avoid resource leaks.
-func discardBody(r io.ReadCloser) {
-	if r != nil {
-		io.Copy(io.Discard, r)
-		r.Close()
-	}
 }
 
 func getEnv(key, fallback string) string {
