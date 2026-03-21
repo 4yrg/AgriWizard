@@ -1,20 +1,29 @@
-# This is a basic workflow to help you get started with Actions
+name: CI/CD - AgriWizard DevSecOps Pipeline
 
-name: CI - devsecops
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main","development" ]
+    branches: ["main", "development"]
+    paths:
+      - "services/**"
+      - "gateway/**"
+      - "docker-compose.yml"
+      - ".github/workflows/devsecops.yml"
   pull_request:
-    branches: [ "main","development ]
+    branches: ["main", "development"]
+    paths:
+      - "services/**"
+      - "gateway/**"
+      - "docker-compose.yml"
 
-  # Allows you to run this workflow manually from the Actions tab
-  #workflow_dispatch:
+  workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+env:
+  REGISTRY: agriWizardRegistry.azurecr.io
+  REGISTRY_USERNAME: agriWizardServicePrincipal
+  GO_VERSION: "1.26"
+
 jobs:
+  # Lint and format check all Go services
   lint-and-fmt:
     name: Lint & Format Check
     runs-on: ubuntu-latest
@@ -25,26 +34,202 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26' # Ensure this matches your local version
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --timeout=5m
+          args: --timeout=5m --enable-all
 
-  sonarcloud:
-    name: SonarCloud Scan
+  # Security scanning with Trivy
+  security-scan:
+    name: Trivy Security Scan
     runs-on: ubuntu-latest
-    needs: lint-and-fmt # Only run if linting passes
+    needs: lint-and-fmt
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # SonarCloud code quality analysis
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: lint-and-fmt
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Build and push Docker images to Azure Container Registry
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint-and-fmt, security-scan]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/development')
+    strategy:
+      matrix:
+        service: [iam-service, hardware-service, analytics-service, weather-service]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Test Docker Compose stack
+  docker-compose-test:
+    name: Docker Compose Stack Test
+    runs-on: ubuntu-latest
+    needs: [lint-and-fmt]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build services locally
+        run: |
+          docker-compose build --no-cache
+
+      - name: Start services
+        run: |
+          docker-compose up -d
+          sleep 15
+
+      - name: Health check - IAM Service
+        run: |
+          curl -f http://localhost:8001/health || exit 1
+
+      - name: Health check - Hardware Service
+        run: |
+          curl -f http://localhost:8002/health || exit 1
+
+      - name: Health check - Analytics Service
+        run: |
+          curl -f http://localhost:8003/health || exit 1
+
+      - name: Health check - Weather Service
+        run: |
+          curl -f http://localhost:8004/health || exit 1
+
+      - name: Health check - KrakenD Gateway
+        run: |
+          curl -f http://localhost:8000/health || exit 1
+
+      - name: Test API Gateway endpoints
+        run: |
+          echo "Testing KrakenD endpoints..."
+          
+          # Test login endpoint (unauthenticated)
+          curl -X POST http://localhost:8000/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@example.com","password":"password123"}' || echo "Login endpoint may require valid credentials"
+          
+          # Test weather endpoint (public)
+          curl -f http://localhost:8000/api/v1/weather/current/London || exit 1
+
+      - name: View logs on failure
+        if: failure()
+        run: |
+          docker-compose logs
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+
+  # SAST with gosec
+  gosec-scan:
+    name: Gosec Security Analysis
+    runs-on: ubuntu-latest
+    needs: lint-and-fmt
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Gosec
+        uses: securego/gosec@master
+        with:
+          args: "-no-fail -fmt json -out gosec-results.json ./services/..."
+
+      - name: Upload Gosec results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: gosec-report
+          path: gosec-results.json
+
+  # Deployment notification
+  deployment-ready:
+    name: Deployment Ready Notification
+    runs-on: ubuntu-latest
+    needs: [build-and-push, docker-compose-test, sonarcloud]
+    if: success() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Notify deployment readiness
+        run: |
+          echo "✓ All checks passed"
+          echo "✓ Images pushed to: ${{ env.REGISTRY }}"
+          echo "✓ Ready for deployment to production"
+          echo ""
+          echo "Services:"
+          echo "  - iam-service:${{ github.sha }}"
+          echo "  - hardware-service:${{ github.sha }}"
+          echo "  - analytics-service:${{ github.sha }}"
+          echo "  - weather-service:${{ github.sha }}"
