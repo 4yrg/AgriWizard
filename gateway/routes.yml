@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Traefik Dynamic Configuration (routes)
+#  Defines how HTTP paths are routed to backend services
+# ─────────────────────────────────────────────────────────────────────────────
+
+http:
+  routers:
+    # ────────────────────────────────────────────────────────────────────────────
+    # IAM Service Routes
+    # ────────────────────────────────────────────────────────────────────────────
+    iam:
+      rule: "PathPrefix(`/api/v1/iam`)"
+      service: iam-service
+      entryPoints:
+        - web
+      middlewares:
+        - corsHeaders
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # Hardware Service Routes
+    # ────────────────────────────────────────────────────────────────────────────
+    hardware:
+      rule: "PathPrefix(`/api/v1/hardware`)"
+      service: hardware-service
+      entryPoints:
+        - web
+      middlewares:
+        - corsHeaders
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # Analytics Service Routes
+    # ────────────────────────────────────────────────────────────────────────────
+    analytics:
+      rule: "PathPrefix(`/api/v1/analytics`)"
+      service: analytics-service
+      entryPoints:
+        - web
+      middlewares:
+        - corsHeaders
+
+    # ────────────────────────────────────────────────────────────────────────────
+    # Weather Service Routes
+    # ────────────────────────────────────────────────────────────────────────────
+    weather:
+      rule: "PathPrefix(`/api/v1/weather`)"
+      service: weather-service
+      entryPoints:
+        - web
+      middlewares:
+        - corsHeaders
+
+  services:
+    # ────────────────────────────────────────────────────────────────────────────
+    # Backend Service Definitions
+    # ────────────────────────────────────────────────────────────────────────────
+    iam-service:
+      loadBalancer:
+        servers:
+          - url: http://iam-service:8081
+
+    hardware-service:
+      loadBalancer:
+        servers:
+          - url: http://hardware-service:8082
+
+    analytics-service:
+      loadBalancer:
+        servers:
+          - url: http://analytics-service:8083
+
+    weather-service:
+      loadBalancer:
+        servers:
+          - url: http://weather-service:8084
+
+  middlewares:
+    corsHeaders:
+      headers:
+        addVaryHeader: true
+        accessControlAllowOriginList:
+          - "*"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Request-ID
+          - X-Internal-Service
+        accessControlMaxAge: 86400

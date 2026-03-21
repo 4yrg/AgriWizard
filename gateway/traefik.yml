@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Traefik Static Configuration
+#  Defines entry points, API settings, and file-based provider
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Global options
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Entrypoints (listening ports)
+entryPoints:
+  web:
+    address: :8080
+
+# Providers (where to find route definitions)
+providers:
+  file:
+    filename: /etc/traefik/routes.yml
+    watch: true  # Watch for changes and auto-reload
+
+# API and Dashboard
+api:
+  dashboard: false
+  debug: false
+
+# Logging
+log:
+  level: INFO
+  format: common
+
+# Formatters for common log format
+accessLog:
+  format: common
