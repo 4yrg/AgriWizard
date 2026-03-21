@@ -44,7 +44,7 @@ jobs:
           version: v1.64.8
           install-mode: goinstall
           working-directory: ${{ matrix.service_path }}
-          args: --timeout=5m --enable-all
+          args: --timeout=5m --config=../../.golangci.yml
 
   sonarcloud:
     name: SonarCloud Scan
