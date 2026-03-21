@@ -56,9 +56,10 @@ services:
       - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agriwizard -d agriwizard"]
-      interval: 100s
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # ────────────────────────────────────────────
   #  Microservices
@@ -76,6 +77,11 @@ services:
       JWT_TTL_HOURS: "24"
     networks:
       - agriwizard-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.iam.rule=PathPrefix(`/api/v1/iam`)"
+      - "traefik.http.routers.iam.entrypoints=web"
+      - "traefik.http.services.iam.loadbalancer.server.port=8081"
     ports:
       - "${IAM_PORT}:8081"
     depends_on:
@@ -83,9 +89,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
-      interval: 1000s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   hardware-service:
     build:
@@ -102,6 +109,11 @@ services:
       ANALYTICS_SERVICE_URL: "http://analytics-service:8083"
     networks:
       - agriwizard-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hardware.rule=PathPrefix(`/api/v1/hardware`)"
+      - "traefik.http.routers.hardware.entrypoints=web"
+      - "traefik.http.services.hardware.loadbalancer.server.port=8082"
     ports:
       - "${HARDWARE_PORT}:8082"
     depends_on:
@@ -111,9 +123,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
-      interval: 1000s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   analytics-service:
     build:
@@ -128,6 +141,11 @@ services:
       WEATHER_SERVICE_URL: "http://weather-service:8084"
     networks:
       - agriwizard-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.analytics.rule=PathPrefix(`/api/v1/analytics`)"
+      - "traefik.http.routers.analytics.entrypoints=web"
+      - "traefik.http.services.analytics.loadbalancer.server.port=8083"
     ports:
       - "${ANALYTICS_PORT}:8083"
     depends_on:
@@ -137,9 +155,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
-      interval: 1000s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   weather-service:
     build:
@@ -158,6 +177,11 @@ services:
       LOCATION_CITY: "Colombo"
     networks:
       - agriwizard-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.weather.rule=PathPrefix(`/api/v1/weather`)"
+      - "traefik.http.routers.weather.entrypoints=web"
+      - "traefik.http.services.weather.loadbalancer.server.port=8084"
     ports:
       - "${WEATHER_PORT}:8084"
     depends_on:
@@ -165,20 +189,22 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
-      interval: 1000s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   # ────────────────────────────────────────────
-  #  API Gateway (KrakenD)
+  #  API Gateway (Traefik)
   # ────────────────────────────────────────────
 
   gateway:
-    image: devopsfaith/krakend:2.7
+    image: traefik:v3.0
     container_name: agriwizard-gateway
     restart: unless-stopped
     volumes:
-      - ./gateway/krakend.json:/etc/krakend/krakend.json:ro
+      - ./gateway/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./gateway/routes.yml:/etc/traefik/routes.yml:ro
     networks:
       - agriwizard-net
     ports:
@@ -192,4 +218,4 @@ services:
         condition: service_healthy
       weather-service:
         condition: service_healthy
-    command: ["run", "-c", "/etc/krakend/krakend.json"]
+    command: ["--configFile=/etc/traefik/traefik.yml"]

@@ -12,7 +12,7 @@ info:
     | Hardware Service | 8082 | IoT device management & MQTT control |
     | Analytics Service | 8083 | Threshold rules & decision logic |
     | Weather Service | 8084 | External weather intelligence |
-    | KrakenD Gateway | 8080 | Unified entry point (all routes via `/api/v1/...`) |
+    | Traefik Gateway | 8080 | Unified entry point (all routes via `/api/v1/...`) |
 
     ## Authentication Flow
     1. `POST /api/v1/iam/register` — Create an account
@@ -27,14 +27,14 @@ info:
 
 servers:
   - url: http://localhost:8080
-    description: Local development (via KrakenD gateway)
+    description: Local development (via Traefik gateway)
   - url: http://localhost:8081
     description: IAM Service (direct)
   - url: http://localhost:8082
     description: Hardware Service (direct)
   - url: http://localhost:8083
     description: Analytics Service (direct)
-  - url: http://localhost:8085
+  - url: http://localhost:8084
     description: Weather Service (direct)
 
 components:
