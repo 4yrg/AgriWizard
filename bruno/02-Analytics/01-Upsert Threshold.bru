@@ -1,0 +1,28 @@
+meta {
+  name: Upsert Threshold
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/analytics/thresholds
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "parameter_id": "{{thresholdParameterId}}",
+    "min_value": 30,
+    "max_value": 70,
+    "is_enabled": true
+  }
+}
