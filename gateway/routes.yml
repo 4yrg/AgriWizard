@@ -13,6 +13,8 @@ http:
       service: iam-service
       entryPoints:
         - web
+      middlewares:
+        - corsHeaders
 
     # ────────────────────────────────────────────────────────────────────────────
     # Hardware Service Routes
@@ -22,6 +24,8 @@ http:
       service: hardware-service
       entryPoints:
         - web
+      middlewares:
+        - corsHeaders
 
     # ────────────────────────────────────────────────────────────────────────────
     # Analytics Service Routes
@@ -31,6 +35,8 @@ http:
       service: analytics-service
       entryPoints:
         - web
+      middlewares:
+        - corsHeaders
 
     # ────────────────────────────────────────────────────────────────────────────
     # Weather Service Routes
@@ -40,6 +46,8 @@ http:
       service: weather-service
       entryPoints:
         - web
+      middlewares:
+        - corsHeaders
 
   services:
     # ────────────────────────────────────────────────────────────────────────────
@@ -68,6 +76,7 @@ http:
   middlewares:
     corsHeaders:
       headers:
+        addVaryHeader: true
         accessControlAllowOriginList:
           - "*"
         accessControlAllowMethods:
