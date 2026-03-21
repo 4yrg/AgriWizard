@@ -1,0 +1,32 @@
+meta {
+  name: Ingest Telemetry
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/analytics/ingest
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "sensor_id": "{{sensorId}}",
+    "readings": [
+      {
+        "parameter_id": "{{parameterId}}",
+        "value": 28.4
+      }
+    ],
+    "timestamp": "2026-03-21T10:05:00Z"
+  }
+}
