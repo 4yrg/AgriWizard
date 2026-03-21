@@ -5,14 +5,12 @@ on:
     branches: ["main", "development"]
     paths:
       - "services/**"
-      - "gateway/**"
       - "docker-compose.yml"
       - ".github/workflows/devsecops.yml"
   pull_request:
     branches: ["main", "development"]
     paths:
       - "services/**"
-      - "gateway/**"
       - "docker-compose.yml"
 
   workflow_dispatch:
@@ -168,21 +166,21 @@ jobs:
         run: |
           curl -f http://localhost:8004/health || exit 1
 
-      - name: Health check - KrakenD Gateway
+      - name: Health check - Traefik Gateway
         run: |
-          curl -f http://localhost:8000/health || exit 1
+          curl -f http://localhost:8080 || exit 1
 
       - name: Test API Gateway endpoints
         run: |
-          echo "Testing KrakenD endpoints..."
+          echo "Testing Traefik gateway endpoints..."
           
           # Test login endpoint (unauthenticated)
-          curl -X POST http://localhost:8000/api/v1/auth/login \
+          curl -X POST http://localhost:8080/api/v1/iam/login \
             -H "Content-Type: application/json" \
             -d '{"email":"test@example.com","password":"password123"}' || echo "Login endpoint may require valid credentials"
-          
-          # Test weather endpoint (public)
-          curl -f http://localhost:8000/api/v1/weather/current/London || exit 1
+
+          # Test introspect endpoint shape (without token should still return JSON)
+          curl -f http://localhost:8080/api/v1/iam/introspect || exit 1
 
       - name: View logs on failure
         if: failure()
