@@ -18,7 +18,7 @@ on:
 env:
   REGISTRY: agriWizardRegistry.azurecr.io
   REGISTRY_USERNAME: agriWizardServicePrincipal
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.26.1"
 
 jobs:
   # Lint and format check all Go services
@@ -37,7 +37,8 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v1.64.8
+          install-mode: goinstall
           args: --timeout=5m --enable-all
 
   # Security scanning with Trivy
@@ -152,19 +153,19 @@ jobs:
 
       - name: Health check - IAM Service
         run: |
-          curl -f http://localhost:8001/health || exit 1
+          curl -f http://localhost:8081/health || exit 1
 
       - name: Health check - Hardware Service
         run: |
-          curl -f http://localhost:8002/health || exit 1
+          curl -f http://localhost:8082/health || exit 1
 
       - name: Health check - Analytics Service
         run: |
-          curl -f http://localhost:8003/health || exit 1
+          curl -f http://localhost:8083/health || exit 1
 
       - name: Health check - Weather Service
         run: |
-          curl -f http://localhost:8004/health || exit 1
+          curl -f http://localhost:8084/health || exit 1
 
       - name: Health check - Traefik Gateway
         run: |
