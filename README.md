@@ -1,6 +1,6 @@
 # AgriWizard — Smart Greenhouse Management System
 
-A secure, cloud-native microservice backend for intelligent greenhouse automation. Built with **Go + Gin**, deployed via **Docker/KrakenD**, and hardened with **DevSecOps** practices.
+A secure, cloud-native microservice backend for intelligent greenhouse automation. Built with **Go + Gin**, deployed via **Docker/Traefik**, and hardened with **DevSecOps** practices.
 
 ---
 
@@ -8,8 +8,8 @@ A secure, cloud-native microservice backend for intelligent greenhouse automatio
 
 ```
                         ┌─────────────────────────────────────────────────────────┐
-                        │              KrakenD API Gateway  :8080                  │
-                        │         JWT Validation · CORS · Rate Limiting            │
+                        │              Traefik API Gateway  :8080                  │
+                        │         Path-based Routing · CORS · EntryPoint           │
                         └──────────┬────────────┬─────────────┬───────────────────┘
                                    │            │             │            │
                     ┌──────────────▼──┐  ┌──────▼──────┐  ┌──▼──────────┐  ┌──────▼──────────┐
@@ -39,15 +39,15 @@ A secure, cloud-native microservice backend for intelligent greenhouse automatio
 
 | Service | Port | Description |
 |---------|------|-------------|
-| KrakenD Gateway | **8080** | Single public entry point |
+| Traefik Gateway | **8080** | Single public entry point |
 | IAM Service | 8081 | Auth & RBAC |
 | Hardware Service | 8082 | IoT device management |
 | Analytics Service | 8083 | Threshold logic & decisions |
-| Weather Service | 8085* | Weather intelligence |
+| Weather Service | 8084 | Weather intelligence |
 | PostgreSQL | 5432 | Shared DB (separate schemas) |
 | HiveMQ Cloud MQTT | external (typically 8883 TLS) | IoT message broker |
 
-*Exposed as 8085 externally.
+*Direct service port is 8084 (gateway entry remains 8080).
 
 ---
 
@@ -75,7 +75,7 @@ docker compose up --build -d
 curl http://localhost:8081/health   # IAM
 curl http://localhost:8082/health   # Hardware
 curl http://localhost:8083/health   # Analytics
-curl http://localhost:8085/health   # Weather
+curl http://localhost:8084/health   # Weather
 ```
 
 ### 4. First API call — register and login
@@ -152,10 +152,6 @@ agriwizard/
 ├── sonar-project.properties         # SonarCloud SAST config
 ├── .env.example                     # Environment variable template
 ├── .gitignore
-│
-├── gateway/
-│   ├── krakend.json                 # KrakenD route + JWT config
-│   └── Dockerfile
 │
 ├── services/
 │   ├── iam-service/
@@ -250,7 +246,7 @@ Full OpenAPI spec is in `swagger.yaml`. Import it into [Swagger Editor](https://
 ## Security (DevSecOps)
 
 ### Authentication & Authorization
-- **JWT HS256** tokens issued by IAM, validated at KrakenD gateway level
+- **JWT HS256** tokens issued by IAM, validated by each microservice middleware
 - **RBAC** — `Admin` role required for manual override; `Agromist` for standard ops
 - **Principle of Least Privilege** — each service only reads/writes its own DB schema
 - Internal service calls use `X-Internal-Service` header (no JWT required for service-to-service)
