@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/nats-io/nats.go"
 )
 
 // Handler holds shared dependencies.
@@ -22,10 +23,11 @@ type Handler struct {
 	longitude   float64
 	cityName    string
 	useMock     bool
+	js          nats.JetStreamContext
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(jwtSecret, owmAPIKey, owmBaseURL string, lat, lon float64, city string, useMock bool) *Handler {
+func NewHandler(jwtSecret, owmAPIKey, owmBaseURL string, lat, lon float64, city string, useMock bool, js nats.JetStreamContext) *Handler {
 	return &Handler{
 		jwtSecret:  jwtSecret,
 		owmAPIKey:  owmAPIKey,
@@ -34,6 +36,23 @@ func NewHandler(jwtSecret, owmAPIKey, owmBaseURL string, lat, lon float64, city 
 		longitude:  lon,
 		cityName:   city,
 		useMock:    useMock,
+		js:         js,
+	}
+}
+
+// publishNotification publishes a notification message to NATS JetStream.
+func (h *Handler) publishNotification(recipient, subject, body string) {
+	if h.js == nil {
+		return
+	}
+	msg, _ := json.Marshal(map[string]string{
+		"channel":   "email",
+		"recipient": recipient,
+		"subject":   subject,
+		"body":      body,
+	})
+	if _, err := h.js.Publish("notifications.send", msg); err != nil {
+		log.Printf("[WARN] Failed to publish notification: %v", err)
 	}
 }
 
@@ -92,6 +111,15 @@ func (h *Handler) GetForecast(c *gin.Context) {
 // @Router       /api/v1/weather/alerts [get]
 func (h *Handler) GetAlerts(c *gin.Context) {
 	alerts := h.generateAlerts()
+
+	for _, a := range alerts {
+		h.publishNotification("farmer@agriwizard.local",
+			fmt.Sprintf("Weather Alert: %s (%s)", a.Type, a.Severity),
+			fmt.Sprintf("<h2>Weather Alert: %s</h2><p><b>Severity:</b> %s</p><p>%s</p><p>Valid until %s</p>",
+				a.Type, a.Severity, a.Message, a.ExpiresAt.Format("2006-01-02 15:04")),
+		)
+	}
+
 	c.JSON(http.StatusOK, SuccessResponse{Data: alerts})
 }
 
