@@ -1,0 +1,24 @@
+meta {
+  name: Create Template
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{notificationBaseUrl}}/api/v1/templates
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "threshold_alert",
+    "channel": "email",
+    "subject_template": "Alert: {{.param}} out of range",
+    "body_template": "<h2>{{.param}}</h2><p>Current value: <b>{{.value}}{{.unit}}</b></p><p>Please check your greenhouse.</p>"
+  }
+}
