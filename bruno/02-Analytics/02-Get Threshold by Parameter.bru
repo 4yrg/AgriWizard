@@ -1,0 +1,15 @@
+meta {
+  name: Get Threshold by Parameter
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/analytics/thresholds/{{thresholdParameterId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
