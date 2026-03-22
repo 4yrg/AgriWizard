@@ -49,6 +49,17 @@ http:
       middlewares:
         - corsHeaders
 
+    # ────────────────────────────────────────────────────────────────────────────
+    # Swagger UI Route
+    # ────────────────────────────────────────────────────────────────────────────
+    swagger:
+      rule: "Path(`/docs`) || PathPrefix(`/docs/`)"
+      service: swagger-ui
+      entryPoints:
+        - web
+      middlewares:
+        - stripDocs
+
   services:
     # ────────────────────────────────────────────────────────────────────────────
     # Backend Service Definitions
@@ -73,6 +84,11 @@ http:
         servers:
           - url: http://weather-service:8084
 
+    swagger-ui:
+      loadBalancer:
+        servers:
+          - url: http://swagger-ui:8080
+
   middlewares:
     corsHeaders:
       headers:
@@ -91,3 +107,8 @@ http:
           - X-Request-ID
           - X-Internal-Service
         accessControlMaxAge: 86400
+
+    stripDocs:
+      stripPrefix:
+        prefixes:
+          - /docs
