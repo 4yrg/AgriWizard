@@ -2,7 +2,7 @@ name: CI/CD - AgriWizard DevSecOps Pipeline
 
 on:
   push:
-    branches: ["main", "development"]
+    branches: ["**"] # Run on push to any branch
   pull_request:
     branches: ["main", "development"]
   workflow_dispatch:
@@ -106,6 +106,13 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Verify ACR Login
+        run: |
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "ACR_USERNAME is set: ${{ secrets.ACR_USERNAME != '' }}"
+          echo "ACR_PASSWORD is set: ${{ secrets.ACR_PASSWORD != '' }}"
+          docker info | grep -i "registry"
 
       - id: meta
         uses: docker/metadata-action@v5
