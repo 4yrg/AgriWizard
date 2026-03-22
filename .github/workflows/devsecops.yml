@@ -77,8 +77,8 @@ jobs:
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [lint-and-fmt, security-scan, sonarcloud]
-    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [docker-compose-test]
+    if: github.event_name == 'push'
     strategy:
       matrix:
         service:
@@ -112,7 +112,6 @@ jobs:
           echo "Registry: ${{ env.REGISTRY }}"
           echo "ACR_USERNAME is set: ${{ secrets.ACR_USERNAME != '' }}"
           echo "ACR_PASSWORD is set: ${{ secrets.ACR_PASSWORD != '' }}"
-          docker info | grep -i "registry"
 
       - id: meta
         uses: docker/metadata-action@v5
