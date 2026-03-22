@@ -169,8 +169,8 @@ jobs:
         run: |
           echo "Testing gateway health..."
           for i in 1 2 3 4 5; do
-            if curl -sf http://localhost:8081/ping; then
-              echo "✅ Gateway is healthy (ping on port 8081)"
+            if curl -sf http://localhost:9090/ping; then
+              echo "✅ Gateway is healthy (ping on port 9090)"
               exit 0
             fi
             echo "Attempt $i failed, retrying in 5s..."
@@ -181,11 +181,11 @@ jobs:
           exit 1
 
       - run: |
-          curl -X POST http://localhost:8080/api/v1/iam/login \
+          curl -X POST http://localhost:3000/api/v1/iam/login \
           -H "Content-Type: application/json" \
           -d '{"email":"test@example.com","password":"password123"}' || true
 
-      - run: curl -f http://localhost:8080/api/v1/iam/introspect
+      - run: curl -f http://localhost:3000/api/v1/iam/introspect
 
       - if: failure()
         run: docker compose logs

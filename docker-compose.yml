@@ -282,7 +282,7 @@ services:
       - agriwizard-net
     ports:
       - "8080:8080" # Web entrypoint (API routes)
-      - "8081:8081" # Traefik API and ping endpoint
+      - "9090:9090" # Traefik API and ping endpoint
     depends_on:
       iam-service:
         condition: service_healthy
