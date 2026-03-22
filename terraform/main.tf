@@ -161,44 +161,19 @@ resource "azurerm_postgresql_flexible_server" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   version             = var.postgresql_version
-  zone                = "1"
 
   # Administrator credentials
-  admin_username = var.postgresql_admin_username
-  admin_password = var.postgresql_admin_password
+  administrator_username = var.postgresql_admin_username
+  administrator_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
 
   # Storage configuration
-  storage_mb           = 32768 # 32GB
-  auto_grow_enabled    = true
-  backup_retention_days = 7
-  geo_redundant_backup_enabled = var.environment == "prod" ? true : false
-
-  # High availability (production only)
-  dynamic "high_availability" {
-    for_each = var.environment == "prod" ? [1] : []
-    content {
-      mode                      = "ZoneRedundant"
-      standby_availability_zone = "2"
-    }
-  }
-
-  # Maintenance window
-  maintenance_window {
-    day_of_week  = 0
-    start_hour   = 2
-    start_minute = 0
-  }
+  storage_mb        = 32768 # 32GB
+  auto_grow_enabled = true
 
   tags = local.common_tags
-
-  lifecycle {
-    ignore_changes = [
-      admin_password # Manage password via Key Vault
-    ]
-  }
 }
 
 # PostgreSQL Database
@@ -256,14 +231,14 @@ resource "azurerm_api_management" "main" {
 
 # API Management - AgriWizard API
 resource "azurerm_api_management_api" "agriwizard" {
-  name                = "agriwizard-api"
-  resource_group_name = azurerm_resource_group.main.name
-  api_management_name = azurerm_api_management.main.name
-  revision            = "1"
-  display_name        = "AgriWizard API"
-  path                = "api/v1"
-  protocols           = ["https"]
-  service_url         = null
+  name                  = "agriwizard-api"
+  resource_group_name   = azurerm_resource_group.main.name
+  api_management_name   = azurerm_api_management.main.name
+  revision              = "1"
+  display_name          = "AgriWizard API"
+  path                  = "api/v1"
+  protocols             = ["https"]
+  service_url           = null
   subscription_required = true
 }
 

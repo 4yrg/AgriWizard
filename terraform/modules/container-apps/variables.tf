@@ -43,8 +43,8 @@ variable "db_host" {
 
 variable "db_port" {
   description = "PostgreSQL port"
-  type        = string
-  default     = "5432"
+  type        = number
+  default     = 5432
 }
 
 variable "db_name" {
@@ -67,6 +67,11 @@ variable "jwt_secret" {
   description = "JWT signing secret"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.jwt_secret) >= 32
+    error_message = "JWT secret must be at least 32 characters long."
+  }
 }
 
 variable "iot_hub_name" {
@@ -77,30 +82,55 @@ variable "iot_hub_name" {
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod."
+  }
 }
 
 variable "cpu_core" {
   description = "CPU cores per container"
   type        = number
   default     = 0.5
+
+  validation {
+    condition     = var.cpu_core > 0
+    error_message = "CPU core must be greater than 0."
+  }
 }
 
 variable "memory_size" {
   description = "Memory in GB per container"
   type        = number
   default     = 1.0
+
+  validation {
+    condition     = var.memory_size > 0
+    error_message = "Memory size must be greater than 0."
+  }
 }
 
 variable "min_replicas" {
   description = "Minimum number of replicas"
   type        = number
   default     = 1
+
+  validation {
+    condition     = var.min_replicas >= 0
+    error_message = "Minimum replicas cannot be negative."
+  }
 }
 
 variable "max_replicas" {
   description = "Maximum number of replicas"
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.max_replicas >= var.min_replicas
+    error_message = "Max replicas must be greater than or equal to min replicas."
+  }
 }
 
 variable "tags" {

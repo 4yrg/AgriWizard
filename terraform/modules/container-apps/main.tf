@@ -5,10 +5,10 @@ resource "azurerm_container_app" "iam_service" {
   resource_group_name          = var.resource_group_name
   revision_mode                = "Single"
 
-  # Ingress configuration - External via API Gateway only
+  # Ingress configuration - Internal only, accessed via API Gateway
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false  # Internal only, accessed via API Gateway
+    external_enabled           = false
     target_port                = 8081
     transport                  = "auto"
 
@@ -81,7 +81,7 @@ resource "azurerm_container_app" "iam_service" {
       name = "http-scale-rule"
       custom {
         type  = "http"
-        value = "10"  # Scale when 10 concurrent requests
+        value = "10"
       }
     }
   }
@@ -164,7 +164,7 @@ resource "azurerm_container_app" "hardware_service" {
       }
       env {
         name  = "ANALYTICS_SERVICE_URL"
-        value = "http://${var.environment}-analytics-service:8083"  # Use service name, not FQDN
+        value = "http://${var.environment}-analytics-service:8083"
       }
       env {
         name  = "GIN_MODE"
@@ -260,11 +260,11 @@ resource "azurerm_container_app" "analytics_service" {
       }
       env {
         name  = "HARDWARE_SERVICE_URL"
-        value = "http://${var.environment}-hardware-service:8082"  # Use service name
+        value = "http://${var.environment}-hardware-service:8082"
       }
       env {
         name  = "WEATHER_SERVICE_URL"
-        value = "http://${var.environment}-weather-service:8084"  # Use service name
+        value = "http://${var.environment}-weather-service:8084"
       }
       env {
         name  = "GIN_MODE"

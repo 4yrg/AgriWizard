@@ -1,3 +1,4 @@
+
 # =============================================================================
 # AgriWizard - Azure Terraform Variables
 # =============================================================================
@@ -15,7 +16,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Azure region for deployment"
   type        = string
-  default     = "centralindia"  # India Central
+  default     = "centralindia"
 }
 
 variable "environment" {
@@ -105,8 +106,8 @@ variable "max_replicas" {
   default     = 3
 
   validation {
-    condition     = var.max_replicas >= 1 && var.max_replicas <= 20
-    error_message = "Max replicas must be between 1 and 20."
+    condition     = var.max_replicas >= var.min_replicas && var.max_replicas <= 20
+    error_message = "Max replicas must be >= min_replicas and <= 20."
   }
 }
 
@@ -153,8 +154,14 @@ variable "postgresql_sku_name" {
   default     = "Standard_B1ms"
 
   validation {
-    condition     = contains(["Standard_B1ms", "Standard_B2ms", "Standard_B4ms", "Standard_D2ads_v2"], var.postgresql_sku_name)
-    error_message = "SKU must be one of: Standard_B1ms, Standard_B2ms, Standard_B4ms, Standard_D2ads_v2."
+    condition = contains([
+      "Standard_B1ms",
+      "Standard_B2ms",
+      "Standard_B4ms",
+      "Standard_D2ads_v2"
+    ], var.postgresql_sku_name)
+
+    error_message = "Invalid PostgreSQL SKU."
   }
 }
 
@@ -195,7 +202,7 @@ variable "key_vault_name" {
 
   validation {
     condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{3,23}$", var.key_vault_name))
-    error_message = "Key Vault name must be 4-24 characters, start with letter, alphanumeric and hyphens."
+    error_message = "Key Vault name must be 4-24 characters, start with a letter."
   }
 }
 
@@ -221,7 +228,7 @@ variable "apim_name" {
 
   validation {
     condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{3,49}$", var.apim_name))
-    error_message = "APIM name must be 4-50 characters, start with letter, alphanumeric and hyphens."
+    error_message = "APIM name must be 4-50 characters, start with a letter."
   }
 }
 
@@ -242,8 +249,14 @@ variable "apim_sku_name" {
   default     = "Developer_1"
 
   validation {
-    condition     = contains(["Developer_1", "Basic_1", "Standard_1", "Premium_1"], var.apim_sku_name)
-    error_message = "APIM SKU must be one of: Developer_1, Basic_1, Standard_1, Premium_1."
+    condition = contains([
+      "Developer_1",
+      "Basic_1",
+      "Standard_1",
+      "Premium_1"
+    ], var.apim_sku_name)
+
+    error_message = "Invalid APIM SKU."
   }
 }
 

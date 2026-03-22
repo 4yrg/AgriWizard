@@ -1,3 +1,4 @@
+
 # =============================================================================
 # AgriWizard - Azure Terraform Outputs
 # =============================================================================
@@ -99,8 +100,8 @@ output "apim_portal_url" {
 }
 
 output "api_management_endpoint" {
-  description = "API Management endpoint for AgriWizard API"
-  value       = "${azurerm_api_management.main.gateway_url}/api/v1"
+  description = "Base API Management endpoint"
+  value       = azurerm_api_management.main.gateway_url
 }
 
 # -----------------------------------------------------------------------------
@@ -208,7 +209,7 @@ output "container_apps_identity_client_id" {
 }
 
 # -----------------------------------------------------------------------------
-# Quick Start Guide
+# Deployment Summary
 # -----------------------------------------------------------------------------
 
 output "deployment_summary" {
@@ -219,10 +220,10 @@ output "deployment_summary" {
     environment    = var.environment
 
     services = {
-      iam       = "https://${module.container_apps.iam_service_url}"
-      hardware  = "http://${module.container_apps.hardware_service_url}:8082"
-      analytics = "http://${module.container_apps.analytics_service_url}:8083"
-      weather   = "http://${module.container_apps.weather_service_url}:8084"
+      iam       = module.container_apps.iam_service_url
+      hardware  = module.container_apps.hardware_service_url
+      analytics = module.container_apps.analytics_service_url
+      weather   = module.container_apps.weather_service_url
     }
 
     api_gateway = azurerm_api_management.main.gateway_url
