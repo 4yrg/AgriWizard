@@ -12,7 +12,7 @@ permissions:
   security-events: write
 
 env:
-  DOCKERHUB_USERNAME: agriwizard
+  DOCKERHUB_USERNAME: iamdasun
   GO_VERSION: "1.26.1"
 
 jobs:
