@@ -34,6 +34,12 @@ func (s *ServiceStatus) IsReady() bool {
 	return s.ready
 }
 
+func (s *ServiceStatus) IsMigrated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.migrated
+}
+
 func (s *ServiceStatus) SetReady(db *sql.DB) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,7 +86,7 @@ func main() {
 			"status":   s,
 			"service":  "analytics-service",
 			"db_ready": status.IsReady(),
-			"migrated": status.migrated,
+			"migrated": status.IsMigrated(),
 		})
 	})
 
@@ -93,23 +99,30 @@ func main() {
 		}
 	}()
 
-	// Connect to database in background
+	// Connect to database in background (retry until ready)
 	go func() {
-		db, err := connectDB(dsn)
-		if err != nil {
-			log.Printf("[ERROR] DB: %v", err)
+		for {
+			db, err := connectDB(dsn)
+			if err != nil {
+				log.Printf("[ERROR] DB: %v", err)
+				log.Println("[WARN] Analytics init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			if err := runMigrations(db); err != nil {
+				log.Printf("[ERROR] Migrations: %v", err)
+				db.Close()
+				log.Println("[WARN] Analytics init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			status.SetReady(db)
+			status.SetMigrated()
+			log.Println("[INFO] Analytics Service fully ready")
 			return
 		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migrations: %v", err)
-			db.Close()
-			return
-		}
-
-		status.SetReady(db)
-		status.SetMigrated()
-		log.Println("[INFO] Analytics Service fully ready")
 	}()
 
 	// Setup API routes
