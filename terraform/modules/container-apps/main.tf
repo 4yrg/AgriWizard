@@ -164,7 +164,7 @@ resource "azurerm_container_app" "hardware_service" {
       }
       env {
         name  = "ANALYTICS_SERVICE_URL"
-        value = "http://${azurerm_container_app.analytics_service.latest_revision_fqdn}:8083"
+        value = "http://${var.environment}-analytics-service:8083"  # Use service name, not FQDN
       }
       env {
         name  = "GIN_MODE"
@@ -192,10 +192,6 @@ resource "azurerm_container_app" "hardware_service" {
   }
 
   tags = var.tags
-
-  depends_on = [
-    azurerm_container_app.analytics_service
-  ]
 }
 
 # Analytics Service Container App
@@ -264,11 +260,11 @@ resource "azurerm_container_app" "analytics_service" {
       }
       env {
         name  = "HARDWARE_SERVICE_URL"
-        value = "http://${azurerm_container_app.hardware_service.latest_revision_fqdn}:8082"
+        value = "http://${var.environment}-hardware-service:8082"  # Use service name
       }
       env {
         name  = "WEATHER_SERVICE_URL"
-        value = "http://${azurerm_container_app.weather_service.latest_revision_fqdn}:8084"
+        value = "http://${var.environment}-weather-service:8084"  # Use service name
       }
       env {
         name  = "GIN_MODE"
@@ -296,11 +292,6 @@ resource "azurerm_container_app" "analytics_service" {
   }
 
   tags = var.tags
-
-  depends_on = [
-    azurerm_container_app.hardware_service,
-    azurerm_container_app.weather_service
-  ]
 }
 
 # Weather Service Container App
