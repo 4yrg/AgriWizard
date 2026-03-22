@@ -36,7 +36,7 @@ max_replicas            = 10 # Autoscaling for load spikes
 postgresql_server_name  = "agriwizard-db-prod"
 postgresql_admin_username = "agriadmin"
 # IMPORTANT: Store this password in Azure Key Vault or use managed identity
-postgresql_admin_password = "CHANGE-THIS-PROD-PASSWORD-123!@#"  # CHANGE THIS!
+postgresql_admin_password = "CHANGE-THIS-PROD-PASSWORD-123!@#"
 postgresql_sku_name     = "Standard_D2ads_v2"  # Production-grade
 postgresql_version      = "16"
 

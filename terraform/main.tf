@@ -161,8 +161,6 @@ resource "azurerm_postgresql_flexible_server" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   version             = var.postgresql_version
-  delegated_subnet_id = null # Public access for now
-  private_dns_zone_id = null
   zone                = "1"
 
   # Administrator credentials

@@ -180,7 +180,7 @@ resource "azurerm_key_vault_secret" "jwt_secret" {
 # Store IoT Hub connection string in Key Vault
 resource "azurerm_key_vault_secret" "iot_hub_connection" {
   name         = "iot-hub-connection-string"
-  value        = azurerm_iothub.main.event_hub_endpoint
+  value        = "HostName=${var.iot_hub_name}.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=<replace-with-actual-key>"
   key_vault_id = azurerm_key_vault.main.id
   sensitive    = true
 

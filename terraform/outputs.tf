@@ -144,7 +144,7 @@ output "iot_hub_hostname" {
 
 output "iot_hub_event_hub_endpoint" {
   description = "IoT Hub Event Hub-compatible endpoint"
-  value       = azurerm_iothub.main.event_hub_endpoint
+  value       = "https://${azurerm_iothub.main.name}.azure-devices.net/events"
   sensitive   = true
 }
 
