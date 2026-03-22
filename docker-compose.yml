@@ -82,7 +82,7 @@ services:
       - "traefik.http.routers.iam.entrypoints=web"
       - "traefik.http.services.iam.loadbalancer.server.port=8081"
     ports:
-      - "${IAM_PORT}:8081"
+      - "${IAM_PORT:-8081}:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -114,7 +114,7 @@ services:
       - "traefik.http.routers.hardware.entrypoints=web"
       - "traefik.http.services.hardware.loadbalancer.server.port=8082"
     ports:
-      - "${HARDWARE_PORT}:8082"
+      - "${HARDWARE_PORT:-8082}:8082"
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,7 +146,7 @@ services:
       - "traefik.http.routers.analytics.entrypoints=web"
       - "traefik.http.services.analytics.loadbalancer.server.port=8083"
     ports:
-      - "${ANALYTICS_PORT}:8083"
+      - "${ANALYTICS_PORT:-8083}:8083"
     depends_on:
       postgres:
         condition: service_healthy
@@ -182,7 +182,7 @@ services:
       - "traefik.http.routers.weather.entrypoints=web"
       - "traefik.http.services.weather.loadbalancer.server.port=8084"
     ports:
-      - "${WEATHER_PORT}:8084"
+      - "${WEATHER_PORT:-8084}:8084"
     depends_on:
       iam-service:
         condition: service_healthy
