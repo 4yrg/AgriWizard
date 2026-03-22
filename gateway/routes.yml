@@ -9,7 +9,7 @@ http:
     # Gateway Health Check Route (root path)
     # ────────────────────────────────────────────────────────────────────────────
     gateway-health:
-      rule: "Path(`/`)"
+      rule: "Path(`/`) || Path(`/health`) || Path(`/ping`) || Path(`/traefik`)"
       service: api@internal
       entryPoints:
         - web
