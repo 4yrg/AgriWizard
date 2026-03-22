@@ -2,7 +2,7 @@ name: CI/CD - AgriWizard DevSecOps Pipeline
 
 on:
   push:
-    branches: ["main", "development"]
+    branches: ["main,development"]
   pull_request:
     branches: ["main", "development"]
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   security-events: write
 
 env:
-  DOCKERHUB_USERNAME: iamdasun
+  REGISTRY: agriwizard.azurecr.io
   GO_VERSION: "1.26.1"
 
 jobs:
@@ -92,16 +92,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Log in to Azure Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Verify ACR Login
+        run: |
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "ACR_USERNAME is set: ${{ secrets.ACR_USERNAME != '' }}"
+          echo "ACR_PASSWORD is set: ${{ secrets.ACR_PASSWORD != '' }}"
+          docker info | grep -i "registry"
 
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/agriwizard-${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/agriwizard-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
@@ -128,7 +144,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - run: docker compose build --no-cache
+      - run: docker compose build
 
       - run: |
           docker compose up -d
@@ -201,11 +217,11 @@ jobs:
     steps:
       - run: |
           echo "✓ All checks passed"
-          echo "✓ Images pushed to: Docker Hub (${{ env.DOCKERHUB_USERNAME }}/agriwizard-*)"
+          echo "✓ Images pushed to: Azure Container Registry (${{ env.REGISTRY }})"
           echo "✓ Ready for deployment to production"
           echo ""
           echo "Services:"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-iam-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-hardware-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-analytics-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-weather-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-iam-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-hardware-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-analytics-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-weather-service:${{ github.sha }}"
