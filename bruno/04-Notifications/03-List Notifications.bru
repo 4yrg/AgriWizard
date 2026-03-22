@@ -1,0 +1,11 @@
+meta {
+  name: List Notifications
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{notificationBaseUrl}}/api/v1/notifications?limit=10&offset=0
+  body: none
+  auth: none
+}
