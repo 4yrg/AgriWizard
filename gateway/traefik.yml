@@ -17,12 +17,13 @@ entryPoints:
 providers:
   file:
     filename: /etc/traefik/routes.yml
-    watch: true  # Watch for changes and auto-reload
+    watch: true # Watch for changes and auto-reload
 
 # API and Dashboard
 api:
   dashboard: false
   debug: false
+  insecure: true
 
 # Logging
 log:
