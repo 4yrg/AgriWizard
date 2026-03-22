@@ -12,7 +12,7 @@ permissions:
   security-events: write
 
 env:
-  DOCKERHUB_USERNAME: iamdasun
+  REGISTRY: agriwizard.azurecr.io
   GO_VERSION: "1.26.1"
 
 jobs:
@@ -100,16 +100,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Log in to Docker Hub
+      - name: Log in to Azure Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKERHUB_USERNAME }}/agriwizard-${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/agriwizard-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
@@ -209,11 +210,11 @@ jobs:
     steps:
       - run: |
           echo "✓ All checks passed"
-          echo "✓ Images pushed to: Docker Hub (${{ env.DOCKERHUB_USERNAME }}/agriwizard-*)"
+          echo "✓ Images pushed to: Azure Container Registry (${{ env.REGISTRY }})"
           echo "✓ Ready for deployment to production"
           echo ""
           echo "Services:"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-iam-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-hardware-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-analytics-service:${{ github.sha }}"
-          echo "  - ${{ env.DOCKERHUB_USERNAME }}/agriwizard-weather-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-iam-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-hardware-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-analytics-service:${{ github.sha }}"
+          echo "  - ${{ env.REGISTRY }}/agriwizard-weather-service:${{ github.sha }}"
