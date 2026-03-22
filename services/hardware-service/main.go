@@ -43,6 +43,18 @@ func (s *ServiceStatus) IsReady() bool {
 	return s.ready
 }
 
+func (s *ServiceStatus) IsMigrated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.migrated
+}
+
+func (s *ServiceStatus) IsMQTTConnected() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mqttClient != nil && s.mqttClient.IsConnected()
+}
+
 func (s *ServiceStatus) SetReady(db *sql.DB, mqttClient mqtt.Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -93,8 +105,8 @@ func main() {
 			"status":    s,
 			"service":   "hardware-service",
 			"db_ready":  status.IsReady(),
-			"migrated":  status.migrated,
-			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
+			"migrated":  status.IsMigrated(),
+			"mqtt_conn": status.IsMQTTConnected(),
 		})
 	})
 
@@ -107,26 +119,33 @@ func main() {
 		}
 	}()
 
-	// Connect to database and MQTT in background
+	// Connect to database and MQTT in background (retry until ready)
 	go func() {
-		db, err := connectDB(dsn)
-		if err != nil {
-			log.Printf("[ERROR] DB connect: %v", err)
+		for {
+			db, err := connectDB(dsn)
+			if err != nil {
+				log.Printf("[ERROR] DB connect: %v", err)
+				log.Println("[WARN] Hardware Service init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			if err := runMigrations(db); err != nil {
+				log.Printf("[ERROR] Migrations: %v", err)
+				db.Close()
+				log.Println("[WARN] Hardware Service init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
+			restoreSubscriptions(db, mqttClient)
+
+			status.SetReady(db, mqttClient)
+			status.SetMigrated()
+			log.Println("[INFO] Hardware Service fully ready")
 			return
 		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migrations: %v", err)
-			db.Close()
-			return
-		}
-
-		mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-		restoreSubscriptions(db, mqttClient)
-
-		status.SetReady(db, mqttClient)
-		status.SetMigrated()
-		log.Println("[INFO] Hardware Service fully ready")
 	}()
 
 	// Setup API routes
