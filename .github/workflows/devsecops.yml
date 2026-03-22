@@ -97,6 +97,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Check Docker Hub credentials
+        id: check-creds
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "warning=Docker Hub credentials not configured. Skipping image push." >> $GITHUB_OUTPUT
+            echo "::warning::Docker Hub credentials not configured. Build will complete but images won't be pushed."
+            exit 0
+          fi
+          echo "credentials=configured" >> $GITHUB_OUTPUT
+
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -106,15 +116,26 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - uses: docker/build-push-action@v5
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./services/${{ matrix.service }}/Dockerfile
-          push: true
+          push: ${{ steps.check-creds.outputs.credentials == 'configured' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          load: ${{ steps.check-creds.outputs.credentials != 'configured' }}
+
+      - name: Verify image built
+        run: |
+          if [ "${{ steps.check-creds.outputs.credentials }}" != "configured" ]; then
+            echo "✅ Image built successfully (not pushed - credentials not configured)"
+            docker images | grep agriwizard
+          else
+            echo "✅ Image built and pushed to Docker Hub"
+          fi
 
   docker-compose-test:
     name: Docker Compose Stack Test
