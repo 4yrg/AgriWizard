@@ -12,6 +12,8 @@ global:
 entryPoints:
   web:
     address: :8080
+  traefik:
+    address: :8081
 
 # Providers (where to find route definitions)
 providers:
@@ -19,11 +21,14 @@ providers:
     filename: /etc/traefik/routes.yml
     watch: true # Watch for changes and auto-reload
 
-# API and Dashboard
+# API and Dashboard (exposed on traefik entrypoint)
 api:
   dashboard: false
   debug: false
-  insecure: true
+
+# Ping endpoint for health checks
+ping:
+  entryPoint: traefik
 
 # Logging
 log:

@@ -169,8 +169,8 @@ jobs:
         run: |
           echo "Testing gateway health..."
           for i in 1 2 3 4 5; do
-            if curl -sf http://localhost:8080/ping; then
-              echo "✅ Gateway is healthy (ping endpoint)"
+            if curl -sf http://localhost:8081/ping; then
+              echo "✅ Gateway is healthy (ping on port 8081)"
               exit 0
             fi
             echo "Attempt $i failed, retrying in 5s..."
