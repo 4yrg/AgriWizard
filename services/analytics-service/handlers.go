@@ -17,15 +17,34 @@ import (
 
 // Handler holds shared dependencies.
 type Handler struct {
-	db          *sql.DB
+	status      *ServiceStatus
 	jwtSecret   string
 	hardwareURL string
 	weatherURL  string
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(db *sql.DB, jwtSecret, hardwareURL, weatherURL string) *Handler {
-	return &Handler{db: db, jwtSecret: jwtSecret, hardwareURL: hardwareURL, weatherURL: weatherURL}
+func NewHandler(status *ServiceStatus, jwtSecret, hardwareURL, weatherURL string) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, hardwareURL: hardwareURL, weatherURL: weatherURL}
+}
+
+// requireDB is a middleware that checks if the database is ready.
+func (h *Handler) requireDB() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.status.IsReady() {
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+				Error:   "service_unavailable",
+				Message: "database connection not ready, please try again later",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func (h *Handler) db() *sql.DB {
+	return h.status.GetDB()
 }
 
 // ──────────────────────────────────────────────
@@ -61,18 +80,18 @@ func (h *Handler) UpsertThreshold(c *gin.Context) {
 
 	// Upsert: update if parameter_id exists, else insert
 	var existingID string
-	err := h.db.QueryRow(`SELECT id FROM analytics.thresholds WHERE parameter_id=$1`, req.ParameterID).Scan(&existingID)
+	err := h.db().QueryRow(`SELECT id FROM analytics.thresholds WHERE parameter_id=$1`, req.ParameterID).Scan(&existingID)
 
 	var thresholdID string
 	if err == sql.ErrNoRows {
 		thresholdID = uuid.New().String()
-		_, err = h.db.Exec(
+		_, err = h.db().Exec(
 			`INSERT INTO analytics.thresholds (id, parameter_id, min_value, max_value, is_enabled) VALUES ($1, $2, $3, $4, $5)`,
 			thresholdID, req.ParameterID, req.MinValue, req.MaxValue, enabled,
 		)
 	} else {
 		thresholdID = existingID
-		_, err = h.db.Exec(
+		_, err = h.db().Exec(
 			`UPDATE analytics.thresholds SET min_value=$1, max_value=$2, is_enabled=$3, updated_at=NOW() WHERE id=$4`,
 			req.MinValue, req.MaxValue, enabled, existingID,
 		)
@@ -103,7 +122,7 @@ func (h *Handler) UpsertThreshold(c *gin.Context) {
 func (h *Handler) GetThreshold(c *gin.Context) {
 	paramID := c.Param("parameterId")
 	var t Threshold
-	err := h.db.QueryRow(
+	err := h.db().QueryRow(
 		`SELECT id, parameter_id, min_value, max_value, is_enabled, created_at, updated_at FROM analytics.thresholds WHERE parameter_id=$1`,
 		paramID,
 	).Scan(&t.ID, &t.ParameterID, &t.MinValue, &t.MaxValue, &t.IsEnabled, &t.CreatedAt, &t.UpdatedAt)
@@ -142,13 +161,13 @@ func (h *Handler) CreateRule(c *gin.Context) {
 
 	// Verify threshold exists
 	var thresholdID string
-	if err := h.db.QueryRow(`SELECT id FROM analytics.thresholds WHERE id=$1`, req.ThresholdID).Scan(&thresholdID); err == sql.ErrNoRows {
+	if err := h.db().QueryRow(`SELECT id FROM analytics.thresholds WHERE id=$1`, req.ThresholdID).Scan(&thresholdID); err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "threshold_not_found", Message: "referenced threshold does not exist"})
 		return
 	}
 
 	ruleID := uuid.New().String()
-	_, err := h.db.Exec(
+	_, err := h.db().Exec(
 		`INSERT INTO analytics.automation_rules (id, threshold_id, equipment_id, low_action, high_action) VALUES ($1, $2, $3, $4, $5)`,
 		ruleID, req.ThresholdID, req.EquipmentID, req.LowAction, req.HighAction,
 	)
@@ -174,7 +193,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 func (h *Handler) GetRulesForParameter(c *gin.Context) {
 	paramID := c.Param("parameterId")
 
-	rows, err := h.db.Query(`
+	rows, err := h.db().Query(`
 		SELECT r.id, r.threshold_id, r.equipment_id, r.low_action, r.high_action, r.created_at
 		FROM analytics.automation_rules r
 		JOIN analytics.thresholds t ON t.id = r.threshold_id
@@ -213,7 +232,7 @@ func (h *Handler) GetRulesForParameter(c *gin.Context) {
 // @Router       /api/v1/analytics/decisions/summary [get]
 func (h *Handler) GetDecisionSummary(c *gin.Context) {
 	// Fetch all thresholds
-	rows, err := h.db.Query(`SELECT id, parameter_id, min_value, max_value, is_enabled FROM analytics.thresholds WHERE is_enabled=true`)
+	rows, err := h.db().Query(`SELECT id, parameter_id, min_value, max_value, is_enabled FROM analytics.thresholds WHERE is_enabled=true`)
 	if err != nil {
 		log.Printf("[ERROR] GetDecisionSummary: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -236,7 +255,7 @@ func (h *Handler) GetDecisionSummary(c *gin.Context) {
 
 		// Get latest sensor value for this parameter
 		var latestVal float64
-		err := h.db.QueryRow(`
+		err := h.db().QueryRow(`
 			SELECT value FROM hardware.raw_sensor_data WHERE parameter_id=$1 ORDER BY timestamp DESC LIMIT 1
 		`, t.ParameterID).Scan(&latestVal)
 		if err == nil {
@@ -252,7 +271,7 @@ func (h *Handler) GetDecisionSummary(c *gin.Context) {
 		}
 
 		// Get linked automation rules
-		ruleRows, _ := h.db.Query(`
+		ruleRows, _ := h.db().Query(`
 			SELECT id, threshold_id, equipment_id, low_action, high_action FROM analytics.automation_rules WHERE threshold_id=$1
 		`, t.ID)
 		if ruleRows != nil {
@@ -305,7 +324,7 @@ func (h *Handler) Ingest(c *gin.Context) {
 	for _, reading := range payload.Readings {
 		// Fetch the threshold for this parameter
 		var t Threshold
-		err := h.db.QueryRow(
+		err := h.db().QueryRow(
 			`SELECT id, min_value, max_value, is_enabled FROM analytics.thresholds WHERE parameter_id=$1 AND is_enabled=true`,
 			reading.ParameterID,
 		).Scan(&t.ID, &t.MinValue, &t.MaxValue, &t.IsEnabled)
@@ -335,7 +354,7 @@ func (h *Handler) Ingest(c *gin.Context) {
 		scaleFactor := h.getWeatherScaleFactor()
 
 		// Fetch automation rules for this threshold
-		rules, _ := h.db.Query(
+		rules, _ := h.db().Query(
 			`SELECT equipment_id, low_action, high_action FROM analytics.automation_rules WHERE threshold_id=$1`,
 			t.ID,
 		)
@@ -391,7 +410,7 @@ func (h *Handler) GetDailySummaries(c *gin.Context) {
 		}
 	}
 
-	rows, err := h.db.Query(
+	rows, err := h.db().Query(
 		`SELECT id, parameter_id, avg_value, min_recorded, max_recorded, date FROM analytics.daily_summaries WHERE date=$1`,
 		date,
 	)
@@ -422,7 +441,7 @@ func (h *Handler) GetDailySummaries(c *gin.Context) {
 // updateDailySummary upserts the daily aggregation for a parameter.
 func (h *Handler) updateDailySummary(paramID string, value float64, ts time.Time) {
 	date := ts.UTC().Truncate(24 * time.Hour)
-	_, err := h.db.Exec(`
+	_, err := h.db().Exec(`
 		INSERT INTO analytics.daily_summaries (parameter_id, avg_value, min_recorded, max_recorded, date)
 		VALUES ($1, $2, $2, $2, $3)
 		ON CONFLICT (parameter_id, date) DO UPDATE SET

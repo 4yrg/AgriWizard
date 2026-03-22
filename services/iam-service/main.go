@@ -1,15 +1,53 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// DBStatus holds the shared database connection and readiness state.
+type DBStatus struct {
+	mu       sync.RWMutex
+	db       *sql.DB
+	ready    bool
+	migrated bool
+}
+
+func (s *DBStatus) GetDB() *sql.DB {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db
+}
+
+func (s *DBStatus) IsReady() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ready
+}
+
+func (s *DBStatus) SetReady(db *sql.DB) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db = db
+	s.ready = true
+}
+
+func (s *DBStatus) SetMigrated() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.migrated = true
+}
 
 func main() {
 	// --- Configuration from environment ---
@@ -31,32 +69,77 @@ func main() {
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
-	db, err := connectDB(dsn)
-	if err != nil {
-		log.Fatalf("[FATAL] Could not connect to database: %v", err)
-	}
-	defer db.Close()
-
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("[FATAL] Migration failed: %v", err)
-	}
+	dbStatus := &DBStatus{}
 
 	// --- Router Setup ---
 	if getEnv("GIN_MODE", "debug") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	h := NewHandler(db, jwtSecret, ttlDur)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
-	// Health check (unauthenticated)
+	// Health check (unauthenticated) - available immediately
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "iam-service"})
+		status := "ok"
+		if !dbStatus.IsReady() {
+			status = "starting"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":   status,
+			"service":  "iam-service",
+			"db_ready": dbStatus.IsReady(),
+			"migrated": dbStatus.migrated,
+		})
 	})
+
+	// Start HTTP server in background
+	server := &http.Server{Addr: ":" + port, Handler: r}
+	go func() {
+		log.Printf("[INFO] IAM Service starting on :%s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[FATAL] Server failed: %v", err)
+		}
+	}()
+
+	// Connect to database in background (non-blocking)
+	go func() {
+		db, err := connectDB(dsn)
+		if err != nil {
+			log.Printf("[ERROR] Database connection failed: %v", err)
+			return
+		}
+
+		if err := runMigrations(db); err != nil {
+			log.Printf("[ERROR] Migration failed: %v", err)
+			db.Close()
+			return
+		}
+
+		dbStatus.SetReady(db)
+		dbStatus.SetMigrated()
+		log.Println("[INFO] IAM Service fully ready")
+	}()
+
+	// Start background job to create default admin user once DB is ready
+	go func() {
+		for i := 0; i < 30; i++ {
+			if dbStatus.IsReady() && dbStatus.migrated {
+				if err := createDefaultAdmin(dbStatus.GetDB()); err != nil {
+					log.Printf("[WARN] Could not create default admin: %v", err)
+				}
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}()
+
+	// Setup API routes (will return 503 until DB is ready)
+	h := NewHandler(dbStatus, jwtSecret, ttlDur)
 
 	// Public routes
 	public := r.Group("/api/v1/iam")
+	public.Use(h.requireDB())
 	{
 		public.POST("/register", h.Register)
 		public.POST("/login", h.Login)
@@ -65,16 +148,14 @@ func main() {
 
 	// Protected routes
 	protected := r.Group("/api/v1/iam")
-	protected.Use(h.JWTAuthMiddleware())
+	protected.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
 		protected.GET("/profile", h.GetProfile)
 		protected.PUT("/profile", h.UpdateProfile)
 	}
 
-	log.Printf("[INFO] IAM Service starting on :%s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("[FATAL] Server failed: %v", err)
-	}
+	// Block main thread
+	<-context.Background().Done()
 }
 
 // connectDB attempts to connect to Postgres with retry logic.
@@ -128,4 +209,33 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// createDefaultAdmin creates a default admin user if none exists.
+func createDefaultAdmin(db *sql.DB) error {
+	email := "admin@agriwizard.local"
+	var exists bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM iam.users WHERE email = $1)`, email).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(
+		`INSERT INTO iam.users (id, email, password_hash, role, full_name) VALUES ($1, $2, $3, $4, $5)`,
+		uuid.New().String(), email, string(hash), RoleAdmin, "System Admin",
+	)
+	if err != nil {
+		return err
+	}
+
+	log.Println("[INFO] Default admin user created: admin@agriwizard.local / admin123")
+	return nil
 }

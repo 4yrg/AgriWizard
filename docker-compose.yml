@@ -22,7 +22,6 @@ volumes:
   postgres-data:
 
 services:
-
   # ────────────────────────────────────────────
   #  Infrastructure
   # ────────────────────────────────────────────
@@ -89,10 +88,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 60s
 
   hardware-service:
     build:
@@ -123,10 +122,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 60s
 
   analytics-service:
     build:
@@ -155,10 +154,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 60s
 
   weather-service:
     build:
@@ -169,8 +168,8 @@ services:
     environment:
       <<: *common-env
       PORT: "8084"
-      USE_MOCK: "true"          # Set to "false" and provide OWM_API_KEY for live data
-      OWM_API_KEY: ""           # Replace with your OpenWeatherMap API key
+      USE_MOCK: "true" # Set to "false" and provide OWM_API_KEY for live data
+      OWM_API_KEY: "" # Replace with your OpenWeatherMap API key
       OWM_BASE_URL: "https://api.openweathermap.org/data/2.5"
       LOCATION_LAT: "6.9271"
       LOCATION_LON: "79.8612"
@@ -189,10 +188,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
 
   # ────────────────────────────────────────────
   #  API Gateway (Traefik)

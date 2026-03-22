@@ -13,16 +13,31 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Handler holds the database connection and config for all handlers.
+// Handler holds the database status and config for all handlers.
 type Handler struct {
-	db        *sql.DB
+	dbStatus  *DBStatus
 	jwtSecret string
 	jwtTTL    time.Duration
 }
 
 // NewHandler creates a new Handler instance.
-func NewHandler(db *sql.DB, jwtSecret string, jwtTTL time.Duration) *Handler {
-	return &Handler{db: db, jwtSecret: jwtSecret, jwtTTL: jwtTTL}
+func NewHandler(dbStatus *DBStatus, jwtSecret string, jwtTTL time.Duration) *Handler {
+	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtTTL: jwtTTL}
+}
+
+// requireDB is a middleware that checks if the database is ready.
+func (h *Handler) requireDB() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.dbStatus.IsReady() {
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+				Error:   "service_unavailable",
+				Message: "database connection not ready, please try again later",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // Register godoc
@@ -37,6 +52,12 @@ func NewHandler(db *sql.DB, jwtSecret string, jwtTTL time.Duration) *Handler {
 // @Failure      409   {object}  ErrorResponse
 // @Router       /api/v1/iam/register [post]
 func (h *Handler) Register(c *gin.Context) {
+	if !h.dbStatus.IsReady() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "service_unavailable", Message: "database not ready"})
+		return
+	}
+	db := h.dbStatus.GetDB()
+
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
@@ -56,7 +77,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	// Check if email already exists
 	var existingID string
-	err := h.db.QueryRow(`SELECT id FROM iam.users WHERE email = $1`, req.Email).Scan(&existingID)
+	err := db.QueryRow(`SELECT id FROM iam.users WHERE email = $1`, req.Email).Scan(&existingID)
 	if err == nil {
 		c.JSON(http.StatusConflict, ErrorResponse{Error: "email_exists", Message: "a user with this email already exists"})
 		return
@@ -75,7 +96,7 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	userID := uuid.New().String()
-	_, err = h.db.Exec(
+	_, err = db.Exec(
 		`INSERT INTO iam.users (id, email, password_hash, role, full_name, phone) VALUES ($1, $2, $3, $4, $5, $6)`,
 		userID, req.Email, string(hash), string(req.Role), req.FullName, req.Phone,
 	)
@@ -104,6 +125,12 @@ func (h *Handler) Register(c *gin.Context) {
 // @Failure      401   {object}  ErrorResponse
 // @Router       /api/v1/iam/login [post]
 func (h *Handler) Login(c *gin.Context) {
+	if !h.dbStatus.IsReady() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "service_unavailable", Message: "database not ready"})
+		return
+	}
+	db := h.dbStatus.GetDB()
+
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
@@ -111,7 +138,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	var user User
-	err := h.db.QueryRow(
+	err := db.QueryRow(
 		`SELECT id, email, password_hash, role, full_name, phone FROM iam.users WHERE email = $1`,
 		req.Email,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.FullName, &user.Phone)
@@ -210,9 +237,15 @@ func (h *Handler) Introspect(c *gin.Context) {
 // @Failure      401   {object}  ErrorResponse
 // @Router       /api/v1/iam/profile [get]
 func (h *Handler) GetProfile(c *gin.Context) {
+	if !h.dbStatus.IsReady() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "service_unavailable", Message: "database not ready"})
+		return
+	}
+	db := h.dbStatus.GetDB()
+
 	userID, _ := c.Get("user_id")
 	var user User
-	err := h.db.QueryRow(
+	err := db.QueryRow(
 		`SELECT id, email, role, full_name, phone, created_at FROM iam.users WHERE id = $1`,
 		userID,
 	).Scan(&user.ID, &user.Email, &user.Role, &user.FullName, &user.Phone, &user.CreatedAt)
@@ -240,13 +273,19 @@ func (h *Handler) GetProfile(c *gin.Context) {
 // @Failure      400   {object}  ErrorResponse
 // @Router       /api/v1/iam/profile [put]
 func (h *Handler) UpdateProfile(c *gin.Context) {
+	if !h.dbStatus.IsReady() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "service_unavailable", Message: "database not ready"})
+		return
+	}
+	db := h.dbStatus.GetDB()
+
 	userID, _ := c.Get("user_id")
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 		return
 	}
-	_, err := h.db.Exec(
+	_, err := db.Exec(
 		`UPDATE iam.users SET full_name=$1, phone=$2, updated_at=NOW() WHERE id=$3`,
 		req.FullName, req.Phone, userID,
 	)
