@@ -5,4 +5,5 @@ use (
 	./services/hardware-service
 	./services/analytics-service
 	./services/weather-service
+	./services/notification-service
 )

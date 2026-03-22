@@ -20,6 +20,7 @@ networks:
 
 volumes:
   postgres-data:
+  nats-data:
 
 services:
   # ────────────────────────────────────────────
@@ -192,6 +193,79 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  # ────────────────────────────────────────────
+  #  Message Queue & Notification Service
+  # ────────────────────────────────────────────
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: agriwizard-nats
+    restart: unless-stopped
+    command: ["--jetstream", "--store_dir", "/data", "-p", "4222", "-m", "8222"]
+    volumes:
+      - nats-data:/data
+    networks:
+      - agriwizard-net
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "nats-server", "--help"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: agriwizard-mailhog
+    restart: unless-stopped
+    networks:
+      - agriwizard-net
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: agriwizard-notification
+    restart: unless-stopped
+    environment:
+      PORT: "8085"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: agriwizard
+      DB_PASSWORD: agriwizard_secret
+      DB_NAME: agriwizard
+      NATS_URL: nats://nats:4222
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_FROM: noreply@agriwizard.local
+    networks:
+      - agriwizard-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.notification.rule=PathPrefix(`/api/v1/notifications`) || PathPrefix(`/api/v1/templates`)"
+      - "traefik.http.routers.notification.entrypoints=web"
+      - "traefik.http.services.notification.loadbalancer.server.port=8085"
+    ports:
+      - "${NOTIFICATION_PORT:-8085}:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # ────────────────────────────────────────────
   #  API Gateway (Traefik)
