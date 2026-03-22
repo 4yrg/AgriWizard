@@ -91,7 +91,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Log in to Docker Hub (to increase rate limits)
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -101,8 +101,8 @@ jobs:
         id: check-creds
         run: |
           if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "warning=Docker Hub credentials not configured. Skipping image push." >> $GITHUB_OUTPUT
-            echo "::warning::Docker Hub credentials not configured. Build will complete but images won't be pushed."
+            echo "warning=Docker Hub credentials not configured. Build may hit rate limits." >> $GITHUB_OUTPUT
+            echo "::warning::Docker Hub credentials not configured. Build may hit rate limits."
             exit 0
           fi
           echo "credentials=configured" >> $GITHUB_OUTPUT
