@@ -1,0 +1,74 @@
+# Standalone docker-compose for testing the Notification Service in isolation.
+# Usage: docker compose up --build
+#
+# Services:
+#   - NATS JetStream   :4222  (message queue)
+#   - PostgreSQL        :5433  (notification DB)
+#   - MailHog           :8025  (fake SMTP web UI) / :1025 (SMTP)
+#   - Notification API  :8085  (REST + NATS consumer)
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["--jetstream", "--store_dir", "/data", "-p", "4222", "-m", "8222"]
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--help"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  notification-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: notification
+      POSTGRES_PASSWORD: notification_secret
+      POSTGRES_DB: notification
+    ports:
+      - "${NOTIFICATION_DB_PORT:-5433}:5432"
+    volumes:
+      - notification-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  notification-service:
+    build: .
+    ports:
+      - "${NOTIFICATION_PORT:-8085}:8085"
+    environment:
+      PORT: "8085"
+      DB_HOST: notification-postgres
+      DB_PORT: "5432"
+      DB_USER: notification
+      DB_PASSWORD: notification_secret
+      DB_NAME: notification
+      NATS_URL: nats://nats:4222
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_FROM: noreply@notification.local
+    depends_on:
+      notification-postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+  notification-pg-data:
