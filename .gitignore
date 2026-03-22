@@ -1,71 +1,32 @@
-# ------------------------------
-# OS / Editor
-# ------------------------------
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
-
-.idea/
-.vscode/
-
-# ------------------------------
-# Go build / test artifacts
-# ------------------------------
-bin/
-dist/
-build/
-tmp/
-
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# Test binary, built with `go test -c`
 *.test
 
+# Code coverage profiles and other test artifacts
 *.out
-coverage.out
 coverage.*
 *.coverprofile
 profile.cov
 
-# ------------------------------
-# Logs / runtime files
-# ------------------------------
-*.log
-logs/
-*.pid
-*.seed
-
-# ------------------------------
-# Environment & secrets
-# ------------------------------
-.env
-.env.*
-!.env.example
-!.env.template
-
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-
-# ------------------------------
-# Docker / local infra artifacts
-# ------------------------------
-.docker/
-docker-data/
-
-# ------------------------------
-# Optional dependency/vendor cache
-# ------------------------------
+# Dependency directories (remove the comment below to include it)
 # vendor/
 
-# ------------------------------
-# Go workspace notes
-# Keep go.work tracked when using monorepo workspaces
-# ------------------------------
-# go.work.sum
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Editor/IDE
+# .idea/
+# .vscode/
