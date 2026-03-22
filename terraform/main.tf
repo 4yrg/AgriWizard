@@ -166,8 +166,8 @@ resource "azurerm_postgresql_flexible_server" "main" {
   zone                = "1"
 
   # Administrator credentials
-  admin_username = var.postgresql_admin_username
-  admin_password = var.postgresql_admin_password
+  administrator_username = var.postgresql_admin_username
+  administrator_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
@@ -198,7 +198,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
   lifecycle {
     ignore_changes = [
-      admin_password # Manage password via Key Vault
+      administrator_password # Manage password via Key Vault
     ]
   }
 }
@@ -220,13 +220,6 @@ resource "azurerm_iothub" "main" {
   sku {
     name     = "S1"
     capacity = 1
-  }
-
-  # IP Filter (allow all for now, restrict in production)
-  ip_filter {
-    name  = "AllowAll"
-    ip_mask = "0.0.0.0/0"
-    action = "Accept"
   }
 
   tags = local.common_tags
