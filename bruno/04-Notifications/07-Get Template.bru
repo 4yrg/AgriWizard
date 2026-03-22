@@ -1,0 +1,11 @@
+meta {
+  name: Get Template
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{notificationBaseUrl}}/api/v1/templates/{{templateId}}
+  body: none
+  auth: none
+}
