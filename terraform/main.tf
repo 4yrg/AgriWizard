@@ -22,23 +22,16 @@ locals {
 # Data source to get current client configuration
 data "azurerm_client_config" "current" {}
 
-# Resource Group
-resource "azurerm_resource_group" "main" {
-  name     = var.resource_group_name
-  location = var.location
-
-  tags = local.common_tags
-
-  lifecycle {
-    prevent_destroy = false
-  }
+# Use existing resource group
+data "azurerm_resource_group" "main" {
+  name = "AgriWizard"
 }
 
 # Log Analytics Workspace for centralized logging
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "${local.prefix}-log"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
 
@@ -48,8 +41,8 @@ resource "azurerm_log_analytics_workspace" "main" {
 # Application Insights for application monitoring
 resource "azurerm_application_insights" "main" {
   name                = "${local.prefix}-appinsights"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   workspace_id        = azurerm_log_analytics_workspace.main.id
   application_type    = "other"
 
@@ -59,8 +52,8 @@ resource "azurerm_application_insights" "main" {
 # Azure Container Registry
 resource "azurerm_container_registry" "main" {
   name                = var.acr_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "Standard"
   admin_enabled       = true
 
@@ -76,8 +69,8 @@ resource "azurerm_container_registry" "main" {
 # Container Apps Environment
 resource "azurerm_container_app_environment" "main" {
   name                       = var.container_apps_env_name
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
+  location                   = data.azurerm_resource_group.main.location
+  resource_group_name        = data.azurerm_resource_group.main.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
 
   tags = local.common_tags
@@ -90,8 +83,8 @@ resource "azurerm_container_app_environment" "main" {
 # Azure Key Vault for secret management
 resource "azurerm_key_vault" "main" {
   name                = var.key_vault_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
   sku_name            = "standard"
 
@@ -149,8 +142,8 @@ resource "azurerm_key_vault_access_policy" "container_apps" {
 # User Assigned Identity for Container Apps
 resource "azurerm_user_assigned_identity" "container_apps" {
   name                = "${local.prefix}-identity"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
 
   tags = local.common_tags
 }
@@ -158,13 +151,13 @@ resource "azurerm_user_assigned_identity" "container_apps" {
 # Azure Database for PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "main" {
   name                = var.postgresql_server_name
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = "AgriWizard"
+  location            = var.location
   version             = var.postgresql_version
 
   # Administrator credentials
-  administrator_username = var.postgresql_admin_username
-  administrator_password = var.postgresql_admin_password
+  admin_username = var.postgresql_admin_username
+  admin_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
@@ -187,8 +180,8 @@ resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
 # IoT Hub for MQTT communication
 resource "azurerm_iothub" "main" {
   name                = var.iot_hub_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
 
   sku {
     name     = "S1"
@@ -202,15 +195,15 @@ resource "azurerm_iothub" "main" {
 resource "azurerm_iothub_consumer_group" "main" {
   name                   = "agriwizard-consumer"
   iothub_name            = azurerm_iothub.main.name
-  resource_group_name    = azurerm_resource_group.main.name
+  resource_group_name    = data.azurerm_resource_group.main.name
   eventhub_endpoint_name = "events"
 }
 
 # API Management Service
 resource "azurerm_api_management" "main" {
   name                = var.apim_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   publisher_name      = "AgriWizard Team"
   publisher_email     = var.apim_publisher_email
   sku_name            = var.apim_sku_name
@@ -232,7 +225,7 @@ resource "azurerm_api_management" "main" {
 # API Management - AgriWizard API
 resource "azurerm_api_management_api" "agriwizard" {
   name                  = "agriwizard-api"
-  resource_group_name   = azurerm_resource_group.main.name
+  resource_group_name   = data.azurerm_resource_group.main.name
   api_management_name   = azurerm_api_management.main.name
   revision              = "1"
   display_name          = "AgriWizard API"
@@ -246,7 +239,7 @@ resource "azurerm_api_management_api" "agriwizard" {
 resource "azurerm_api_management_product" "agriwizard" {
   product_id            = "agriwizard-product"
   api_management_name   = azurerm_api_management.main.name
-  resource_group_name   = azurerm_resource_group.main.name
+  resource_group_name   = data.azurerm_resource_group.main.name
   display_name          = "AgriWizard Product"
   description           = "Access to AgriWizard microservices APIs"
   subscription_required = true
@@ -259,5 +252,5 @@ resource "azurerm_api_management_product_api" "main" {
   product_id          = azurerm_api_management_product.agriwizard.product_id
   api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
 }

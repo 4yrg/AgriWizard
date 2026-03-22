@@ -7,8 +7,8 @@ module "container_apps" {
   source = "./modules/container-apps"
 
   # Resource configuration
-  resource_group_name     = azurerm_resource_group.main.name
-  location                = azurerm_resource_group.main.location
+  resource_group_name     = data.azurerm_resource_group.main.name
+  location                = data.azurerm_resource_group.main.location
   container_apps_env_name = azurerm_container_app_environment.main.name
 
   # Container Registry
@@ -59,7 +59,7 @@ module "container_apps" {
 
 resource "azurerm_api_management_backend" "iam_service" {
   name                = "iam-service-backend"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   api_management_name = azurerm_api_management.main.name
   protocol            = "http"
 
@@ -69,7 +69,7 @@ resource "azurerm_api_management_backend" "iam_service" {
 
 resource "azurerm_api_management_backend" "hardware_service" {
   name                = "hardware-service-backend"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   api_management_name = azurerm_api_management.main.name
   protocol            = "http"
 
@@ -79,7 +79,7 @@ resource "azurerm_api_management_backend" "hardware_service" {
 
 resource "azurerm_api_management_backend" "analytics_service" {
   name                = "analytics-service-backend"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   api_management_name = azurerm_api_management.main.name
   protocol            = "http"
 
@@ -89,7 +89,7 @@ resource "azurerm_api_management_backend" "analytics_service" {
 
 resource "azurerm_api_management_backend" "weather_service" {
   name                = "weather-service-backend"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   api_management_name = azurerm_api_management.main.name
   protocol            = "http"
 
@@ -105,7 +105,7 @@ resource "azurerm_api_management_api_operation" "iam_operations" {
   operation_id        = "iam-operations"
   api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   display_name        = "IAM Operations"
   method              = "ANY"
   url_template        = "/iam/*"
@@ -115,7 +115,7 @@ resource "azurerm_api_management_api_operation" "hardware_operations" {
   operation_id        = "hardware-operations"
   api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   display_name        = "Hardware Operations"
   method              = "ANY"
   url_template        = "/hardware/*"
@@ -125,7 +125,7 @@ resource "azurerm_api_management_api_operation" "analytics_operations" {
   operation_id        = "analytics-operations"
   api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   display_name        = "Analytics Operations"
   method              = "ANY"
   url_template        = "/analytics/*"
@@ -135,7 +135,7 @@ resource "azurerm_api_management_api_operation" "weather_operations" {
   operation_id        = "weather-operations"
   api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   display_name        = "Weather Operations"
   method              = "ANY"
   url_template        = "/weather/*"
