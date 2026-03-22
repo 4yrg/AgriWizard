@@ -1,15 +1,51 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
+
+// ServiceStatus holds the shared service state.
+type ServiceStatus struct {
+	mu       sync.RWMutex
+	db       *sql.DB
+	ready    bool
+	migrated bool
+}
+
+func (s *ServiceStatus) GetDB() *sql.DB {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db
+}
+
+func (s *ServiceStatus) IsReady() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ready
+}
+
+func (s *ServiceStatus) SetReady(db *sql.DB) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db = db
+	s.ready = true
+}
+
+func (s *ServiceStatus) SetMigrated() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.migrated = true
+}
 
 func main() {
 	dbHost := getEnv("DB_HOST", "localhost")
@@ -24,30 +60,62 @@ func main() {
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
-	db, err := connectDB(dsn)
-	if err != nil {
-		log.Fatalf("[FATAL] DB: %v", err)
-	}
-	defer db.Close()
 
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("[FATAL] Migrations: %v", err)
-	}
+	status := &ServiceStatus{}
 
 	if getEnv("GIN_MODE", "debug") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	h := NewHandler(db, jwtSecret, hardwareURL, weatherURL)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
+	// Health check - available immediately
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "analytics-service"})
+		s := "ok"
+		if !status.IsReady() {
+			s = "starting"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":   s,
+			"service":  "analytics-service",
+			"db_ready": status.IsReady(),
+			"migrated": status.migrated,
+		})
 	})
 
+	// Start HTTP server in background
+	server := &http.Server{Addr: ":" + port, Handler: r}
+	go func() {
+		log.Printf("[INFO] Analytics Service starting on :%s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[FATAL] Server: %v", err)
+		}
+	}()
+
+	// Connect to database in background
+	go func() {
+		db, err := connectDB(dsn)
+		if err != nil {
+			log.Printf("[ERROR] DB: %v", err)
+			return
+		}
+
+		if err := runMigrations(db); err != nil {
+			log.Printf("[ERROR] Migrations: %v", err)
+			db.Close()
+			return
+		}
+
+		status.SetReady(db)
+		status.SetMigrated()
+		log.Println("[INFO] Analytics Service fully ready")
+	}()
+
+	// Setup API routes
+	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
 	api := r.Group("/api/v1/analytics")
-	api.Use(h.JWTAuthMiddleware())
+	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
 		api.POST("/thresholds", h.UpsertThreshold)
 		api.GET("/thresholds/:parameterId", h.GetThreshold)
@@ -61,10 +129,8 @@ func main() {
 		api.GET("/summaries", h.GetDailySummaries)
 	}
 
-	log.Printf("[INFO] Analytics Service starting on :%s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("[FATAL] Server: %v", err)
-	}
+	// Block main thread
+	<-context.Background().Done()
 }
 
 func connectDB(dsn string) (*sql.DB, error) {

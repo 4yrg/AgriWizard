@@ -2,17 +2,60 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
+
+// ServiceStatus holds the shared service state.
+type ServiceStatus struct {
+	mu         sync.RWMutex
+	db         *sql.DB
+	mqttClient mqtt.Client
+	ready      bool
+	migrated   bool
+}
+
+func (s *ServiceStatus) GetDB() *sql.DB {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db
+}
+
+func (s *ServiceStatus) GetMQTTClient() mqtt.Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mqttClient
+}
+
+func (s *ServiceStatus) IsReady() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ready
+}
+
+func (s *ServiceStatus) SetReady(db *sql.DB, mqttClient mqtt.Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db = db
+	s.mqttClient = mqttClient
+	s.ready = true
+}
+
+func (s *ServiceStatus) SetMigrated() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.migrated = true
+}
 
 func main() {
 	dbHost := getEnv("DB_HOST", "localhost")
@@ -27,40 +70,69 @@ func main() {
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
 
-	// --- Database ---
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
-	db, err := connectDB(dsn)
-	if err != nil {
-		log.Fatalf("[FATAL] DB connect: %v", err)
-	}
-	defer db.Close()
 
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("[FATAL] Migrations: %v", err)
-	}
-
-	// --- MQTT ---
-	mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-
-	// --- Restore MQTT subscriptions for existing sensors/equipment ---
-	restoreSubscriptions(db, mqttClient)
+	status := &ServiceStatus{}
 
 	// --- Router ---
 	if getEnv("GIN_MODE", "debug") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	h := NewHandler(db, mqttClient, jwtSecret, analyticsURL)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
+	// Health check - available immediately
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "hardware-service"})
+		s := "ok"
+		if !status.IsReady() {
+			s = "starting"
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":    s,
+			"service":   "hardware-service",
+			"db_ready":  status.IsReady(),
+			"migrated":  status.migrated,
+			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
+		})
 	})
 
+	// Start HTTP server in background
+	server := &http.Server{Addr: ":" + port, Handler: r}
+	go func() {
+		log.Printf("[INFO] Hardware Service starting on :%s", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[FATAL] Server: %v", err)
+		}
+	}()
+
+	// Connect to database and MQTT in background
+	go func() {
+		db, err := connectDB(dsn)
+		if err != nil {
+			log.Printf("[ERROR] DB connect: %v", err)
+			return
+		}
+
+		if err := runMigrations(db); err != nil {
+			log.Printf("[ERROR] Migrations: %v", err)
+			db.Close()
+			return
+		}
+
+		mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
+		restoreSubscriptions(db, mqttClient)
+
+		status.SetReady(db, mqttClient)
+		status.SetMigrated()
+		log.Println("[INFO] Hardware Service fully ready")
+	}()
+
+	// Setup API routes
+	h := NewHandler(status, jwtSecret, analyticsURL)
 	api := r.Group("/api/v1/hardware")
-	api.Use(h.JWTAuthMiddleware())
+	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
 		// Equipment
 		api.POST("/equipments", h.CreateEquipment)
@@ -79,10 +151,8 @@ func main() {
 		api.POST("/telemetry", h.IngestTelemetry)
 	}
 
-	log.Printf("[INFO] Hardware Service starting on :%s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("[FATAL] Server: %v", err)
-	}
+	// Block main thread
+	<-context.Background().Done()
 }
 
 func connectDB(dsn string) (*sql.DB, error) {

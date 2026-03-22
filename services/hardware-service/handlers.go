@@ -17,15 +17,37 @@ import (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	db          *sql.DB
-	mqttClient  mqtt.Client
-	jwtSecret   string
+	status       *ServiceStatus
+	jwtSecret    string
 	analyticsURL string
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(db *sql.DB, mqttClient mqtt.Client, jwtSecret, analyticsURL string) *Handler {
-	return &Handler{db: db, mqttClient: mqttClient, jwtSecret: jwtSecret, analyticsURL: analyticsURL}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL}
+}
+
+// requireDB is a middleware that checks if the database is ready.
+func (h *Handler) requireDB() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.status.IsReady() {
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+				Error:   "service_unavailable",
+				Message: "database connection not ready, please try again later",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func (h *Handler) db() *sql.DB {
+	return h.status.GetDB()
+}
+
+func (h *Handler) mqttClient() mqtt.Client {
+	return h.status.GetMQTTClient()
 }
 
 // ──────────────────────────────────────────────
@@ -53,7 +75,7 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 	mqttTopic := fmt.Sprintf("agriwizard/equipment/%s/command", id)
 	ops := StringArray(req.SupportedOperations)
 
-	_, err := h.db.Exec(
+	_, err := h.db().Exec(
 		`INSERT INTO hardware.equipments (id, name, operations, mqtt_topic, api_url, current_status)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		id, req.Name, ops, mqttTopic, req.APIURL, string(StatusOff),
@@ -65,7 +87,7 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 	}
 
 	// Subscribe to the newly created equipment topic to receive status updates
-	if token := h.mqttClient.Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
+	if token := h.mqttClient().Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
 		log.Printf("[WARN] CreateEquipment: mqtt subscribe failed: %v", token.Error())
 	}
 
@@ -84,7 +106,7 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 // @Success      200  {object}  SuccessResponse
 // @Router       /api/v1/hardware/equipments [get]
 func (h *Handler) ListEquipments(c *gin.Context) {
-	rows, err := h.db.Query(`SELECT id, name, operations, mqtt_topic, api_url, current_status, created_at FROM hardware.equipments ORDER BY created_at DESC`)
+	rows, err := h.db().Query(`SELECT id, name, operations, mqtt_topic, api_url, current_status, created_at FROM hardware.equipments ORDER BY created_at DESC`)
 	if err != nil {
 		log.Printf("[ERROR] ListEquipments: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -123,7 +145,7 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	equipmentID := c.Param("id")
 
 	var eq Equipment
-	err := h.db.QueryRow(
+	err := h.db().QueryRow(
 		`SELECT id, name, operations, mqtt_topic, current_status FROM hardware.equipments WHERE id = $1`,
 		equipmentID,
 	).Scan(&eq.ID, &eq.Name, &eq.SupportedOperations, &eq.MQTTTopic, &eq.CurrentStatus)
@@ -176,7 +198,7 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	}
 	msgBytes, _ := json.Marshal(mqttMsg)
 
-	token := h.mqttClient.Publish(eq.MQTTTopic, 1, false, msgBytes)
+	token := h.mqttClient().Publish(eq.MQTTTopic, 1, false, msgBytes)
 	token.Wait()
 	if token.Error() != nil {
 		log.Printf("[ERROR] DispatchControl: mqtt publish: %v", token.Error())
@@ -189,7 +211,7 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	if strings.EqualFold(cmd.Operation, "OFF") || strings.EqualFold(cmd.Operation, "TURN_OFF") {
 		newStatus = StatusOff
 	}
-	_, _ = h.db.Exec(`UPDATE hardware.equipments SET current_status=$1 WHERE id=$2`, string(newStatus), equipmentID)
+	_, _ = h.db().Exec(`UPDATE hardware.equipments SET current_status=$1 WHERE id=$2`, string(newStatus), equipmentID)
 
 	log.Printf("[INFO] DispatchControl: published cmd=%s to topic=%s", cmd.Operation, eq.MQTTTopic)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -227,7 +249,7 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 	mqttTopic := fmt.Sprintf("agriwizard/sensor/%s/telemetry", id)
 	paramIDs := StringArray(req.ParameterIDs)
 
-	_, err := h.db.Exec(
+	_, err := h.db().Exec(
 		`INSERT INTO hardware.sensors (id, name, parameter_ids, mqtt_topic, api_url, update_frequency)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		id, req.Name, paramIDs, mqttTopic, req.APIURL, req.UpdateFrequency,
@@ -239,7 +261,7 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 	}
 
 	// Subscribe to telemetry topic for incoming data
-	h.mqttClient.Subscribe(mqttTopic, 1, h.handleTelemetry)
+	h.mqttClient().Subscribe(mqttTopic, 1, h.handleTelemetry)
 
 	log.Printf("[INFO] CreateSensor: provisioned id=%s name=%s topic=%s", id, req.Name, mqttTopic)
 	c.JSON(http.StatusCreated, SuccessResponse{
@@ -256,7 +278,7 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 // @Success      200  {object}  SuccessResponse
 // @Router       /api/v1/hardware/sensors [get]
 func (h *Handler) ListSensors(c *gin.Context) {
-	rows, err := h.db.Query(`SELECT id, name, parameter_ids, mqtt_topic, api_url, update_frequency, created_at FROM hardware.sensors ORDER BY created_at DESC`)
+	rows, err := h.db().Query(`SELECT id, name, parameter_ids, mqtt_topic, api_url, update_frequency, created_at FROM hardware.sensors ORDER BY created_at DESC`)
 	if err != nil {
 		log.Printf("[ERROR] ListSensors: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -280,7 +302,7 @@ func (h *Handler) ListSensors(c *gin.Context) {
 		var params []Parameter
 		for _, pid := range s.ParameterIDs {
 			var p Parameter
-			if err := h.db.QueryRow(`SELECT id, unit, description FROM hardware.parameters WHERE id=$1`, pid).
+			if err := h.db().QueryRow(`SELECT id, unit, description FROM hardware.parameters WHERE id=$1`, pid).
 				Scan(&p.ID, &p.Unit, &p.Description); err == nil {
 				params = append(params, p)
 			}
@@ -317,7 +339,7 @@ func (h *Handler) CreateParameter(c *gin.Context) {
 		return
 	}
 
-	_, err := h.db.Exec(
+	_, err := h.db().Exec(
 		`INSERT INTO hardware.parameters (id, unit, description) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET unit=$2, description=$3`,
 		req.ID, req.Unit, req.Description,
 	)
@@ -338,7 +360,7 @@ func (h *Handler) CreateParameter(c *gin.Context) {
 // @Success      200  {object}  SuccessResponse
 // @Router       /api/v1/hardware/parameters [get]
 func (h *Handler) ListParameters(c *gin.Context) {
-	rows, err := h.db.Query(`SELECT id, unit, description, created_at FROM hardware.parameters ORDER BY id`)
+	rows, err := h.db().Query(`SELECT id, unit, description, created_at FROM hardware.parameters ORDER BY id`)
 	if err != nil {
 		log.Printf("[ERROR] ListParameters: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -416,7 +438,7 @@ func (h *Handler) handleEquipmentStatus(_ mqtt.Client, msg mqtt.Message) {
 	if err := json.Unmarshal(msg.Payload(), &status); err != nil {
 		return
 	}
-	if _, err := h.db.Exec(
+	if _, err := h.db().Exec(
 		`UPDATE hardware.equipments SET current_status=$1 WHERE id=$2`,
 		status.Status, status.EquipmentID,
 	); err != nil {
@@ -427,7 +449,7 @@ func (h *Handler) handleEquipmentStatus(_ mqtt.Client, msg mqtt.Message) {
 // storeTelemetry persists telemetry data and forwards it to the analytics service.
 func (h *Handler) storeTelemetry(payload TelemetryPayload) error {
 	for _, r := range payload.Readings {
-		_, err := h.db.Exec(
+		_, err := h.db().Exec(
 			`INSERT INTO hardware.raw_sensor_data (sensor_id, parameter_id, value, timestamp) VALUES ($1, $2, $3, $4)`,
 			payload.SensorID, r.ParameterID, r.Value, payload.Timestamp,
 		)
