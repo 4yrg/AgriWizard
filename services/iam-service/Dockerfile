@@ -5,17 +5,15 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
-# Copy go.mod first for better layer caching
-COPY go.mod ./
-
-# Copy go.sum if it exists (optional)
-COPY go.sum* ./
+# Copy go.mod and go.sum from the service directory
+COPY services/iam-service/go.mod ./
+COPY services/iam-service/go.sum* ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy the rest of the application
-COPY . .
+# Copy the rest of the service
+COPY services/iam-service/ ./
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/iam-service .
