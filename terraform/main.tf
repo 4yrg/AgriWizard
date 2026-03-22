@@ -4,6 +4,21 @@
 # This file creates the core Azure infrastructure for AgriWizard.
 # =============================================================================
 
+# Local values for consistent naming
+locals {
+  common_tags = {
+    Project     = "AgriWizard"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    Application = "Smart Greenhouse Management"
+    Owner       = "AgriWizard Team"
+    CostCenter  = "IT-Cloud"
+  }
+
+  # Resource name prefix
+  prefix = "${var.project_name}-${var.environment}"
+}
+
 # Data source to get current client configuration
 data "azurerm_client_config" "current" {}
 
