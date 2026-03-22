@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"github.com/nats-io/nats.go"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -147,8 +148,27 @@ func main() {
 		}
 	}()
 
+	// --- NATS Connection (optional) ---
+	var js nats.JetStreamContext
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	nc, err := nats.Connect(natsURL,
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Printf("[WARN] NATS connection failed: %v — notifications disabled", err)
+	} else {
+		js, err = nc.JetStream()
+		if err != nil {
+			log.Printf("[WARN] JetStream init failed: %v — notifications disabled", err)
+		} else {
+			log.Printf("[INFO] NATS connected: %s", natsURL)
+		}
+	}
+
 	// Setup API routes (will return 503 until DB is ready)
-	h := NewHandler(dbStatus, jwtSecret, ttlDur)
+	h := NewHandler(dbStatus, jwtSecret, ttlDur, js)
 
 	// Public routes
 	public := r.Group("/api/v1/iam")

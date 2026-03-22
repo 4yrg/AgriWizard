@@ -76,6 +76,7 @@ services:
       PORT: "8081"
       DB_NAME: "${IAM_DB_NAME:-iam_db}"
       JWT_TTL_HOURS: "24"
+      NATS_URL: nats://nats:4222
     networks:
       - agriwizard-net
     labels:
@@ -87,6 +88,8 @@ services:
       - "${IAM_PORT:-8081}:8081"
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
