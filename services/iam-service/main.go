@@ -36,6 +36,12 @@ func (s *DBStatus) IsReady() bool {
 	return s.ready
 }
 
+func (s *DBStatus) IsMigrated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.migrated
+}
+
 func (s *DBStatus) SetReady(db *sql.DB) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -89,7 +95,7 @@ func main() {
 			"status":   status,
 			"service":  "iam-service",
 			"db_ready": dbStatus.IsReady(),
-			"migrated": dbStatus.migrated,
+			"migrated": dbStatus.IsMigrated(),
 		})
 	})
 
@@ -102,29 +108,36 @@ func main() {
 		}
 	}()
 
-	// Connect to database in background (non-blocking)
+	// Connect to database in background (retry until ready)
 	go func() {
-		db, err := connectDB(dsn)
-		if err != nil {
-			log.Printf("[ERROR] Database connection failed: %v", err)
+		for {
+			db, err := connectDB(dsn)
+			if err != nil {
+				log.Printf("[ERROR] Database connection failed: %v", err)
+				log.Println("[WARN] IAM init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			if err := runMigrations(db); err != nil {
+				log.Printf("[ERROR] Migration failed: %v", err)
+				db.Close()
+				log.Println("[WARN] IAM init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			dbStatus.SetReady(db)
+			dbStatus.SetMigrated()
+			log.Println("[INFO] IAM Service fully ready")
 			return
 		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migration failed: %v", err)
-			db.Close()
-			return
-		}
-
-		dbStatus.SetReady(db)
-		dbStatus.SetMigrated()
-		log.Println("[INFO] IAM Service fully ready")
 	}()
 
 	// Start background job to create default admin user once DB is ready
 	go func() {
 		for i := 0; i < 30; i++ {
-			if dbStatus.IsReady() && dbStatus.migrated {
+			if dbStatus.IsReady() && dbStatus.IsMigrated() {
 				if err := createDefaultAdmin(dbStatus.GetDB()); err != nil {
 					log.Printf("[WARN] Could not create default admin: %v", err)
 				}
