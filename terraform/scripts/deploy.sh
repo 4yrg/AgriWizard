@@ -65,14 +65,13 @@ check_prerequisites() {
 init_terraform() {
     print_header "Initializing Terraform"
 
-    cd "$(dirname "$0")"
+    # Get the terraform directory (parent of scripts/)
+    TERRAFORM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+    cd "$TERRAFORM_DIR"
 
-    terraform init \
-        -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
-        -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
-        -backend-config="container_name=$TF_STATE_CONTAINER" \
-        -backend-config="key=$TF_STATE_KEY" \
-        -reconfigure
+    echo "Working directory: $(pwd)"
+
+    terraform init
 
     echo "✓ Terraform initialized"
 }

@@ -9,7 +9,7 @@
 # General Configuration
 # -----------------------------------------------------------------------------
 resource_group_name     = "agriwizard-rg-dev"
-location                = "eastus"
+location                = "centralindia"  # India Central region
 environment             = "dev"
 project_name            = "agriwizard"
 

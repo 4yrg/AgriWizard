@@ -15,7 +15,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Azure region for deployment"
   type        = string
-  default     = "eastus"
+  default     = "centralindia"  # India Central
 }
 
 variable "environment" {

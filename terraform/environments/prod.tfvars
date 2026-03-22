@@ -9,7 +9,7 @@
 # General Configuration
 # -----------------------------------------------------------------------------
 resource_group_name     = "agriwizard-rg-prod"
-location                = "eastus2"  # Use different region for prod
+location                = "centralindia"  # India Central region
 environment             = "prod"
 project_name            = "agriwizard"
 
