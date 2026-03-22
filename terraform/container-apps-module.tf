@@ -56,7 +56,7 @@ module "container_apps" {
 }
 
 # =============================================================================
-# API Management - API Configuration
+# API Management - Backend Services
 # =============================================================================
 
 # API Management - IAM Service Backend
@@ -103,56 +103,52 @@ resource "azurerm_api_management_backend" "weather_service" {
   description         = "Weather data and irrigation recommendations"
 }
 
+# =============================================================================
+# API Management - API Operations
+# =============================================================================
+
 # API Management - IAM Operations
 resource "azurerm_api_management_api_operation" "iam_operations" {
   operation_id        = "iam-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  api_id              = azurerm_api_management_api.agriwizard.api_id
   resource_group_name = azurerm_resource_group.main.name
   display_name        = "IAM Operations"
   method              = "ANY"
   url_template        = "/iam/*"
-
-  backend_service_id = azurerm_api_management_backend.iam_service.id
 }
 
 # API Management - Hardware Operations
 resource "azurerm_api_management_api_operation" "hardware_operations" {
   operation_id        = "hardware-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  api_id              = azurerm_api_management_api.agriwizard.api_id
   resource_group_name = azurerm_resource_group.main.name
   display_name        = "Hardware Operations"
   method              = "ANY"
   url_template        = "/hardware/*"
-
-  backend_service_id = azurerm_api_management_backend.hardware_service.id
 }
 
 # API Management - Analytics Operations
 resource "azurerm_api_management_api_operation" "analytics_operations" {
   operation_id        = "analytics-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  api_id              = azurerm_api_management_api.agriwizard.api_id
   resource_group_name = azurerm_resource_group.main.name
   display_name        = "Analytics Operations"
   method              = "ANY"
   url_template        = "/analytics/*"
-
-  backend_service_id = azurerm_api_management_backend.analytics_service.id
 }
 
 # API Management - Weather Operations
 resource "azurerm_api_management_api_operation" "weather_operations" {
   operation_id        = "weather-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
-  api_id              = azurerm_api_management_api.agriwizard.api_id
   resource_group_name = azurerm_resource_group.main.name
   display_name        = "Weather Operations"
   method              = "ANY"
   url_template        = "/weather/*"
-
-  backend_service_id = azurerm_api_management_backend.weather_service.id
 }
 
 # =============================================================================

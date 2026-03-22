@@ -1,66 +1,8 @@
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.80.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5.0"
-    }
-  }
-
-  # Backend configuration for remote state storage
-  # Uncomment and configure for production use
-  # backend "azurerm" {
-  #   resource_group_name  = "agriwizard-tfstate-rg"
-  #   storage_account_name = "tfstateagriwizard"
-  #   container_name       = "tfstate"
-  #   key                  = "agriwizard.terraform.tfstate"
-  # }
-}
-
-provider "azurerm" {
-  features {
-    resource_group {
-      prevent_deletion_if_contains_resources = false
-    }
-    key_vault {
-      purge_soft_delete_on_destroy    = true
-      recover_soft_deleted_key_vaults = true
-    }
-  }
-
-  # Use Azure CLI authentication
-  # Alternatively, set ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_SUBSCRIPTION_ID, ARM_TENANT_ID
-}
-
-provider "random" {}
-
-# Local values for consistent naming
-locals {
-  common_tags = {
-    Project     = "AgriWizard"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Application = "Smart Greenhouse Management"
-    Owner       = "AgriWizard Team"
-    CostCenter  = "IT-Cloud"
-  }
-
-  # Resource name prefix
-  prefix = "${var.project_name}-${var.environment}"
-
-  # Container Apps configuration
-  container_apps_config = {
-    cpu_core    = var.cpu_core
-    memory_size = var.memory_size
-    min_replicas = var.min_replicas
-    max_replicas = var.max_replicas
-  }
-}
+# =============================================================================
+# AgriWizard - Main Terraform Configuration
+# =============================================================================
+# This file creates the core Azure infrastructure for AgriWizard.
+# =============================================================================
 
 # Data source to get current client configuration
 data "azurerm_client_config" "current" {}
@@ -110,9 +52,6 @@ resource "azurerm_container_registry" "main" {
   # Enable data endpoint for better performance
   data_endpoint_enabled = true
 
-  # Retention policy
-  retention_policy_in_days = 7
-
   tags = local.common_tags
 
   # Zone redundancy for production
@@ -125,10 +64,6 @@ resource "azurerm_container_app_environment" "main" {
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
-
-  # Infrastructure configuration
-  infrastructure_subnet_id   = null # Use managed environment
-  internal_load_balancer_enabled = false
 
   tags = local.common_tags
 
@@ -211,13 +146,13 @@ resource "azurerm_postgresql_flexible_server" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   version             = var.postgresql_version
-  delegated_subnet_id = null # Public access for now, can be configured for private
+  delegated_subnet_id = null # Public access for now
   private_dns_zone_id = null
   zone                = "1"
 
   # Administrator credentials
-  administrator_username = var.postgresql_admin_username
-  administrator_password = var.postgresql_admin_password
+  admin_username = var.postgresql_admin_username
+  admin_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
@@ -229,9 +164,12 @@ resource "azurerm_postgresql_flexible_server" "main" {
   geo_redundant_backup_enabled = var.environment == "prod" ? true : false
 
   # High availability (production only)
-  high_availability {
-    mode                      = var.environment == "prod" ? "ZoneRedundant" : "Disabled"
-    standby_availability_zone = var.environment == "prod" ? "2" : null
+  dynamic "high_availability" {
+    for_each = var.environment == "prod" ? [1] : []
+    content {
+      mode                      = "ZoneRedundant"
+      standby_availability_zone = "2"
+    }
   }
 
   # Maintenance window
@@ -245,7 +183,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
   lifecycle {
     ignore_changes = [
-      administrator_password # Manage password via Key Vault
+      admin_password # Manage password via Key Vault
     ]
   }
 }
@@ -263,15 +201,10 @@ resource "azurerm_iothub" "main" {
   name                = var.iot_hub_name
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  sku                 = "S1"
-  capacity            = 1
 
-  # Event Hub endpoints configuration
-  event_hub {
-    name                      = "events"
-    partition_count           = 2
-    retention_time_in_days    = 1
-    partition_ids             = ["0", "1"]
+  sku {
+    name     = "S1"
+    capacity = 1
   }
 
   # IP Filter (allow all for now, restrict in production)
@@ -286,9 +219,10 @@ resource "azurerm_iothub" "main" {
 
 # IoT Hub Consumer Group
 resource "azurerm_iothub_consumer_group" "main" {
-  name            = "agriwizard-consumer"
-  iothub_id       = azurerm_iothub.main.id
-  event_hub_endpoint_name = "events"
+  name                   = "agriwizard-consumer"
+  iothub_name            = azurerm_iothub.main.name
+  resource_group_name    = azurerm_resource_group.main.name
+  eventhub_endpoint_name = "events"
 }
 
 # API Management Service
@@ -304,9 +238,6 @@ resource "azurerm_api_management" "main" {
   identity {
     type = "SystemAssigned"
   }
-
-  # Virtual network configuration (optional)
-  # virtual_network_type = "Internal" # or "External"
 
   tags = local.common_tags
 
@@ -328,12 +259,6 @@ resource "azurerm_api_management_api" "agriwizard" {
   protocols           = ["https"]
   service_url         = null
   subscription_required = true
-
-  # Import OpenAPI specification if available
-  # import {
-  #   content_format = "openapi"
-  #   content_value  = file("${path.module}/swagger.yaml")
-  # }
 }
 
 # API Management - Products
@@ -344,14 +269,14 @@ resource "azurerm_api_management_product" "agriwizard" {
   display_name          = "AgriWizard Product"
   description           = "Access to AgriWizard microservices APIs"
   subscription_required = true
-  requires_approval     = false
+  approval_required     = false
   published             = true
 }
 
 # API Management - Product API Association
 resource "azurerm_api_management_product_api" "main" {
   product_id          = azurerm_api_management_product.agriwizard.product_id
-  api_id              = azurerm_api_management_api.agriwizard.api_id
+  api_name            = azurerm_api_management_api.agriwizard.name
   api_management_name = azurerm_api_management.main.name
   resource_group_name = azurerm_resource_group.main.name
 }
