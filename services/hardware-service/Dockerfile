@@ -2,7 +2,7 @@ FROM golang:1.26.1-alpine AS builder
 RUN apk add --no-cache git ca-certificates
 WORKDIR /app
 
-# Copy go.mod and go.sum from the service directory
+# Copy go.mod and go.sum
 COPY services/hardware-service/go.mod ./
 COPY services/hardware-service/go.sum* ./
 

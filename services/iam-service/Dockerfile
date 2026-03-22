@@ -5,7 +5,7 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
-# Copy go.mod and go.sum from the service directory
+# Copy go.mod and go.sum
 COPY services/iam-service/go.mod ./
 COPY services/iam-service/go.sum* ./
 
