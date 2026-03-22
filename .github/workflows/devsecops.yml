@@ -2,7 +2,7 @@ name: CI/CD - AgriWizard DevSecOps Pipeline
 
 on:
   push:
-    branches: ["**"] # Run on push to any branch
+    branches: ["main,development"]
   pull_request:
     branches: ["main", "development"]
   workflow_dispatch:
