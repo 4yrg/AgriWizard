@@ -164,8 +164,8 @@ resource "azurerm_postgresql_flexible_server" "main" {
   zone                = "1"
 
   # Administrator credentials
-  administrator_username = var.postgresql_admin_username
-  administrator_password = var.postgresql_admin_password
+  admin_username = var.postgresql_admin_username
+  admin_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
@@ -196,7 +196,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
   lifecycle {
     ignore_changes = [
-      administrator_password # Manage password via Key Vault
+      admin_password # Manage password via Key Vault
     ]
   }
 }
