@@ -100,7 +100,7 @@ jobs:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: [docker-compose-test]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         service:
@@ -114,9 +114,9 @@ jobs:
           echo "========================================"
           echo "🔍 BUILD-AND-PUSH DEBUG INFO"
           echo "========================================"
-          echo "Job Condition: github.event_name == 'push'"
+          echo "Job Condition: push OR workflow_dispatch"
           echo "Current Event: ${{ github.event_name }}"
-          echo "Will Run: ${{ github.event_name == 'push' }}"
+          echo "Will Run: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}"
           echo "========================================"
           echo "Needs: docker-compose-test"
           echo "docker-compose-test result: ${{ needs.docker-compose-test.result }}"
