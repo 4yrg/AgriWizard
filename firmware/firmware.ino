@@ -15,7 +15,7 @@ const char* MQTT_PASSWORD = "Agriwizard@999";
 const char* DEVICE_ID = "esp32-greenhouse-01";
 
 const char* SENSOR_ID = "REPLACE_WITH_SENSOR_ID_FROM_HARDWARE_SERVICE";
-const char* FAN_EQUIPMENT_ID = "a59110c3-cd56-4c83-9626-0b34b3cdd19d";
+const char* FAN_EQUIPMENT_ID = "b8cff3e4-7bc3-4480-a23c-a8bfae62aac1";
 const char* PUMP_EQUIPMENT_ID = "REPLACE_WITH_PUMP_EQUIPMENT_ID";
 
 const char* PARAM_TEMP = "air_temp_c";
@@ -90,7 +90,7 @@ void publishEquipmentStatus(const String& statusTopic, const char* equipmentId, 
 
   char payload[192];
   size_t n = serializeJson(doc, payload, sizeof(payload));
-  bool ok = mqttClient.publish(statusTopic.c_str(), payload, n, false);
+  bool ok = mqttClient.publish(statusTopic.c_str(), (const uint8_t*)payload, n, false);
   logLine(String("status publish ") + (ok ? "OK" : "FAIL") + " topic=" + statusTopic + " payload=" + String(payload));
 }
 
@@ -164,8 +164,8 @@ float readSoilMoisturePct() {
 }
 
 void publishTelemetry() {
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
+  float humidity = 40.55 //dht.readHumidity();
+  float temperature = 25.6 //dht.readTemperature();
   float soilPct = readSoilMoisturePct();
 
   if (isnan(humidity) || isnan(temperature)) {
@@ -191,7 +191,7 @@ void publishTelemetry() {
 
   char payload[640];
   size_t n = serializeJson(doc, payload, sizeof(payload));
-  bool ok = mqttClient.publish(sensorTelemetryTopic.c_str(), payload, n, false);
+  bool ok = mqttClient.publish(sensorTelemetryTopic.c_str(), (const uint8_t*)payload, n, false);
   logLine(String("telemetry publish ") + (ok ? "OK" : "FAIL") + " topic=" + sensorTelemetryTopic + " payload=" + String(payload));
 }
 
