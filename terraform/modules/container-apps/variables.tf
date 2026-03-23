@@ -80,12 +80,12 @@ variable "iot_hub_name" {
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (prod)"
   type        = string
 
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, staging, prod."
+    condition     = contains(["prod"], var.environment)
+    error_message = "Environment must be: prod."
   }
 }
 

@@ -16,8 +16,6 @@ terraform/
 │   ├── networking/         # Network resources
 │   └── database/           # Database resources
 ├── environments/
-│   ├── dev.tfvars          # Development environment variables
-│   ├── staging.tfvars      # Staging environment variables
 │   └── prod.tfvars         # Production environment variables
 └── scripts/
     └── init.sh             # Initialization script
@@ -35,11 +33,11 @@ terraform init
 # Validate configuration
 terraform validate
 
-# Plan deployment (development)
-terraform plan -var-file=environments/dev.tfvars
+# Plan deployment (production)
+terraform plan -var-file=environments/prod.tfvars
 
 # Apply deployment
-terraform apply -var-file=environments/dev.tfvars
+terraform apply -var-file=environments/prod.tfvars
 ```
 
 ## 🔐 Prerequisites
@@ -65,32 +63,32 @@ terraform apply -var-file=environments/dev.tfvars
 
 ### Environment Variables
 
-Create `environments/dev.tfvars`:
+Create `environments/prod.tfvars`:
 
 ```hcl
-resource_group_name     = "agriwizard-rg-dev"
-location                = "eastus"
-environment             = "dev"
-acr_name                = "agriwizardacrdev"
-container_apps_env_name = "agriwizard-env-dev"
-postgresql_server_name  = "agriwizard-db-dev"
-iot_hub_name            = "agriwizard-iot-dev"
-key_vault_name          = "agriwizard-kv-dev"
-apim_name               = "agriwizard-apim-dev"
+resource_group_name     = "agriwizard-rg-prod"
+location                = "eastasia"
+environment             = "prod"
+acr_name                = "agriwizardacrprod"
+container_apps_env_name = "agriwizard-env-prod"
+postgresql_server_name  = "agriwizard-db-prod"
+iot_hub_name            = "agriwizard-iot-prod"
+key_vault_name          = "agriwizard-kv-prod"
+apim_name               = "agriwizard-apim-prod"
 
 # Container Apps Configuration
-cpu_core           = 0.5
-memory_size        = 1.0
-min_replicas       = 1
-max_replicas       = 3
+cpu_core           = 1.0
+memory_size        = 2.0
+min_replicas       = 2
+max_replicas       = 10
 
 # Database Configuration
 postgresql_admin_username = "agriadmin"
-postgresql_sku_name       = "Standard_B1ms"
-postgresql_version        = "16"
+postgresql_sku_name       = "GP_Standard_D2s_v3"
+postgresql_version        = "15"
 
 # Image Configuration
-image_tag = "latest"
+image_tag = "stable"
 ```
 
 ## 🏗️ Architecture
@@ -165,15 +163,13 @@ All resources are integrated with:
 
 ## 💰 Cost Optimization
 
-- **Dev Environment**: Scale to zero enabled, basic SKUs
-- **Staging Environment**: Balanced performance and cost
 - **Production Environment**: High availability, premium SKUs
 
 ## 🧹 Cleanup
 
 ```bash
 # Destroy all resources
-terraform destroy -var-file=environments/dev.tfvars
+terraform destroy -var-file=environments/prod.tfvars
 
 # Remove state file (optional)
 rm -rf .terraform/

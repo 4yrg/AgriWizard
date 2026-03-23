@@ -155,7 +155,7 @@ cleanup() {
 # Main script
 main() {
     local command=${1:-help}
-    local environment=${2:-dev}
+    local environment=${2:-prod}
 
     case $command in
         init)
@@ -202,16 +202,13 @@ main() {
             echo "  help      Show this help message"
             echo ""
             echo "Environments:"
-            echo "  dev       Development environment (default)"
-            echo "  staging   Staging environment"
-            echo "  prod      Production environment"
+            echo "  prod      Production environment (default)"
             echo ""
             echo "Examples:"
             echo "  $0 init"
-            echo "  $0 plan dev"
-            echo "  $0 apply dev"
+            echo "  $0 plan prod"
             echo "  $0 apply prod"
-            echo "  $0 destroy dev"
+            echo "  $0 destroy prod"
             ;;
     esac
 }

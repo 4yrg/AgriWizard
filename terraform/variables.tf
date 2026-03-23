@@ -20,13 +20,13 @@ variable "location" {
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (prod)"
   type        = string
-  default     = "dev"
+  default     = "prod"
 
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, staging, prod."
+    condition     = contains(["prod"], var.environment)
+    error_message = "Environment must be: prod."
   }
 }
 
@@ -158,7 +158,8 @@ variable "postgresql_sku_name" {
       "Standard_B1ms",
       "Standard_B2ms",
       "Standard_B4ms",
-      "Standard_D2ads_v2"
+      "Standard_D2ads_v2",
+      "GP_Standard_D2s_v3"
     ], var.postgresql_sku_name)
 
     error_message = "Invalid PostgreSQL SKU."
