@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	"github.com/nats-io/nats.go"
 )
 
 // ServiceStatus holds the shared service state.
@@ -125,8 +126,27 @@ func main() {
 		}
 	}()
 
+	// --- NATS Connection (optional) ---
+	var js nats.JetStreamContext
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	nc, err := nats.Connect(natsURL,
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Printf("[WARN] NATS connection failed: %v — notifications disabled", err)
+	} else {
+		js, err = nc.JetStream()
+		if err != nil {
+			log.Printf("[WARN] JetStream init failed: %v — notifications disabled", err)
+		} else {
+			log.Printf("[INFO] NATS connected: %s", natsURL)
+		}
+	}
+
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
+	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL, js)
 	api := r.Group("/api/v1/analytics")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{

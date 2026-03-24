@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 )
 
 // Handler holds shared dependencies.
@@ -21,11 +22,28 @@ type Handler struct {
 	jwtSecret   string
 	hardwareURL string
 	weatherURL  string
+	js          nats.JetStreamContext
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, hardwareURL, weatherURL string) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, hardwareURL: hardwareURL, weatherURL: weatherURL}
+func NewHandler(status *ServiceStatus, jwtSecret, hardwareURL, weatherURL string, js nats.JetStreamContext) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, hardwareURL: hardwareURL, weatherURL: weatherURL, js: js}
+}
+
+// publishNotification publishes a notification message to NATS JetStream.
+func (h *Handler) publishNotification(recipient, subject, body string) {
+	if h.js == nil {
+		return
+	}
+	msg, _ := json.Marshal(map[string]string{
+		"channel":   "email",
+		"recipient": recipient,
+		"subject":   subject,
+		"body":      body,
+	})
+	if _, err := h.js.Publish("notifications.send", msg); err != nil {
+		log.Printf("[WARN] Failed to publish notification: %v", err)
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -380,6 +398,18 @@ func (h *Handler) Ingest(c *gin.Context) {
 		}
 
 		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
+	}
+
+	// Notify about threshold breaches and automation actions
+	if len(decisions) > 0 {
+		var rows string
+		for _, d := range decisions {
+			rows += fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td></tr>", d.EquipmentID, d.Action, d.Reason)
+		}
+		h.publishNotification("farmer@agriwizard.local",
+			fmt.Sprintf("Threshold Alert: %d automation(s) triggered", len(decisions)),
+			fmt.Sprintf("<h2>Threshold Breach Detected</h2><table border='1' cellpadding='5'><tr><th>Equipment</th><th>Action</th><th>Reason</th></tr>%s</table><p>Automated actions have been dispatched.</p>", rows),
+		)
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{

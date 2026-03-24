@@ -4,8 +4,10 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -32,7 +34,26 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	h := NewHandler(jwtSecret, owmAPIKey, owmBaseURL, lat, lon, cityName, useMock)
+	// --- NATS Connection (optional) ---
+	var js nats.JetStreamContext
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	nc, err := nats.Connect(natsURL,
+		nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
+	if err != nil {
+		log.Printf("[WARN] NATS connection failed: %v — notifications disabled", err)
+	} else {
+		js, err = nc.JetStream()
+		if err != nil {
+			log.Printf("[WARN] JetStream init failed: %v — notifications disabled", err)
+		} else {
+			log.Printf("[INFO] NATS connected: %s", natsURL)
+		}
+	}
+
+	h := NewHandler(jwtSecret, owmAPIKey, owmBaseURL, lat, lon, cityName, useMock, js)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 

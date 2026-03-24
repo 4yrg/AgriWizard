@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 )
 
 // Handler holds shared dependencies for all HTTP handlers.
@@ -20,11 +21,28 @@ type Handler struct {
 	status       *ServiceStatus
 	jwtSecret    string
 	analyticsURL string
+	js           nats.JetStreamContext
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, js nats.JetStreamContext) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, js: js}
+}
+
+// publishNotification publishes a notification message to NATS JetStream.
+func (h *Handler) publishNotification(recipient, subject, body string) {
+	if h.js == nil {
+		return
+	}
+	msg, _ := json.Marshal(map[string]string{
+		"channel":   "email",
+		"recipient": recipient,
+		"subject":   subject,
+		"body":      body,
+	})
+	if _, err := h.js.Publish("notifications.send", msg); err != nil {
+		log.Printf("[WARN] Failed to publish notification: %v", err)
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -431,18 +449,27 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 
 // handleEquipmentStatus handles status update messages from equipment devices.
 func (h *Handler) handleEquipmentStatus(_ mqtt.Client, msg mqtt.Message) {
-	var status struct {
+	var eqStatus struct {
 		EquipmentID string `json:"equipment_id"`
 		Status      string `json:"status"`
 	}
-	if err := json.Unmarshal(msg.Payload(), &status); err != nil {
+	if err := json.Unmarshal(msg.Payload(), &eqStatus); err != nil {
 		return
 	}
 	if _, err := h.db().Exec(
 		`UPDATE hardware.equipments SET current_status=$1 WHERE id=$2`,
-		status.Status, status.EquipmentID,
+		eqStatus.Status, eqStatus.EquipmentID,
 	); err != nil {
 		log.Printf("[ERROR] handleEquipmentStatus: %v", err)
+		return
+	}
+
+	// Notify on critical status changes
+	if strings.EqualFold(eqStatus.Status, "LOCKED") || strings.EqualFold(eqStatus.Status, "DISABLED") {
+		h.publishNotification("farmer@agriwizard.local",
+			fmt.Sprintf("Equipment %s is now %s", eqStatus.EquipmentID, eqStatus.Status),
+			fmt.Sprintf("<h2>Equipment Status Change</h2><p>Equipment <b>%s</b> has changed to <b>%s</b>.</p><p>This device will not accept commands until its status is restored.</p>", eqStatus.EquipmentID, eqStatus.Status),
+		)
 	}
 }
 

@@ -76,6 +76,7 @@ services:
       PORT: "8081"
       DB_NAME: "${IAM_DB_NAME:-iam_db}"
       JWT_TTL_HOURS: "24"
+      NATS_URL: nats://nats:4222
     networks:
       - agriwizard-net
     labels:
@@ -87,6 +88,8 @@ services:
       - "${IAM_PORT:-8081}:8081"
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
@@ -109,6 +112,7 @@ services:
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
       ANALYTICS_SERVICE_URL: "http://analytics-service:8083"
+      NATS_URL: nats://nats:4222
     networks:
       - agriwizard-net
     labels:
@@ -122,6 +126,8 @@ services:
       postgres:
         condition: service_healthy
       iam-service:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
@@ -142,6 +148,7 @@ services:
       DB_NAME: "${ANALYTICS_DB_NAME:-analytics_db}"
       HARDWARE_SERVICE_URL: "http://hardware-service:8082"
       WEATHER_SERVICE_URL: "http://weather-service:8084"
+      NATS_URL: nats://nats:4222
     networks:
       - agriwizard-net
     labels:
@@ -155,6 +162,8 @@ services:
       postgres:
         condition: service_healthy
       iam-service:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
@@ -178,6 +187,7 @@ services:
       LOCATION_LAT: "6.9271"
       LOCATION_LON: "79.8612"
       LOCATION_CITY: "Colombo"
+      NATS_URL: nats://nats:4222
     networks:
       - agriwizard-net
     labels:
@@ -189,6 +199,8 @@ services:
       - "${WEATHER_PORT:-8084}:8084"
     depends_on:
       iam-service:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
@@ -240,9 +252,9 @@ services:
       PORT: "8085"
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_USER: agriwizard
-      DB_PASSWORD: agriwizard_secret
-      DB_NAME: agriwizard
+      DB_USER: "${DB_USER:-agriwizard}"
+      DB_PASSWORD: "${DB_PASSWORD:-agriwizard_secret}"
+      DB_NAME: "${NOTIFICATION_DB_NAME:-notification_db}"
       NATS_URL: nats://nats:4222
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"

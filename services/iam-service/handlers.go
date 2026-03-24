@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -18,11 +20,28 @@ type Handler struct {
 	dbStatus  *DBStatus
 	jwtSecret string
 	jwtTTL    time.Duration
+	js        nats.JetStreamContext
 }
 
 // NewHandler creates a new Handler instance.
-func NewHandler(dbStatus *DBStatus, jwtSecret string, jwtTTL time.Duration) *Handler {
-	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtTTL: jwtTTL}
+func NewHandler(dbStatus *DBStatus, jwtSecret string, jwtTTL time.Duration, js nats.JetStreamContext) *Handler {
+	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtTTL: jwtTTL, js: js}
+}
+
+// publishNotification publishes a notification message to NATS JetStream.
+func (h *Handler) publishNotification(recipient, subject, body string) {
+	if h.js == nil {
+		return
+	}
+	msg, _ := json.Marshal(map[string]string{
+		"channel":   "email",
+		"recipient": recipient,
+		"subject":   subject,
+		"body":      body,
+	})
+	if _, err := h.js.Publish("notifications.send", msg); err != nil {
+		log.Printf("[WARN] Failed to publish notification: %v", err)
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -107,6 +126,12 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	log.Printf("[INFO] Register: new user created id=%s email=%s role=%s", userID, req.Email, req.Role)
+
+	h.publishNotification(req.Email,
+		"Welcome to AgriWizard!",
+		"<h2>Welcome, "+req.FullName+"!</h2><p>Your account has been created successfully as <b>"+string(req.Role)+"</b>.</p><p>You can now log in and start managing your greenhouse.</p>",
+	)
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Message: "user registered successfully",
 		Data:    UserDTO{ID: userID, Email: req.Email, FullName: req.FullName, Role: req.Role},
@@ -174,6 +199,12 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	log.Printf("[INFO] Login: successful login id=%s role=%s", user.ID, user.Role)
+
+	h.publishNotification(user.Email,
+		"New Login to AgriWizard",
+		"<h2>Hello, "+user.FullName+"!</h2><p>A new login was detected on your account at <b>"+time.Now().Format("2006-01-02 15:04")+"</b>.</p><p>If this wasn't you, please secure your account immediately.</p>",
+	)
+
 	c.JSON(http.StatusOK, LoginResponse{
 		Token:     tokenStr,
 		ExpiresAt: expiresAt,
