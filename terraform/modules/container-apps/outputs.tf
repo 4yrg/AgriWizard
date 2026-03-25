@@ -38,12 +38,23 @@ output "weather_service_url" {
   value       = try(azurerm_container_app.weather_service.latest_revision_fqdn, null)
 }
 
+output "notification_service_name" {
+  description = "Notification Service Container App name"
+  value       = azurerm_container_app.notification_service.name
+}
+
+output "notification_service_url" {
+  description = "Notification Service FQDN"
+  value       = try(azurerm_container_app.notification_service.latest_revision_fqdn, null)
+}
+
 output "all_service_urls" {
   description = "All service URLs for reference"
   value = {
-    iam       = try(azurerm_container_app.iam_service.latest_revision_fqdn, null)
-    hardware  = try(azurerm_container_app.hardware_service.latest_revision_fqdn, null)
-    analytics = try(azurerm_container_app.analytics_service.latest_revision_fqdn, null)
-    weather   = try(azurerm_container_app.weather_service.latest_revision_fqdn, null)
+    iam          = try(azurerm_container_app.iam_service.latest_revision_fqdn, null)
+    hardware     = try(azurerm_container_app.hardware_service.latest_revision_fqdn, null)
+    analytics    = try(azurerm_container_app.analytics_service.latest_revision_fqdn, null)
+    weather      = try(azurerm_container_app.weather_service.latest_revision_fqdn, null)
+    notification = try(azurerm_container_app.notification_service.latest_revision_fqdn, null)
   }
 }

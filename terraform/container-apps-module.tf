@@ -32,6 +32,10 @@ module "container_apps" {
   # IoT Hub configuration
   iot_hub_name = azurerm_iothub.main.name
 
+  # Service Bus configuration
+  service_bus_namespace  = azurerm_servicebus_namespace.main.name
+  service_bus_connection = azurerm_servicebus_namespace_authorization_rule.container_apps.primary_connection_string
+
   # Environment
   environment = var.environment
 
@@ -49,7 +53,8 @@ module "container_apps" {
     azurerm_postgresql_flexible_server_database.agriwizard,
     azurerm_iothub.main,
     azurerm_container_registry.main,
-    azurerm_container_app_environment.main
+    azurerm_container_app_environment.main,
+    azurerm_servicebus_namespace.main
   ]
 }
 
@@ -97,6 +102,16 @@ resource "azurerm_api_management_backend" "weather_service" {
   title = "Weather Service"
 }
 
+resource "azurerm_api_management_backend" "notification_service" {
+  name                = "notification-service-backend"
+  resource_group_name = data.azurerm_resource_group.main.name
+  api_management_name = azurerm_api_management.main.name
+  protocol            = "http"
+
+  url   = "http://${module.container_apps.notification_service_url}"
+  title = "Notification Service"
+}
+
 # =============================================================================
 # API Management - API Operations
 # =============================================================================
@@ -141,6 +156,26 @@ resource "azurerm_api_management_api_operation" "weather_operations" {
   url_template        = "/weather/*"
 }
 
+resource "azurerm_api_management_api_operation" "notification_operations" {
+  operation_id        = "notification-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
+  display_name        = "Notification Operations"
+  method              = "ANY"
+  url_template        = "/notifications/*"
+}
+
+resource "azurerm_api_management_api_operation" "template_operations" {
+  operation_id        = "template-operations"
+  api_name            = azurerm_api_management_api.agriwizard.name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
+  display_name        = "Template Operations"
+  method              = "ANY"
+  url_template        = "/templates/*"
+}
+
 # =============================================================================
 # Key Vault Secrets
 # =============================================================================
@@ -161,5 +196,11 @@ resource "azurerm_key_vault_secret" "iot_hub_connection" {
   name  = "iot-hub-connection-string"
   value = "HostName=${var.iot_hub_name}.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=<replace-with-actual-key>"
 
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "service_bus_connection" {
+  name         = "service-bus-connection-string"
+  value        = azurerm_servicebus_namespace_authorization_rule.container_apps.primary_connection_string
   key_vault_id = azurerm_key_vault.main.id
 }

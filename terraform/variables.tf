@@ -262,6 +262,21 @@ variable "apim_sku_name" {
 }
 
 # -----------------------------------------------------------------------------
+# Service Bus Configuration
+# -----------------------------------------------------------------------------
+
+variable "service_bus_name" {
+  description = "Azure Service Bus namespace name"
+  type        = string
+  default     = "agriwizard-sb"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{3,62}[a-zA-Z0-9]$", var.service_bus_name))
+    error_message = "Service Bus name must be 6-63 characters, start/end with alphanumeric."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Tags
 # -----------------------------------------------------------------------------
 

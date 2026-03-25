@@ -79,6 +79,17 @@ variable "iot_hub_name" {
   type        = string
 }
 
+variable "service_bus_namespace" {
+  description = "Azure Service Bus namespace name"
+  type        = string
+}
+
+variable "service_bus_connection" {
+  description = "Service Bus connection string"
+  type        = string
+  sensitive   = true
+}
+
 variable "environment" {
   description = "Environment name (prod)"
   type        = string

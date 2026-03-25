@@ -254,3 +254,75 @@ resource "azurerm_api_management_product_api" "main" {
   api_management_name = azurerm_api_management.main.name
   resource_group_name = data.azurerm_resource_group.main.name
 }
+
+# =============================================================================
+# Azure Service Bus (Event-Driven Architecture)
+# =============================================================================
+
+# Service Bus Namespace
+resource "azurerm_servicebus_namespace" "main" {
+  name                = var.service_bus_name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  sku                 = "Standard"
+
+  tags = local.common_tags
+}
+
+# Service Bus Topic: telemetry-events
+resource "azurerm_servicebus_topic" "telemetry_events" {
+  name                      = "telemetry-events"
+  namespace_id              = azurerm_servicebus_namespace.main.id
+  enable_batched_operations = true
+  auto_delete_on_idle       = "PT168H"
+}
+
+# Service Bus Topic: automation-commands
+resource "azurerm_servicebus_topic" "automation_commands" {
+  name                      = "automation-commands"
+  namespace_id              = azurerm_servicebus_namespace.main.id
+  enable_batched_operations = true
+  auto_delete_on_idle       = "PT168H"
+}
+
+# Service Bus Topic: notifications
+resource "azurerm_servicebus_topic" "notifications" {
+  name                      = "notifications"
+  namespace_id              = azurerm_servicebus_namespace.main.id
+  enable_batched_operations = true
+  auto_delete_on_idle       = "PT168H"
+}
+
+# Service Bus Authorization Rule (for Container Apps)
+resource "azurerm_servicebus_namespace_authorization_rule" "container_apps" {
+  name         = "container-apps-listen"
+  namespace_id = azurerm_servicebus_namespace.main.id
+
+  listen = true
+  send   = true
+  manage = false
+}
+
+# Service Bus Subscription: telemetry-events (for analytics service)
+resource "azurerm_servicebus_subscription" "analytics_telemetry" {
+  name               = "analytics-service"
+  topic_id           = azurerm_servicebus_topic.telemetry_events.id
+  max_delivery_count = 10
+  lock_duration      = "PT30S"
+}
+
+# Service Bus Subscription: notifications (for notification service)
+resource "azurerm_servicebus_subscription" "notification_handler" {
+  name               = "notification-service"
+  topic_id           = azurerm_servicebus_topic.notifications.id
+  max_delivery_count = 10
+  lock_duration      = "PT30S"
+}
+
+# Service Bus Subscription: automation-commands (for hardware service)
+resource "azurerm_servicebus_subscription" "hardware_commands" {
+  name               = "hardware-service"
+  topic_id           = azurerm_servicebus_topic.automation_commands.id
+  max_delivery_count = 10
+  lock_duration      = "PT30S"
+}
