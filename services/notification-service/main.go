@@ -26,6 +26,11 @@ func main() {
 	smtpUser := getEnv("SMTP_USERNAME", "")
 	smtpPass := getEnv("SMTP_PASSWORD", "")
 
+	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
+	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
+	sbTopic := getEnv("SERVICE_BUS_TOPIC", "notifications")
+	sbSubscription := getEnv("SERVICE_BUS_SUBSCRIPTION", "notification-service")
+
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
@@ -56,12 +61,27 @@ func main() {
 		Password: smtpPass,
 	})
 
-	// ---- NATS JetStream consumer ----
+	// ---- NATS JetStream consumer (fallback) ----
 	consumer, err := StartConsumer(natsURL, dispatcher)
 	if err != nil {
-		log.Printf("[WARN] NATS consumer failed to start: %v (REST API still available)", err)
+		log.Printf("[WARN] NATS consumer failed to start: %v", err)
 	} else {
 		defer consumer.Close()
+	}
+
+	// ---- Azure Service Bus consumer ----
+	sbConsumer, err := NewServiceBusConsumer(sbConnection, sbNamespace, sbTopic, sbSubscription, dispatcher)
+	if err != nil {
+		log.Printf("[WARN] Service Bus consumer initialization failed: %v", err)
+	}
+	if sbConsumer != nil && sbConsumer.IsConnected() {
+		go func() {
+			<-sbConsumer.Ready()
+			log.Println("[INFO] Service Bus consumer ready")
+			if err := sbConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] Service Bus consumer error: %v", err)
+			}
+		}()
 	}
 
 	// ---- HTTP server ----
