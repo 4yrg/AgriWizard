@@ -70,13 +70,24 @@ func main() {
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
 
+	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
+	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
+	sbTopic := getEnv("SERVICE_BUS_TOPIC", "telemetry-events")
+
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
 
+	sbPublisher, err := NewServiceBusPublisher(sbConnection, sbTopic)
+	if err != nil {
+		log.Printf("[WARN] Service Bus publisher initialization failed: %v", err)
+	}
+
 	// --- Router ---
-	if getEnv("GIN_MODE", "debug") == "release" {
+	if getEnv("GIN_MODE", "debug") == "debug" {
+		gin.SetMode(gin.DebugMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -90,11 +101,12 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":    s,
-			"service":   "hardware-service",
-			"db_ready":  status.IsReady(),
+			"status":     s,
+			"service":    "hardware-service",
+			"db_ready":   status.IsReady(),
 			"migrated":  status.migrated,
-			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
+			"mqtt_conn":  status.mqttClient != nil && status.mqttClient.IsConnected(),
+			"sb_conn":    sbPublisher.IsConnected(),
 		})
 	})
 
@@ -122,7 +134,7 @@ func main() {
 		}
 
 		mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-		restoreSubscriptions(db, mqttClient)
+		restoreSubscriptions(db, mqttClient, sbPublisher)
 
 		status.SetReady(db, mqttClient)
 		status.SetMigrated()
@@ -130,7 +142,7 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL)
+	h := NewHandler(status, jwtSecret, analyticsURL, sbPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
@@ -210,7 +222,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
-func restoreSubscriptions(db *sql.DB, client mqtt.Client) {
+func restoreSubscriptions(db *sql.DB, client mqtt.Client, sbPublisher *ServiceBusPublisher) {
 	if !client.IsConnected() {
 		return
 	}
@@ -220,8 +232,13 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client) {
 		for rows.Next() {
 			var topic string
 			if rows.Scan(&topic) == nil {
-				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+				client.Subscribe(topic, 1, func(_ mqtt.Client, msg paho.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
+					// Also publish to Service Bus for analytics
+					if sbPublisher != nil {
+						// Parse and publish to SB - simplified for now
+						log.Printf("[DEBUG] Would publish to Service Bus: %s", msg.Topic())
+					}
 				})
 			}
 		}

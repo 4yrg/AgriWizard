@@ -3,6 +3,7 @@ module agriwizard/hardware-service
 go 1.26.1
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.3.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.2

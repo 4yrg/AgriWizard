@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,14 +18,15 @@ import (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	status       *ServiceStatus
-	jwtSecret    string
-	analyticsURL string
+	status        *ServiceStatus
+	jwtSecret     string
+	analyticsURL  string
+	sbPublisher   *ServiceBusPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, sbPublisher *ServiceBusPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, sbPublisher: sbPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -407,6 +409,7 @@ func (h *Handler) IngestTelemetry(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "storage_error"})
 		return
 	}
+	h.publishTelemetryToServiceBus(payload)
 	c.JSON(http.StatusCreated, SuccessResponse{Message: "telemetry ingested"})
 }
 
@@ -426,6 +429,27 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 	}
 	if err := h.storeTelemetry(payload); err != nil {
 		log.Printf("[ERROR] handleTelemetry: store error: %v", err)
+	}
+	h.publishTelemetryToServiceBus(payload)
+}
+
+func (h *Handler) publishTelemetryToServiceBus(payload TelemetryPayload) {
+	if h.sbPublisher == nil || !h.sbPublisher.IsConnected() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, reading := range payload.Readings {
+		event := TelemetryEvent{
+			SensorID:     payload.SensorID,
+			ParameterID:  reading.ParameterID,
+			Value:        reading.Value,
+			Timestamp:    payload.Timestamp,
+			Metadata:     payload.Metadata,
+		}
+		if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
+			log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+		}
 	}
 }
 
