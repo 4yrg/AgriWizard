@@ -22,6 +22,8 @@ type ServiceStatus struct {
 	migrated bool
 }
 
+var sbConsumer *ServiceBusConsumer
+
 func (s *ServiceStatus) GetDB() *sql.DB {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -58,12 +60,19 @@ func main() {
 	weatherURL := getEnv("WEATHER_SERVICE_URL", "http://weather-service:8084")
 	port := getEnv("PORT", "8083")
 
+	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
+	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
+	sbTopic := getEnv("SERVICE_BUS_TOPIC", "telemetry-events")
+	sbSubscription := getEnv("SERVICE_BUS_SUBSCRIPTION", "analytics-service")
+
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
 
-	if getEnv("GIN_MODE", "debug") == "release" {
+	if getEnv("GIN_MODE", "debug") == "debug" {
+		gin.SetMode(gin.DebugMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -77,10 +86,11 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":   s,
-			"service":  "analytics-service",
-			"db_ready": status.IsReady(),
-			"migrated": status.migrated,
+			"status":    s,
+			"service":   "analytics-service",
+			"db_ready":  status.IsReady(),
+			"migrated":  status.migrated,
+			"sb_ready":  sbConsumer != nil && sbConsumer.IsConnected(),
 		})
 	})
 
@@ -92,6 +102,26 @@ func main() {
 			log.Fatalf("[FATAL] Server: %v", err)
 		}
 	}()
+
+	// Setup handler first (before SB consumer needs it)
+	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
+
+	// Initialize Service Bus consumer
+	sbConsumer, err := NewServiceBusConsumer(sbConnection, sbNamespace, sbTopic, sbSubscription, h)
+	if err != nil {
+		log.Printf("[WARN] Service Bus consumer initialization failed: %v", err)
+	}
+
+	// Start Service Bus consumer in background
+	if sbConsumer != nil && sbConsumer.IsConnected() {
+		go func() {
+			<-sbConsumer.Ready()
+			log.Println("[INFO] Service Bus consumer ready")
+			if err := sbConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] Service Bus consumer error: %v", err)
+			}
+		}()
+	}
 
 	// Connect to database in background
 	go func() {
@@ -113,7 +143,6 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
 	api := r.Group("/api/v1/analytics")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{

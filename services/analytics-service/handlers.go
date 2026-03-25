@@ -319,6 +319,21 @@ func (h *Handler) Ingest(c *gin.Context) {
 		payload.Timestamp = time.Now().UTC()
 	}
 
+	decisions, err := h.ProcessIngest(payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "processing_error", Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "ingest processed",
+		Data:    gin.H{"decisions_triggered": len(decisions), "decisions": decisions},
+	})
+}
+
+// ProcessIngest processes telemetry data and applies threshold automation logic.
+// This is used by both the REST API and Service Bus consumer.
+func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, error) {
 	var decisions []AutomationDecision
 
 	for _, reading := range payload.Readings {
@@ -382,10 +397,7 @@ func (h *Handler) Ingest(c *gin.Context) {
 		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "ingest processed",
-		Data:    gin.H{"decisions_triggered": len(decisions), "decisions": decisions},
-	})
+	return decisions, nil
 }
 
 // GetDailySummaries godoc
