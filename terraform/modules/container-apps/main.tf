@@ -5,10 +5,10 @@ resource "azurerm_container_app" "iam_service" {
   resource_group_name          = var.resource_group_name
   revision_mode                = "Single"
 
-  # Ingress configuration - Internal only, accessed via API Gateway
+  # Ingress configuration - External for APIM access
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false
+    external_enabled           = true
     target_port                = 8081
     transport                  = "auto"
 
@@ -18,11 +18,17 @@ resource "azurerm_container_app" "iam_service" {
     }
   }
 
+  # Secrets
+  secret {
+    name  = "acr-password"
+    value = var.container_registry_password
+  }
+
   # Registry configuration
   registry {
-    server   = var.container_registry_server
-    username = var.container_registry_username
-    password = var.container_registry_password
+    server               = var.container_registry_server
+    username             = var.container_registry_username
+    password_secret_name = "acr-password"
   }
 
   # Template for container
@@ -77,12 +83,9 @@ resource "azurerm_container_app" "iam_service" {
     max_replicas = var.max_replicas
 
     # Scale based on HTTP requests
-    scale_rule {
-      name = "http-scale-rule"
-      custom {
-        type  = "http"
-        value = "10"
-      }
+    http_scale_rule {
+      name                = "http-scale-rule"
+      concurrent_requests = 10
     }
   }
 
@@ -104,7 +107,7 @@ resource "azurerm_container_app" "hardware_service" {
   # Ingress configuration - Internal only
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false
+    external_enabled           = true
     target_port                = 8082
     transport                  = "auto"
 
@@ -114,11 +117,17 @@ resource "azurerm_container_app" "hardware_service" {
     }
   }
 
+  # Secrets
+  secret {
+    name  = "acr-password"
+    value = var.container_registry_password
+  }
+
   # Registry configuration
   registry {
-    server   = var.container_registry_server
-    username = var.container_registry_username
-    password = var.container_registry_password
+    server               = var.container_registry_server
+    username             = var.container_registry_username
+    password_secret_name = "acr-password"
   }
 
   # Template for container
@@ -177,12 +186,9 @@ resource "azurerm_container_app" "hardware_service" {
     max_replicas = var.max_replicas
 
     # Scale based on HTTP requests
-    scale_rule {
-      name = "http-scale-rule"
-      custom {
-        type  = "http"
-        value = "10"
-      }
+    http_scale_rule {
+      name                = "http-scale-rule"
+      concurrent_requests = 10
     }
   }
 
@@ -204,7 +210,7 @@ resource "azurerm_container_app" "analytics_service" {
   # Ingress configuration - Internal only
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false
+    external_enabled           = true
     target_port                = 8083
     transport                  = "auto"
 
@@ -214,11 +220,17 @@ resource "azurerm_container_app" "analytics_service" {
     }
   }
 
+  # Secrets
+  secret {
+    name  = "acr-password"
+    value = var.container_registry_password
+  }
+
   # Registry configuration
   registry {
-    server   = var.container_registry_server
-    username = var.container_registry_username
-    password = var.container_registry_password
+    server               = var.container_registry_server
+    username             = var.container_registry_username
+    password_secret_name = "acr-password"
   }
 
   # Template for container
@@ -277,12 +289,9 @@ resource "azurerm_container_app" "analytics_service" {
     max_replicas = var.max_replicas
 
     # Scale based on HTTP requests
-    scale_rule {
-      name = "http-scale-rule"
-      custom {
-        type  = "http"
-        value = "10"
-      }
+    http_scale_rule {
+      name                = "http-scale-rule"
+      concurrent_requests = 10
     }
   }
 
@@ -304,7 +313,7 @@ resource "azurerm_container_app" "weather_service" {
   # Ingress configuration - Internal only
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false
+    external_enabled           = true
     target_port                = 8084
     transport                  = "auto"
 
@@ -314,11 +323,17 @@ resource "azurerm_container_app" "weather_service" {
     }
   }
 
+  # Secrets
+  secret {
+    name  = "acr-password"
+    value = var.container_registry_password
+  }
+
   # Registry configuration
   registry {
-    server   = var.container_registry_server
-    username = var.container_registry_username
-    password = var.container_registry_password
+    server               = var.container_registry_server
+    username             = var.container_registry_username
+    password_secret_name = "acr-password"
   }
 
   # Template for container
@@ -365,12 +380,9 @@ resource "azurerm_container_app" "weather_service" {
     max_replicas = var.max_replicas
 
     # Scale based on HTTP requests
-    scale_rule {
-      name = "http-scale-rule"
-      custom {
-        type  = "http"
-        value = "10"
-      }
+    http_scale_rule {
+      name                = "http-scale-rule"
+      concurrent_requests = 10
     }
   }
 
@@ -392,7 +404,7 @@ resource "azurerm_container_app" "notification_service" {
   # Ingress configuration - Internal only
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false
+    external_enabled           = true
     target_port                = 8085
     transport                  = "auto"
 
@@ -402,11 +414,17 @@ resource "azurerm_container_app" "notification_service" {
     }
   }
 
+  # Secrets
+  secret {
+    name  = "acr-password"
+    value = var.container_registry_password
+  }
+
   # Registry configuration
   registry {
-    server   = var.container_registry_server
-    username = var.container_registry_username
-    password = var.container_registry_password
+    server               = var.container_registry_server
+    username             = var.container_registry_username
+    password_secret_name = "acr-password"
   }
 
   # Template for container
@@ -473,12 +491,9 @@ resource "azurerm_container_app" "notification_service" {
     max_replicas = var.max_replicas
 
     # Scale based on HTTP requests
-    scale_rule {
-      name = "http-scale-rule"
-      custom {
-        type  = "http"
-        value = "10"
-      }
+    http_scale_rule {
+      name                = "http-scale-rule"
+      concurrent_requests = 10
     }
   }
 

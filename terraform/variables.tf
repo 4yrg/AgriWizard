@@ -155,6 +155,10 @@ variable "postgresql_sku_name" {
 
   validation {
     condition = contains([
+      "B1ms",
+      "B2s",
+      "B2ms",
+      "B4ms",
       "Standard_B1ms",
       "Standard_B2ms",
       "Standard_B4ms",
@@ -268,7 +272,7 @@ variable "apim_sku_name" {
 variable "service_bus_name" {
   description = "Azure Service Bus namespace name"
   type        = string
-  default     = "agriwizard-sb"
+  default     = "agriwizard-sbus"
 
   validation {
     condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{3,62}[a-zA-Z0-9]$", var.service_bus_name))

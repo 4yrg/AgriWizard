@@ -184,12 +184,16 @@ resource "azurerm_key_vault_secret" "db_password" {
   name         = "database-password"
   value        = var.postgresql_admin_password
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.current_user]
 }
 
 resource "azurerm_key_vault_secret" "jwt_secret" {
   name         = "jwt-secret"
   value        = var.jwt_secret
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.current_user]
 }
 
 resource "azurerm_key_vault_secret" "iot_hub_connection" {
@@ -197,44 +201,52 @@ resource "azurerm_key_vault_secret" "iot_hub_connection" {
   value = "HostName=${var.iot_hub_name}.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=<replace-with-actual-key>"
 
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.current_user]
 }
 
 resource "azurerm_key_vault_secret" "service_bus_connection" {
   name         = "service-bus-connection-string"
   value        = azurerm_servicebus_namespace_authorization_rule.container_apps.primary_connection_string
   key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_key_vault_access_policy.current_user]
 }
 
 # =============================================================================
 # API Management - Policies
 # =============================================================================
 
-# JWT Validation Policy
-resource "azurerm_api_management_policy" "jwt_validation" {
-  api_management_id = azurerm_api_management.main.id
-  xml_content       = <<XML
-<policies>
-    <inbound>
-        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Invalid or expired token.">
-            <openid-config url="https://${azurerm_api_management.main.name}.developer.azure-api.net/.well-known/openid-configuration" />
-            <audiences>
-                <audience>agriwizard-api</audience>
-            </audiences>
-            <issuers>
-                <issuer>agriwizard-iam-service</issuer>
-            </issuers>
-        </validate-jwt>
-        <rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
-    </inbound>
-    <backend>
-        <forward-request />
-    </backend>
-    <outbound>
-        <base />
-    </outbound>
-    <on-error>
-        <base />
-    </on-error>
-</policies>
-XML
-}
+# =============================================================================
+# API Management - Policies (Commented out - enable after services are deployed)
+# =============================================================================
+
+# JWT Validation Policy - Uncomment after services are deployed
+# resource "azurerm_api_management_policy" "jwt_validation" {
+#   api_management_id = azurerm_api_management.main.id
+#   xml_content       = <<XML
+# <policies>
+#     <inbound>
+#         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Invalid or expired token.">
+#             <openid-config url="https://login.microsoftonline.com/{tenant}/.well-known/openid-configuration" />
+#             <audiences>
+#                 <audience>agriwizard-api</audience>
+#             </audiences>
+#             <issuers>
+#                 <issuer>agriwizard-iam-service</issuer>
+#             </issuers>
+#         </validate-jwt>
+#         <rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
+#     </inbound>
+#     <backend>
+#         <forward-request />
+#     </backend>
+#     <outbound>
+#         <base />
+#     </outbound>
+#     <on-error>
+#         <base />
+#     </on-error>
+# </policies>
+# XML
+# }

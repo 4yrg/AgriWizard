@@ -24,7 +24,7 @@ data "azurerm_client_config" "current" {}
 
 # Use existing resource group
 data "azurerm_resource_group" "main" {
-  name = "AgriWizard"
+  name = "agriwizard-rg"
 }
 
 # Log Analytics Workspace for centralized logging
@@ -58,12 +58,11 @@ resource "azurerm_container_registry" "main" {
   admin_enabled       = true
 
   # Enable data endpoint for better performance
-  data_endpoint_enabled = true
+  data_endpoint_enabled = false
 
   tags = local.common_tags
 
-  # Zone redundancy for production
-  zone_redundancy_enabled = var.environment == "prod" ? true : false
+  zone_redundancy_enabled = false
 }
 
 # Container Apps Environment
@@ -151,13 +150,13 @@ resource "azurerm_user_assigned_identity" "container_apps" {
 # Azure Database for PostgreSQL Flexible Server
 resource "azurerm_postgresql_flexible_server" "main" {
   name                = var.postgresql_server_name
-  resource_group_name = "AgriWizard"
+  resource_group_name = data.azurerm_resource_group.main.name
   location            = var.location
   version             = var.postgresql_version
 
   # Administrator credentials
-  admin_username = var.postgresql_admin_username
-  admin_password = var.postgresql_admin_password
+  administrator_login    = var.postgresql_admin_username
+  administrator_password = var.postgresql_admin_password
 
   # SKU configuration
   sku_name = var.postgresql_sku_name
@@ -167,14 +166,18 @@ resource "azurerm_postgresql_flexible_server" "main" {
   auto_grow_enabled = true
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [zone]
+  }
 }
 
 # PostgreSQL Database
 resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
   name      = "agriwizard"
   server_id = azurerm_postgresql_flexible_server.main.id
+  collation = "en_US.utf8"
   charset   = "UTF8"
-  collation = "English_United States.1252"
 }
 
 # IoT Hub for MQTT communication
@@ -271,26 +274,23 @@ resource "azurerm_servicebus_namespace" "main" {
 
 # Service Bus Topic: telemetry-events
 resource "azurerm_servicebus_topic" "telemetry_events" {
-  name                      = "telemetry-events"
-  namespace_id              = azurerm_servicebus_namespace.main.id
-  enable_batched_operations = true
-  auto_delete_on_idle       = "PT168H"
+  name                = "telemetry-events"
+  namespace_id        = azurerm_servicebus_namespace.main.id
+  auto_delete_on_idle = "PT168H"
 }
 
 # Service Bus Topic: automation-commands
 resource "azurerm_servicebus_topic" "automation_commands" {
-  name                      = "automation-commands"
-  namespace_id              = azurerm_servicebus_namespace.main.id
-  enable_batched_operations = true
-  auto_delete_on_idle       = "PT168H"
+  name                = "automation-commands"
+  namespace_id        = azurerm_servicebus_namespace.main.id
+  auto_delete_on_idle = "PT168H"
 }
 
 # Service Bus Topic: notifications
 resource "azurerm_servicebus_topic" "notifications" {
-  name                      = "notifications"
-  namespace_id              = azurerm_servicebus_namespace.main.id
-  enable_batched_operations = true
-  auto_delete_on_idle       = "PT168H"
+  name                = "notifications"
+  namespace_id        = azurerm_servicebus_namespace.main.id
+  auto_delete_on_idle = "PT168H"
 }
 
 # Service Bus Authorization Rule (for Container Apps)
