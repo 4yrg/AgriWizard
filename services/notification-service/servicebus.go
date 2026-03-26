@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
@@ -48,7 +47,7 @@ func (s *ServiceBusConsumer) Start(ctx context.Context) error {
 		return nil
 	}
 
-	receiver, err := s.client.NewReceiver(s.topicName, s.subscription, nil)
+	receiver, err := s.client.NewReceiverForSubscription(s.topicName, s.subscription, nil)
 	if err != nil {
 		log.Printf("[ERROR] Service Bus receiver creation failed: %v", err)
 		close(s.ready)
@@ -80,7 +79,7 @@ func (s *ServiceBusConsumer) Start(ctx context.Context) error {
 		for _, msg := range messages {
 			if err := s.processMessage(ctx, msg); err != nil {
 				log.Printf("[ERROR] Failed to process message: %v", err)
-				_, dlqErr := receiver.DeadLetterMessage(ctx, msg, nil)
+				dlqErr := receiver.DeadLetterMessage(ctx, msg, nil)
 				if dlqErr != nil {
 					log.Printf("[ERROR] Failed to dead letter message: %v", dlqErr)
 				}
@@ -104,7 +103,7 @@ func (s *ServiceBusConsumer) processMessage(ctx context.Context, msg *azserviceb
 	log.Printf("[DEBUG] Received notification request from Service Bus: channel=%s recipient=%s",
 		notification.Channel, notification.Recipient)
 
-	if err := s.dispatcher.Dispatch(ctx, &notification); err != nil {
+	if err := s.dispatcher.Process(ctx, &notification); err != nil {
 		log.Printf("[ERROR] Failed to dispatch notification: %v", err)
 		return err
 	}

@@ -18,10 +18,10 @@ import (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	status        *ServiceStatus
-	jwtSecret     string
-	analyticsURL  string
-	sbPublisher   *ServiceBusPublisher
+	status       *ServiceStatus
+	jwtSecret    string
+	analyticsURL string
+	sbPublisher  *ServiceBusPublisher
 }
 
 // NewHandler creates a new Handler.
@@ -441,11 +441,11 @@ func (h *Handler) publishTelemetryToServiceBus(payload TelemetryPayload) {
 	defer cancel()
 	for _, reading := range payload.Readings {
 		event := TelemetryEvent{
-			SensorID:     payload.SensorID,
-			ParameterID:  reading.ParameterID,
-			Value:        reading.Value,
-			Timestamp:    payload.Timestamp,
-			Metadata:     payload.Metadata,
+			SensorID:    payload.SensorID,
+			ParameterID: reading.ParameterID,
+			Value:       reading.Value,
+			Timestamp:   payload.Timestamp,
+			Metadata:    nil,
 		}
 		if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
 			log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)

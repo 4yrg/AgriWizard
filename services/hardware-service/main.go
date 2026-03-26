@@ -71,7 +71,6 @@ func main() {
 	port := getEnv("PORT", "8082")
 
 	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
-	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
 	sbTopic := getEnv("SERVICE_BUS_TOPIC", "telemetry-events")
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -101,12 +100,12 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":     s,
-			"service":    "hardware-service",
-			"db_ready":   status.IsReady(),
+			"status":    s,
+			"service":   "hardware-service",
+			"db_ready":  status.IsReady(),
 			"migrated":  status.migrated,
-			"mqtt_conn":  status.mqttClient != nil && status.mqttClient.IsConnected(),
-			"sb_conn":    sbPublisher.IsConnected(),
+			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
+			"sb_conn":   sbPublisher.IsConnected(),
 		})
 	})
 
@@ -133,11 +132,20 @@ func main() {
 			return
 		}
 
-		mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-		restoreSubscriptions(db, mqttClient, sbPublisher)
-
-		status.SetReady(db, mqttClient)
+		// Set ready with DB first (MQTT is optional)
+		status.SetReady(db, nil)
 		status.SetMigrated()
+		log.Println("[INFO] Hardware Service ready (DB connected)")
+
+		// Try MQTT in background (non-blocking)
+		go func() {
+			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
+			if mqttClient != nil {
+				status.SetReady(db, mqttClient)
+				restoreSubscriptions(db, mqttClient, sbPublisher)
+				log.Println("[INFO] MQTT connected, subscriptions restored")
+			}
+		}()
 		log.Println("[INFO] Hardware Service fully ready")
 	}()
 
@@ -188,6 +196,11 @@ func connectDB(dsn string) (*sql.DB, error) {
 }
 
 func connectMQTT(broker, username, password string) mqtt.Client {
+	if broker == "" {
+		log.Println("[INFO] MQTT broker not configured, skipping MQTT")
+		return nil
+	}
+
 	opts := mqtt.NewClientOptions().
 		AddBroker(broker).
 		SetClientID("agriwizard-hardware-service").
@@ -232,7 +245,7 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, sbPublisher *ServiceBu
 		for rows.Next() {
 			var topic string
 			if rows.Scan(&topic) == nil {
-				client.Subscribe(topic, 1, func(_ mqtt.Client, msg paho.Message) {
+				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
 					// Also publish to Service Bus for analytics
 					if sbPublisher != nil {

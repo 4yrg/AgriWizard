@@ -4,15 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 )
 
 type TelemetryEvent struct {
-	SensorID     string                 `json:"sensor_id"`
-	ParameterID  string                 `json:"parameter_id"`
+	SensorID    string                 `json:"sensor_id"`
+	ParameterID string                 `json:"parameter_id"`
 	Value       float64                `json:"value"`
 	Timestamp   time.Time              `json:"timestamp"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
@@ -56,7 +55,7 @@ func (s *ServiceBusConsumer) Start(ctx context.Context) error {
 		return nil
 	}
 
-	receiver, err := s.client.NewReceiver(s.topicName, s.subscription, nil)
+	receiver, err := s.client.NewReceiverForSubscription(s.topicName, s.subscription, nil)
 	if err != nil {
 		log.Printf("[ERROR] Service Bus receiver creation failed: %v", err)
 		close(s.ready)
@@ -88,7 +87,7 @@ func (s *ServiceBusConsumer) Start(ctx context.Context) error {
 		for _, msg := range messages {
 			if err := s.processMessage(ctx, msg); err != nil {
 				log.Printf("[ERROR] Failed to process message: %v", err)
-				_, dlqErr := receiver.DeadLetterMessage(ctx, msg, nil)
+				dlqErr := receiver.DeadLetterMessage(ctx, msg, nil)
 				if dlqErr != nil {
 					log.Printf("[ERROR] Failed to dead letter message: %v", dlqErr)
 				}
@@ -113,8 +112,8 @@ func (s *ServiceBusConsumer) processMessage(ctx context.Context, msg *azserviceb
 		event.SensorID, event.ParameterID, event.Value)
 
 	ingestPayload := IngestPayload{
-		SensorID:   event.SensorID,
-		Timestamp:  event.Timestamp,
+		SensorID:  event.SensorID,
+		Timestamp: event.Timestamp,
 		Readings: []ParameterReading{
 			{
 				ParameterID: event.ParameterID,
@@ -124,7 +123,7 @@ func (s *ServiceBusConsumer) processMessage(ctx context.Context, msg *azserviceb
 		Metadata: event.Metadata,
 	}
 
-	if err := s.handler.ProcessIngest(ingestPayload); err != nil {
+	if _, err := s.handler.ProcessIngest(ingestPayload); err != nil {
 		log.Printf("[ERROR] Failed to process ingest: %v", err)
 		return err
 	}
