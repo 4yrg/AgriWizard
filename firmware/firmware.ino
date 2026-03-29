@@ -15,8 +15,11 @@ const char* MQTT_PASSWORD = "Agriwizard@999";
 const char* DEVICE_ID = "esp32-greenhouse-01";
 
 const char* SENSOR_ID = "REPLACE_WITH_SENSOR_ID_FROM_HARDWARE_SERVICE";
-const char* FAN_EQUIPMENT_ID = "a59110c3-cd56-4c83-9626-0b34b3cdd19d";
-const char* PUMP_EQUIPMENT_ID = "REPLACE_WITH_PUMP_EQUIPMENT_ID";
+const char* SOIL_SENSOR_ID = "REPLACE_WITH_SENSOR_ID_FROM_HARDWARE_SERVICE";
+const char* TMP_SENSOR_ID = "REPLACE_WITH_SENSOR_ID_FROM_HARDWARE_SERVICE";
+
+const char* FAN_EQUIPMENT_ID = "b8cff3e4-7bc3-4480-a23c-a8bfae62aac1"; //main wp
+const char* PUMP_EQUIPMENT_ID = "57aec2ac-8ce2-45fb-a037-ffacb8e9dd06"; //main wsply
 
 const char* PARAM_TEMP = "air_temp_c";
 const char* PARAM_HUMIDITY = "air_humidity_pct";
@@ -24,7 +27,7 @@ const char* PARAM_SOIL = "soil_moisture_pct";
 
 const int DHT_PIN = 4;
 const int DHT_TYPE = DHT11;
-const int SOIL_PIN = 34;
+const int SOIL_PIN = 26;
 const int FAN_PIN = 18;
 const int PUMP_PIN = 19;
 
@@ -90,7 +93,7 @@ void publishEquipmentStatus(const String& statusTopic, const char* equipmentId, 
 
   char payload[192];
   size_t n = serializeJson(doc, payload, sizeof(payload));
-  bool ok = mqttClient.publish(statusTopic.c_str(), payload, n, false);
+  bool ok = mqttClient.publish(statusTopic.c_str(), (const uint8_t*)payload, n, false);
   logLine(String("status publish ") + (ok ? "OK" : "FAIL") + " topic=" + statusTopic + " payload=" + String(payload));
 }
 
@@ -191,7 +194,7 @@ void publishTelemetry() {
 
   char payload[640];
   size_t n = serializeJson(doc, payload, sizeof(payload));
-  bool ok = mqttClient.publish(sensorTelemetryTopic.c_str(), payload, n, false);
+  bool ok = mqttClient.publish(sensorTelemetryTopic.c_str(), (const uint8_t*)payload, n, false);
   logLine(String("telemetry publish ") + (ok ? "OK" : "FAIL") + " topic=" + sensorTelemetryTopic + " payload=" + String(payload));
 }
 
@@ -247,6 +250,9 @@ void connectMQTT() {
 
 void setupTopics() {
   sensorTelemetryTopic = "agriwizard/sensor/" + String(SENSOR_ID) + "/telemetry";
+  soilSensorTelemetryTopic = "agriwizard/sensor/" + String(SOIL_SENSOR_ID) + "/telemetry";
+  tmpSensorTelemetryTopic = "agriwizard/sensor/" + String(TMP_SENSOR_ID) + "/telemetry";
+
   fanCommandTopic = "agriwizard/equipment/" + String(FAN_EQUIPMENT_ID) + "/command";
   pumpCommandTopic = "agriwizard/equipment/" + String(PUMP_EQUIPMENT_ID) + "/command";
   fanStatusTopic = fanCommandTopic + "/status";
@@ -268,6 +274,8 @@ void setup() {
 
   setupTopics();
   logLine("sensor topic=" + sensorTelemetryTopic);
+  logLine("soil sensor topic=" + soilSensorTelemetryTopic);
+  logLine("temp sensor topic=" + tmpSensorTelemetryTopic);
   logLine("fan command topic=" + fanCommandTopic);
   logLine("pump command topic=" + pumpCommandTopic);
   connectWiFi();
