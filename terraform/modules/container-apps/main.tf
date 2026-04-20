@@ -461,12 +461,20 @@ resource "azurerm_container_app" "notification_service" {
         value = var.db_name
       }
       env {
-        name  = "SERVICE_BUS_NAMESPACE"
-        value = var.service_bus_namespace
+        name  = "RABBITMQ_HOST"
+        value = var.rabbitmq_host
       }
       env {
-        name  = "SERVICE_BUS_CONNECTION"
-        value = var.service_bus_connection
+        name  = "RABBITMQ_PORT"
+        value = var.rabbitmq_port
+      }
+      env {
+        name  = "RABBITMQ_USER"
+        value = var.rabbitmq_user
+      }
+      env {
+        name  = "RABBITMQ_PASSWORD"
+        value = var.rabbitmq_password
       }
       env {
         name  = "SMTP_HOST"

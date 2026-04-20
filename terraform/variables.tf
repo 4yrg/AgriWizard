@@ -266,17 +266,115 @@ variable "apim_sku_name" {
 }
 
 # -----------------------------------------------------------------------------
-# Service Bus Configuration
+# RabbitMQ Configuration
 # -----------------------------------------------------------------------------
 
-variable "service_bus_name" {
-  description = "Azure Service Bus namespace name"
+variable "rabbitmq_default_user" {
+  description = "RabbitMQ default username"
   type        = string
-  default     = "agriwizard-sbus"
+  default     = "agriwizard"
 
   validation {
-    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{3,62}[a-zA-Z0-9]$", var.service_bus_name))
-    error_message = "Service Bus name must be 6-63 characters, start/end with alphanumeric."
+    condition     = length(var.rabbitmq_default_user) >= 3
+    error_message = "Username must be at least 3 characters."
+  }
+}
+
+variable "rabbitmq_default_pass" {
+  description = "RabbitMQ default password"
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = length(var.rabbitmq_default_pass) >= 8
+    error_message = "Password must be at least 8 characters."
+  }
+}
+
+variable "rabbitmq_cpu_core" {
+  description = "CPU cores per RabbitMQ container"
+  type        = number
+  default     = 0.5
+
+  validation {
+    condition     = var.rabbitmq_cpu_core >= 0.25 && var.rabbitmq_cpu_core <= 4
+    error_message = "CPU cores must be between 0.25 and 4."
+  }
+}
+
+variable "rabbitmq_memory_size" {
+  description = "Memory in GB per RabbitMQ container"
+  type        = number
+  default     = 1.0
+
+  validation {
+    condition     = var.rabbitmq_memory_size >= 0.5 && var.rabbitmq_memory_size <= 8
+    error_message = "Memory must be between 0.5 and 8 GB."
+  }
+}
+
+variable "rabbitmq_min_replicas" {
+  description = "Minimum number of RabbitMQ replicas"
+  type        = number
+  default     = 1
+}
+
+variable "rabbitmq_max_replicas" {
+  description = "Maximum number of RabbitMQ replicas"
+  type        = number
+  default     = 1
+}
+
+# -----------------------------------------------------------------------------
+# Tags
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Kong Gateway Configuration
+# -----------------------------------------------------------------------------
+
+variable "kong_cpu_core" {
+  description = "CPU cores per Kong container replica"
+  type        = number
+  default     = 0.5
+
+  validation {
+    condition     = var.kong_cpu_core >= 0.25 && var.kong_cpu_core <= 4
+    error_message = "CPU cores must be between 0.25 and 4."
+  }
+}
+
+variable "kong_memory_size" {
+  description = "Memory in GB per Kong container replica"
+  type        = number
+  default     = 1.0
+
+  validation {
+    condition     = var.kong_memory_size >= 0.5 && var.kong_memory_size <= 8
+    error_message = "Memory must be between 0.5 and 8 GB."
+  }
+}
+
+variable "kong_min_replicas" {
+  description = "Minimum number of Kong replicas"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.kong_min_replicas >= 0 && var.kong_min_replicas <= 10
+    error_message = "Min replicas must be between 0 and 10."
+  }
+}
+
+variable "kong_max_replicas" {
+  description = "Maximum number of Kong replicas"
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.kong_max_replicas >= var.kong_min_replicas && var.kong_max_replicas <= 20
+    error_message = "Max replicas must be >= min_replicas and <= 20."
   }
 }
 

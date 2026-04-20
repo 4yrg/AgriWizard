@@ -4,57 +4,60 @@
 # NOTE: Container Apps are deployed manually and not managed by Terraform
 # to avoid import issues with existing manually-deployed container apps
 
-# module "container_apps" {
-#   source = "./modules/container-apps"
+module "container_apps" {
+  source = "./modules/container-apps"
 
-#   # Resource configuration
-#   resource_group_name     = data.azurerm_resource_group.main.name
-#   location                = data.azurerm_resource_group.main.location
-#   container_apps_env_name = azurerm_container_app_environment.main.name
+  # Resource configuration
+  resource_group_name     = data.azurerm_resource_group.main.name
+  location                = data.azurerm_resource_group.main.location
+  container_apps_env_name = azurerm_container_app_environment.main.name
 
-#   # Container Registry
-#   container_registry_server   = azurerm_container_registry.main.login_server
-#   container_registry_username = azurerm_container_registry.main.admin_username
-#   container_registry_password = azurerm_container_registry.main.admin_password
+  # Container Registry
+  container_registry_server   = azurerm_container_registry.main.login_server
+  container_registry_username = azurerm_container_registry.main.admin_username
+  container_registry_password = azurerm_container_registry.main.admin_password
 
-#   # Image configuration
-#   image_tag = var.image_tag
+  # Image configuration
+  image_tag = var.image_tag
 
-#   # Database configuration - Using external database placeholder
-#   db_host     = "postgres"
-#   db_port     = 5432
-#   db_name     = "agriwizard"
-#   db_user     = var.postgresql_admin_username
-#   db_password = var.postgresql_admin_password
+  # Database configuration - Using PostgreSQL
+  db_host     = azurerm_postgresql_flexible_server.main.fqdn
+  db_port     = 5432
+  db_name     = "agriwizard"
+  db_user     = var.postgresql_admin_username
+  db_password = var.postgresql_admin_password
 
-#   # JWT Secret
-#   jwt_secret = var.jwt_secret
+  # JWT Secret
+  jwt_secret = var.jwt_secret
 
-#   # IoT Hub configuration (commented out - not deployed)
-#   iot_hub_name = ""
+  # IoT Hub configuration
+  iot_hub_name = var.iot_hub_name
 
-#   # Service Bus configuration
-#   service_bus_namespace  = azurerm_servicebus_namespace.main.name
-#   service_bus_connection = azurerm_servicebus_namespace_authorization_rule.container_apps.primary_connection_string
+  # RabbitMQ configuration
+  rabbitmq_host     = azurerm_container_app.rabbitmq.ingress[0].fqdn
+  rabbitmq_port    = 5672
+  rabbitmq_user    = var.rabbitmq_default_user
+  rabbitmq_password = var.rabbitmq_default_pass
 
-#   # Environment
-#   environment = var.environment
+  # Environment
+  environment = var.environment
 
-#   # Scaling configuration
-#   cpu_core     = var.cpu_core
-#   memory_size  = var.memory_size
-#   min_replicas = var.min_replicas
-#   max_replicas = var.max_replicas
+  # Scaling configuration
+  cpu_core     = var.cpu_core
+  memory_size  = var.memory_size
+  min_replicas = var.min_replicas
+  max_replicas = var.max_replicas
 
-#   # Tags
-#   tags = local.common_tags
+  # Tags
+  tags = local.common_tags
 
-#   depends_on = [
-#     azurerm_container_registry.main,
-#     azurerm_container_app_environment.main,
-#     azurerm_servicebus_namespace.main
-#   ]
-# }
+  depends_on = [
+    azurerm_container_registry.main,
+    azurerm_container_app_environment.main,
+    azurerm_container_app.rabbitmq,
+    azurerm_postgresql_flexible_server.main
+  ]
+}
 
 # =============================================================================
 # API Management - Backend Services (commented out - using Kong instead)
@@ -203,9 +206,9 @@ resource "azurerm_key_vault_secret" "jwt_secret" {
 #   depends_on = [azurerm_key_vault_access_policy.current_user]
 # }
 
-resource "azurerm_key_vault_secret" "service_bus_connection" {
-  name         = "service-bus-connection-string"
-  value        = azurerm_servicebus_namespace_authorization_rule.container_apps.primary_connection_string
+resource "azurerm_key_vault_secret" "rabbitmq_connection" {
+  name         = "rabbitmq-connection-string"
+  value        = "amqp://${var.rabbitmq_default_user}:${var.rabbitmq_default_pass}@${azurerm_container_app.rabbitmq.ingress[0].fqdn}:5672"
   key_vault_id = azurerm_key_vault.main.id
 
   depends_on = [azurerm_key_vault_access_policy.current_user]

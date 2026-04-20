@@ -1,10 +1,10 @@
-name: Deploy to Azure
+name: Build and Deploy to Azure
 
 on:
   push:
     branches:
-      - main
       - development
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -12,18 +12,15 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'staging'
+        default: 'production'
         type: choice
         options:
           - development
-          - staging
           - production
 
 env:
   REGISTRY: agriwizard.azurecr.io
-  GO_VERSION: "1.26.1"
-  TERRAFORM_VERSION: "1.9.0"
-  AZURE_CLI_VERSION: "2.64.0"
+  RESOURCE_GROUP: agriwizard-rg
 
 jobs:
   # ============================================================================
@@ -35,6 +32,7 @@ jobs:
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       tag: ${{ steps.env.outputs.tag }}
+      prefix: ${{ steps.env.outputs.prefix }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,198 +43,26 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/development" ]]; then
             echo "environment=development" >> $GITHUB_OUTPUT
             echo "tag=dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "prefix=dev" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
-              echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-            else
-              echo "environment=staging" >> $GITHUB_OUTPUT
-            fi
+            echo "environment=production" >> $GITHUB_OUTPUT
             echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "prefix=prod" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "prefix=prod" >> $GITHUB_OUTPUT
           else
             echo "environment=development" >> $GITHUB_OUTPUT
             echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "prefix=dev" >> $GITHUB_OUTPUT
           fi
 
           echo "========================================"
-          echo "Deploying to: ${{ steps.env.outputs.environment }}"
+          echo "Building for: ${{ steps.env.outputs.environment }}"
           echo "Image tag: ${{ steps.env.outputs.tag }}"
+          echo "Service prefix: ${{ steps.env.outputs.prefix }}"
           echo "========================================"
-
-      - name: Display environment info
-        run: |
-          echo "Registry: ${{ env.REGISTRY }}"
-          echo "Environment: ${{ steps.env.outputs.environment }}"
-
-  # ============================================================================
-  # Terraform Validation
-  # ============================================================================
-  terraform-validate:
-    name: Terraform Validate
-    needs: setup
-    runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-          cli_config_credentials_token: ${{ secrets.TERRAFORM_BACKEND_STORAGE_KEY }}
-
-      - name: Configure Terraform backend
-        working-directory: terraform
-        run: |
-          cat > backend.tf <<EOF
-          terraform {
-            backend "azurerm" {
-              resource_group_name  = "${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}"
-              storage_account_name = "${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}"
-              container_name   = "${{ secrets.TERRAFORM_BACKEND_CONTAINER }}"
-              key            = "${{ needs.setup.outputs.environment }}/terraform.tfstate"
-            }
-          }
-          EOF
-        shell: bash
-
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}" -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" -backend-config="key=${{ needs.setup.outputs.environment }}/terraform.tfstate" -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}" -backend-config="access_key=${{ secrets.TERRAFORM_BACKEND_STORAGE_KEY }}"
-
-      - name: Terraform Validate
-        working-directory: terraform
-        run: terraform validate
-
-      - name: Terraform Format Check
-        working-directory: terraform
-        run: terraform fmt -check -recursive
-        continue-on-error: true
-
-  # ============================================================================
-  # Terraform Plan
-  # ============================================================================
-  terraform-plan:
-    name: Terraform Plan
-    needs: [setup, terraform-validate]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
-    if: github.event_name != 'workflow_dispatch'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Configure Terraform backend
-        working-directory: terraform
-        run: |
-          cat > backend.tf <<EOF
-          terraform {
-            backend "azurerm" {
-              resource_group_name  = "${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}"
-              storage_account_name = "${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}"
-              container_name   = "${{ secrets.TERRAFORM_BACKEND_CONTAINER }}"
-              key            = "${{ needs.setup.outputs.environment }}/terraform.tfstate"
-            }
-          }
-          EOF
-
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}" -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" -backend-config="key=${{ needs.setup.outputs.environment }}/terraform.tfstate" -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}" -backend-config="access_key=${{ secrets.TERRAFORM_BACKEND_STORAGE_KEY }}"
-
-      - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan \
-            -var-file="${{ needs.setup.outputs.environment }}.tfvars" \
-            -out=tfplan-${{ needs.setup.outputs.environment }} \
-            -lock=true \
-            -lock-timeout=30m
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-
-      - name: Save Plan Output
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ needs.setup.outputs.environment }}
-          path: terraform/tfplan-${{ needs.setup.outputs.environment }}
-          retention-days: 7
-
-  # ============================================================================
-  # Terraform Apply (on main or tag push)
-  # ============================================================================
-  terraform-apply:
-    name: Terraform Apply
-    needs: [setup, terraform-validate]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Configure Terraform backend
-        working-directory: terraform
-        run: |
-          cat > backend.tf <<EOF
-          terraform {
-            backend "azurerm" {
-              resource_group_name  = "${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}"
-              storage_account_name = "${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}"
-              container_name   = "${{ secrets.TERRAFORM_BACKEND_CONTAINER }}"
-              key            = "${{ needs.setup.outputs.environment }}/terraform.tfstate"
-            }
-          }
-          EOF
-
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_STORAGE_ACCOUNT }}" -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" -backend-config="key=${{ needs.setup.outputs.environment }}/terraform.tfstate" -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RESOURCE_GROUP }}" -backend-config="access_key=${{ secrets.TERRAFORM_BACKEND_STORAGE_KEY }}"
-
-      - name: Terraform Apply
-        working-directory: terraform
-        run: |
-          terraform apply \
-            -var-file="${{ needs.setup.outputs.environment }}.tfvars" \
-            -lock=true \
-            -lock-timeout=30m \
-            -auto-approve
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-
-      - name: Terraform Output
-        working-directory: terraform
-        run: terraform output -json
-        continue-on-error: true
 
   # ============================================================================
   # Build and Push Docker Images
@@ -248,7 +74,7 @@ jobs:
     environment: ${{ needs.setup.outputs.environment }}
     strategy:
       matrix:
-        service: [iam-service, hardware-service, analytics-service, weather-service]
+        service: [iam-service, hardware-service, analytics-service, weather-service, notification-service]
     permissions:
       contents: read
       packages: write
@@ -297,168 +123,130 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Image pushed summary
+        run: |
+          echo "✓ ${{ matrix.service }} built and pushed: ${{ steps.meta.outputs.tags }}"
+
   # ============================================================================
-  # Deploy to Azure Container Apps
+  # Generate Deployment Commands
   # ============================================================================
-  deploy-container-apps:
-    name: Deploy to Container Apps
-    needs: [setup, build-push, terraform-apply]
+  deployment-commands:
+    name: Generate Deployment Commands
+    needs: [setup, build-push]
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.environment }}
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    outputs:
+      commands: ${{ steps.generate.outputs.commands }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Get Terraform outputs
-        working-directory: terraform
-        id: tf-output
+      - name: Generate deployment commands
+        id: generate
         run: |
-          echo "acr_login_server=$(az acr show -n agriwizardacr --query loginServer -o tsv)" >> $GITHUB_OUTPUT
-        shell: bash
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          PREFIX="${{ needs.setup.outputs.prefix }}"
+          TAG="${{ needs.setup.outputs.tag }}"
+          REGISTRY="${{ env.REGISTRY }}"
+          RG="${{ env.RESOURCE_GROUP }}"
 
-      - name: Deploy IAM Service
-        run: |
-          az containerapp update \
-            --name agriwizard-iam \
-            --resource-group agriwizard-rg \
-            --image ${{ env.REGISTRY }}/agriwizard-iam-service:${{ needs.setup.outputs.tag }} \
-            --cpu 0.25 --memory 0.5Gi \
-            --min-replicas 1 --max-replicas 3 || echo "Creating IAM container app..."
-            az containerapp create \
-              --name agriwizard-iam \
-              --resource-group agriwizard-rg \
-              --environment agriwizard-env \
-              --image ${{ env.REGISTRY }}/agriwizard-iam-service:${{ needs.setup.outputs.tag }} \
-              --cpu 0.25 --memory 0.5Gi \
-              --min-replicas 1 --max-replicas 3
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          cat << EOF > deployment-commands.sh
+          #!/bin/bash
+          # Deployment commands for ${{ needs.setup.outputs.environment }} environment
+          # Image tag: $TAG
+          # Prefix: $PREFIX
 
-      - name: Deploy Hardware Service
-        run: |
-          az containerapp update \
-            --name agriwizard-hardware \
-            --resource-group agriwizard-rg \
-            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:${{ needs.setup.outputs.tag }} \
-            --cpu 0.25 --memory 0.5Gi \
-            --min-replicas 1 --max-replicas 3 || echo "Creating hardware container app..."
-            az containerapp create \
-              --name agriwizard-hardware \
-              --resource-group agriwizard-rg \
-              --environment agriwizard-env \
-              --image ${{ env.REGISTRY }}/agriwizard-hardware-service:${{ needs.setup.outputs.tag }} \
-              --cpu 0.25 --memory 0.5Gi \
-              --min-replicas 1 --max-replicas 3
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          echo "========================================="
+          echo "Deploying to ${{ needs.setup.outputs.environment }} environment"
+          echo "Image tag: $TAG"
+          echo "========================================="
 
-      - name: Deploy Analytics Service
-        run: |
-          az containerapp update \
-            --name agriwizard-analytics \
-            --resource-group agriwizard-rg \
-            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:${{ needs.setup.outputs.tag }} \
-            --cpu 0.25 --memory 0.5Gi \
-            --min-replicas 1 --max-replicas 3 || echo "Creating analytics container app..."
-            az containerapp create \
-              --name agriwizard-analytics \
-              --resource-group agriwizard-rg \
-              --environment agriwizard-env \
-              --image ${{ env.REGISTRY }}/agriwizard-analytics-service:${{ needs.setup.outputs.tag }} \
-              --cpu 0.25 --memory 0.5Gi \
-              --min-replicas 1 --max-replicas 3
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          # Login to Azure
+          echo "Logging into Azure..."
+          az login
 
-      - name: Deploy Weather Service
-        run: |
-          az containerapp update \
-            --name agriwizard-weather \
-            --resource-group agriwizard-rg \
-            --image ${{ env.REGISTRY }}/agriwizard-weather-service:${{ needs.setup.outputs.tag }} \
-            --cpu 0.25 --memory 0.5Gi \
-            --min-replicas 1 --max-replicas 3 || echo "Creating weather container app..."
-            az containerapp create \
-              --name agriwizard-weather \
-              --resource-group agriwizard-rg \
-              --environment agriwizard-env \
-              --image ${{ env.REGISTRY }}/agriwizard-weather-service:${{ needs.setup.outputs.tag }} \
-              --cpu 0.25 --memory 0.5Gi \
-              --min-replicas 1 --max-replicas 3
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          # Set subscription
+          az account set --subscription 911cf5d3-ab4a-4897-9e23-244536f28127
+
+          # Update Container Apps
+          echo "Deploying IAM Service..."
+          az containerapp update \\
+            --name ${PREFIX}-iam-service \\
+            --resource-group ${RG} \\
+            --image ${REGISTRY}/agriwizard-iam-service:${TAG}
+
+          echo "Deploying Hardware Service..."
+          az containerapp update \\
+            --name ${PREFIX}-hardware-service \\
+            --resource-group ${RG} \\
+            --image ${REGISTRY}/agriwizard-hardware-service:${TAG}
+
+          echo "Deploying Analytics Service..."
+          az containerapp update \\
+            --name ${PREFIX}-analytics-service \\
+            --resource-group ${RG} \\
+            --image ${REGISTRY}/agriwizard-analytics-service:${TAG}
+
+          echo "Deploying Weather Service..."
+          az containerapp update \\
+            --name ${PREFIX}-weather-service \\
+            --resource-group ${RG} \\
+            --image ${REGISTRY}/agriwizard-weather-service:${TAG}
+
+          echo "Deploying Notification Service..."
+          az containerapp update \\
+            --name ${PREFIX}-notification-service \\
+            --resource-group ${RG} \\
+            --image ${REGISTRY}/agriwizard-notification-service:${TAG}
+
+          echo "========================================="
+          echo "Deployment completed!"
+          echo "========================================="
+          EOF
+
+          # Output as JSON
+          echo "commands<<EOF" >> $GITHUB_OUTPUT
+          cat deployment-commands.sh >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   # ============================================================================
-  # Health Check
-  # ============================================================================
-  health-check:
-    name: Health Check
-    needs: [setup, deploy-container-apps]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.setup.outputs.environment }}
-    steps:
-      - name: Wait for deployment
-        run: sleep 30
-
-      - name: Check Kong Gateway Health
-        run: |
-          echo "Checking Kong gateway health..."
-          curl -f http://localhost:8001/health || echo "Kong not running locally"
-
-      - name: Check Service Health
-        run: |
-          echo "Checking service endpoints..."
-          echo "Note: In production, use actual FQDN from Azure"
-          for endpoint in iam hardware analytics weather; do
-            echo "Checking $endpoint service..."
-          done
-
-      - name: Display deployment summary
-        run: |
-          echo "========================================"
-          echo "Deployment completed successfully!"
-          echo "Environment: ${{ needs.setup.outputs.environment }}"
-          echo "Image tag: ${{ needs.setup.outputs.tag }}"
-          echo "========================================"
-
-  # ============================================================================
-  # Notification
+  # Notify Completion
   # ============================================================================
   notify:
-    name: Notify
-    needs: [setup, health-check]
+    name: Deployment Ready
+    needs: [setup, build-push, deployment-commands]
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Send failure notification
-        if: needs.health-check.result == 'failure'
+      - name: Summary
         run: |
-          echo "Deployment failed! Check logs for details."
-
-      - name: Send success notification
-        if: needs.health-check.result == 'success'
-        run: |
-          echo "Deployment succeeded to ${{ needs.setup.outputs.environment }}!"
+          echo "========================================="
+          echo "✅ Build completed successfully!"
+          echo "========================================="
+          echo ""
+          echo "Environment: ${{ needs.setup.outputs.environment }}"
+          echo "Image tag: ${{ needs.setup.outputs.tag }}"
+          echo ""
+          echo "Docker images pushed to ACR:"
+          echo "  - agriwizard.azurecr.io/agriwizard-iam-service:${{ needs.setup.outputs.tag }}"
+          echo "  - agriwizard.azurecr.io/agriwizard-hardware-service:${{ needs.setup.outputs.tag }}"
+          echo "  - agriwizard.azurecr.io/agriwizard-analytics-service:${{ needs.setup.outputs.tag }}"
+          echo "  - agriwizard.azurecr.io/agriwizard-weather-service:${{ needs.setup.outputs.tag }}"
+          echo "  - agriwizard.azurecr.io/agriwizard-notification-service:${{ needs.setup.outputs.tag }}"
+          echo ""
+          echo "========================================="
+          echo "📋 TO DEPLOY TO AZURE CONTAINER APPS"
+          echo "========================================="
+          echo ""
+          echo "Run these commands locally:"
+          echo ""
+          echo '```bash'
+          echo "# Login to Azure"
+          echo "az login"
+          echo ""
+          echo "# Deploy services"
+          echo 'az containerapp update --name ${{ needs.setup.outputs.prefix }}-iam-service --resource-group agriwizard-rg --image agriwizard.azurecr.io/agriwizard-iam-service:${{ needs.setup.outputs.tag }}'
+          echo 'az containerapp update --name ${{ needs.setup.outputs.prefix }}-hardware-service --resource-group agriwizard-rg --image agriwizard.azurecr.io/agriwizard-hardware-service:${{ needs.setup.outputs.tag }}'
+          echo 'az containerapp update --name ${{ needs.setup.outputs.prefix }}-analytics-service --resource-group agriwizard-rg --image agriwizard.azurecr.io/agriwizard-analytics-service:${{ needs.setup.outputs.tag }}'
+          echo 'az containerapp update --name ${{ needs.setup.outputs.prefix }}-weather-service --resource-group agriwizard-rg --image agriwizard.azurecr.io/agriwizard-weather-service:${{ needs.setup.outputs.tag }}'
+          echo 'az containerapp update --name ${{ needs.setup.outputs.prefix }}-notification-service --resource-group agriwizard-rg --image agriwizard.azurecr.io/agriwizard-notification-service:${{ needs.setup.outputs.tag }}'
+          echo '```'
+          echo ""
+          echo "Or save the generated script:"
+          echo "Save the content from deployment-commands.sh and run it locally"

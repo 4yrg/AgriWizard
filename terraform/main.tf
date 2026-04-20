@@ -147,38 +147,59 @@ resource "azurerm_user_assigned_identity" "container_apps" {
   tags = local.common_tags
 }
 
-# Azure Database for PostgreSQL Flexible Server (commented out for deployment)
-# resource "azurerm_postgresql_flexible_server" "main" {
-#   name                = var.postgresql_server_name
-#   resource_group_name = data.azurerm_resource_group.main.name
-#   location            = var.location
-#   version             = var.postgresql_version
+# Azure Database for PostgreSQL Flexible Server
+resource "azurerm_postgresql_flexible_server" "main" {
+  name                = var.postgresql_server_name
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = var.location
+  version             = var.postgresql_version
 
-#   # Administrator credentials
-#   administrator_login    = var.postgresql_admin_username
-#   administrator_password = var.postgresql_admin_password
+  # Administrator credentials
+  administrator_login    = var.postgresql_admin_username
+  administrator_password = var.postgresql_admin_password
 
-#   # SKU configuration
-#   sku_name = var.postgresql_sku_name
+  # SKU configuration
+  sku_name = var.postgresql_sku_name
 
-#   # Storage configuration
-#   storage_mb        = 32768 # 32GB
-#   auto_grow_enabled = true
+  # Storage configuration
+  storage_mb        = 32768 # 32GB
+  auto_grow_enabled = true
 
-#   tags = local.common_tags
+  # High availability
+  high_availability {
+    mode = "Disabled"
+  }
 
-#   lifecycle {
-#     ignore_changes = [zone]
-#   }
-# }
+  tags = local.common_tags
 
-# PostgreSQL Database (commented out)
-# resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
-#   name      = "agriwizard"
-#   server_id = azurerm_postgresql_flexible_server.main.id
-#   collation = "en_US.utf8"
-#   charset   = "UTF8"
-# }
+  lifecycle {
+    ignore_changes = [zone]
+  }
+}
+
+# PostgreSQL Database
+resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
+  name      = "agriwizard"
+  server_id = azurerm_postgresql_flexible_server.main.id
+  collation = "en_US.utf8"
+  charset   = "UTF8"
+}
+
+# PostgreSQL Firewall Rule - Allow Azure resources
+resource "azurerm_postgresql_flexible_server_firewall_rule" "azure_access" {
+  name     = "AllowAzureResources"
+  server_id = azurerm_postgresql_flexible_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# PostgreSQL Firewall Rule - Allow all IP (for development/staging)
+resource "azurerm_postgresql_flexible_server_firewall_rule" "all_access" {
+  name     = "AllowAll"
+  server_id = azurerm_postgresql_flexible_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "255.255.255.255"
+}
 
 # IoT Hub for MQTT communication (commented out)
 # resource "azurerm_iothub" "main" {
@@ -259,70 +280,144 @@ resource "azurerm_user_assigned_identity" "container_apps" {
 # }
 
 # =============================================================================
-# Azure Service Bus (Event-Driven Architecture)
+# RabbitMQ (Event-Driven Architecture)
 # =============================================================================
 
-# Service Bus Namespace
-resource "azurerm_servicebus_namespace" "main" {
-  name                = var.service_bus_name
-  location            = data.azurerm_resource_group.main.location
-  resource_group_name = data.azurerm_resource_group.main.name
-  sku                 = "Standard"
+# RabbitMQ Container App
+resource "azurerm_container_app" "rabbitmq" {
+  name                         = "${var.project_name}-rabbitmq"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = data.azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  # Ingress - Internal only (not exposed publicly)
+  ingress {
+    allow_insecure_connections = false
+    external_enabled           = false
+    target_port                = 5672
+    transport                  = "tcp"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+
+  # Secrets
+  secret {
+    name  = "rabbitmq-default-user"
+    value = var.rabbitmq_default_user
+  }
+
+  secret {
+    name  = "rabbitmq-default-pass"
+    value = var.rabbitmq_default_pass
+  }
+
+  # Registry configuration (using public image, no ACR needed)
+  # template for container
+  template {
+    container {
+      name   = "rabbitmq"
+      image  = "rabbitmq:3.12-management"
+      cpu    = var.rabbitmq_cpu_core
+      memory = "${var.rabbitmq_memory_size}Gi"
+
+      # Environment variables
+      env {
+        name  = "RABBITMQ_DEFAULT_USER"
+        value = var.rabbitmq_default_user
+      }
+      env {
+        name  = "RABBITMQ_DEFAULT_PASS"
+        value = var.rabbitmq_default_pass
+      }
+      env {
+        name  = "RABBITMQ_DEFAULT_VHOST"
+        value = "/"
+      }
+      env {
+        name  = "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS"
+        value = "-rabbit log_levels [{connection,info}]"
+      }
+    }
+
+    # Scaling
+    min_replicas = var.rabbitmq_min_replicas
+    max_replicas = var.rabbitmq_max_replicas
+  }
+
+  # Managed Identity
+  identity {
+    type = "SystemAssigned"
+  }
 
   tags = local.common_tags
 }
 
-# Service Bus Topic: telemetry-events
-resource "azurerm_servicebus_topic" "telemetry_events" {
-  name                = "telemetry-events"
-  namespace_id        = azurerm_servicebus_namespace.main.id
-  auto_delete_on_idle = "PT168H"
+# RabbitMQ Management UI Ingress
+resource "azurerm_container_app" "rabbitmq_mgmt" {
+  name                         = "${var.project_name}-rabbitmq-mgmt"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = data.azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  # Ingress - External for management UI
+  ingress {
+    allow_insecure_connections = false
+    external_enabled           = true
+    target_port                = 15672
+    transport                  = "http"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
+
+  # Registry configuration (not needed for public image)
+  # template for container
+  template {
+    container {
+      name   = "rabbitmq-mgmt"
+      image  = "rabbitmq:3.12-management"
+      cpu    = var.rabbitmq_cpu_core
+      memory = "${var.rabbitmq_memory_size}Gi"
+
+      # Environment variables
+      env {
+        name  = "RABBITMQ_DEFAULT_USER"
+        value = var.rabbitmq_default_user
+      }
+      env {
+        name  = "RABBITMQ_DEFAULT_PASS"
+        value = var.rabbitmq_default_pass
+      }
+      env {
+        name  = "RABBITMQ_MANAGEMENT_HTTP_PORT"
+        value = "15672"
+      }
+    }
+
+    min_replicas = 1
+    max_replicas = 1
+  }
+
+  # Managed Identity
+  identity {
+    type = "SystemAssigned"
+  }
+
+  tags = local.common_tags
 }
 
-# Service Bus Topic: automation-commands
-resource "azurerm_servicebus_topic" "automation_commands" {
-  name                = "automation-commands"
-  namespace_id        = azurerm_servicebus_namespace.main.id
-  auto_delete_on_idle = "PT168H"
+# Outputs for RabbitMQ
+output "rabbitmq_url" {
+  description = "RabbitMQ AMQP URL"
+  value       = "amqp://${var.rabbitmq_default_user}:${var.rabbitmq_default_pass}@${azurerm_container_app.rabbitmq.ingress[0].fqdn}:5672"
 }
 
-# Service Bus Topic: notifications
-resource "azurerm_servicebus_topic" "notifications" {
-  name                = "notifications"
-  namespace_id        = azurerm_servicebus_namespace.main.id
-  auto_delete_on_idle = "PT168H"
-}
-
-# Service Bus Authorization Rule (for Container Apps)
-resource "azurerm_servicebus_namespace_authorization_rule" "container_apps" {
-  name         = "container-apps-listen"
-  namespace_id = azurerm_servicebus_namespace.main.id
-
-  listen = true
-  send   = true
-  manage = false
-}
-
-# Service Bus Subscription: telemetry-events (for analytics service)
-resource "azurerm_servicebus_subscription" "analytics_telemetry" {
-  name               = "analytics-service"
-  topic_id           = azurerm_servicebus_topic.telemetry_events.id
-  max_delivery_count = 10
-  lock_duration      = "PT30S"
-}
-
-# Service Bus Subscription: notifications (for notification service)
-resource "azurerm_servicebus_subscription" "notification_handler" {
-  name               = "notification-service"
-  topic_id           = azurerm_servicebus_topic.notifications.id
-  max_delivery_count = 10
-  lock_duration      = "PT30S"
-}
-
-# Service Bus Subscription: automation-commands (for hardware service)
-resource "azurerm_servicebus_subscription" "hardware_commands" {
-  name               = "hardware-service"
-  topic_id           = azurerm_servicebus_topic.automation_commands.id
-  max_delivery_count = 10
-  lock_duration      = "PT30S"
+output "rabbitmq_management_url" {
+  description = "RabbitMQ Management UI URL"
+  value       = "http://${azurerm_container_app.rabbitmq_mgmt.ingress[0].fqdn}:15672"
 }

@@ -80,24 +80,35 @@ variable "iot_hub_name" {
   default     = ""
 }
 
-variable "service_bus_namespace" {
-  description = "Azure Service Bus namespace name"
+variable "rabbitmq_host" {
+  description = "RabbitMQ hostname"
   type        = string
 }
 
-variable "service_bus_connection" {
-  description = "Service Bus connection string"
+variable "rabbitmq_port" {
+  description = "RabbitMQ port"
+  type        = number
+  default     = 5672
+}
+
+variable "rabbitmq_user" {
+  description = "RabbitMQ username"
+  type        = string
+}
+
+variable "rabbitmq_password" {
+  description = "RabbitMQ password"
   type        = string
   sensitive   = true
 }
 
 variable "environment" {
-  description = "Environment name (prod)"
+  description = "Environment name (dev, staging, prod)"
   type        = string
 
   validation {
-    condition     = contains(["prod"], var.environment)
-    error_message = "Environment must be: prod."
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be: dev, staging, or prod."
   }
 }
 

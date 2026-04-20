@@ -52,6 +52,35 @@ output "container_apps_environment_id" {
 }
 
 # -----------------------------------------------------------------------------
+# Kong Gateway
+# -----------------------------------------------------------------------------
+
+output "kong_gateway_url" {
+  description = "Kong Gateway URL"
+  value       = "http://${azurerm_container_app.kong.ingress[0].fqdn}"
+}
+
+output "kong_admin_url" {
+  description = "Kong Admin API URL"
+  value       = "http://${azurerm_container_app.kong.ingress[0].fqdn}:8001"
+}
+
+# -----------------------------------------------------------------------------
+# RabbitMQ
+# -----------------------------------------------------------------------------
+
+output "rabbitmq_url" {
+  description = "RabbitMQ AMQP URL"
+  value       = "amqp://${var.rabbitmq_default_user}:${var.rabbitmq_default_pass}@${azurerm_container_app.rabbitmq.ingress[0].fqdn}:5672"
+  sensitive   = true
+}
+
+output "rabbitmq_management_url" {
+  description = "RabbitMQ Management UI URL"
+  value       = "http://${azurerm_container_app.rabbitmq_mgmt.ingress[0].fqdn}:15672"
+}
+
+# -----------------------------------------------------------------------------
 # Container Apps - Service URLs (managed manually)
 # -----------------------------------------------------------------------------
 
