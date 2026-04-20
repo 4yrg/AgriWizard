@@ -75,8 +75,9 @@ variable "jwt_secret" {
 }
 
 variable "iot_hub_name" {
-  description = "Azure IoT Hub name"
+  description = "Azure IoT Hub name (optional - leave empty if not using IoT Hub)"
   type        = string
+  default     = ""
 }
 
 variable "service_bus_namespace" {

@@ -1,0 +1,96 @@
+# =============================================================================
+# Kong Plugins Configuration (Legacy Reference)
+# =============================================================================
+# Active production config is now consolidated in `infrastructure/kong/kong.yml`
+# for DB-less declarative deployment in ACA.
+# =============================================================================
+
+_format_version: "3.0"
+_transform: true
+
+# =============================================================================
+# JWT Authentication Plugin
+# =============================================================================
+# Validates JWT tokens for authenticated service-to-service communication
+# -----------------------------------------------------------------------------
+plugins:
+  - name: jwt
+    route: iam-route
+    config:
+      uri_param_names:
+        - jwt
+      header_names:
+        - Authorization
+      claims_claims_verification:
+        - exp
+        - iat
+      maximum_expiration: 3600
+
+# Rate limiting per consumer (applied per-route via service)
+  - name: rate-limiting
+    config:
+      minute: 100
+      hour: 1000
+      day: 10000
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+      redis_host: null
+      redis_port: 6379
+      redis_database: 0
+      redis_password: null
+
+# Request transformer for logging
+  - name: request-transformer
+    config:
+      add:
+        headers:
+          - X-Gateway:Kong
+          - X-Gateway-Version:3.4
+
+# Response transformer
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - X-Kong-Version:3.4
+          - X-Api-Gateway:AgriWizard
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+# HTTP logging to external service (optional)
+# -----------------------------------------------------------------------------
+# Uncomment and configure if using external log aggregation
+# - name: http-log
+#   config:
+#     method: POST
+#     url: http://log-service:8086/log
+#     content_type: application/json
+#     timeout: 1000
+#     keepalive: 1000
+
+# =============================================================================
+# IP Restriction (protect admin endpoints)
+# =============================================================================
+# - name: ip-restriction
+#   route: admin-route
+#   config:
+#     allow:
+#       - 10.0.0.0/8
+#       - 172.16.0.0/12
+#       - 192.168.0.0/16
+#       - 127.0.0.1/32
+#     deny:
+#       - 0.0.0.0/0
+
+# =============================================================================
+# Bot Detection (optional)
+# =============================================================================
+# - name: bot-detection
+#   config:
+#     allow: []
+#     deny:
+#       - curl
+#       - wget
+#       - python-requests

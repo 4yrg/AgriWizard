@@ -20,13 +20,13 @@ variable "location" {
 }
 
 variable "environment" {
-  description = "Environment name (prod)"
+  description = "Environment name (dev, staging, prod)"
   type        = string
   default     = "prod"
 
   validation {
-    condition     = contains(["prod"], var.environment)
-    error_message = "Environment must be: prod."
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be: dev, staging, or prod."
   }
 }
 
@@ -176,23 +176,23 @@ variable "postgresql_version" {
   default     = "16"
 
   validation {
-    condition     = contains(["14", "15", "16"], var.postgresql_version)
-    error_message = "PostgreSQL version must be 14, 15, or 16."
+    condition     = contains(["14", "15", "16", "17"], var.postgresql_version)
+    error_message = "PostgreSQL version must be 14, 15, 16, or 17."
   }
 }
 
 # -----------------------------------------------------------------------------
-# IoT Hub Configuration
+# IoT Hub Configuration (optional)
 # -----------------------------------------------------------------------------
 
 variable "iot_hub_name" {
-  description = "Azure IoT Hub name"
+  description = "Azure IoT Hub name (leave empty to skip)"
   type        = string
-  default     = "agriwizard-iot"
+  default     = ""
 
   validation {
-    condition     = can(regex("^[a-zA-Z0-9-]{3,50}$", var.iot_hub_name))
-    error_message = "IoT Hub name must be 3-50 characters, alphanumeric and hyphens."
+    condition     = var.iot_hub_name == "" || can(regex("^[a-zA-Z0-9-]{3,50}$", var.iot_hub_name))
+    error_message = "IoT Hub name must be 3-50 characters, alphanumeric and hyphens, or leave empty."
   }
 }
 

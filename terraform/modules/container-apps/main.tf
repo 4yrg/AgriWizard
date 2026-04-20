@@ -169,7 +169,7 @@ resource "azurerm_container_app" "hardware_service" {
       }
       env {
         name  = "MQTT_BROKER"
-        value = "ssl://${var.iot_hub_name}.azure-devices.net:8883"
+        value = var.iot_hub_name != "" ? "ssl://${var.iot_hub_name}.azure-devices.net:8883" : ""
       }
       env {
         name  = "ANALYTICS_SERVICE_URL"

@@ -147,116 +147,116 @@ resource "azurerm_user_assigned_identity" "container_apps" {
   tags = local.common_tags
 }
 
-# Azure Database for PostgreSQL Flexible Server
-resource "azurerm_postgresql_flexible_server" "main" {
-  name                = var.postgresql_server_name
-  resource_group_name = data.azurerm_resource_group.main.name
-  location            = var.location
-  version             = var.postgresql_version
+# Azure Database for PostgreSQL Flexible Server (commented out for deployment)
+# resource "azurerm_postgresql_flexible_server" "main" {
+#   name                = var.postgresql_server_name
+#   resource_group_name = data.azurerm_resource_group.main.name
+#   location            = var.location
+#   version             = var.postgresql_version
 
-  # Administrator credentials
-  administrator_login    = var.postgresql_admin_username
-  administrator_password = var.postgresql_admin_password
+#   # Administrator credentials
+#   administrator_login    = var.postgresql_admin_username
+#   administrator_password = var.postgresql_admin_password
 
-  # SKU configuration
-  sku_name = var.postgresql_sku_name
+#   # SKU configuration
+#   sku_name = var.postgresql_sku_name
 
-  # Storage configuration
-  storage_mb        = 32768 # 32GB
-  auto_grow_enabled = true
+#   # Storage configuration
+#   storage_mb        = 32768 # 32GB
+#   auto_grow_enabled = true
 
-  tags = local.common_tags
+#   tags = local.common_tags
 
-  lifecycle {
-    ignore_changes = [zone]
-  }
-}
+#   lifecycle {
+#     ignore_changes = [zone]
+#   }
+# }
 
-# PostgreSQL Database
-resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
-  name      = "agriwizard"
-  server_id = azurerm_postgresql_flexible_server.main.id
-  collation = "en_US.utf8"
-  charset   = "UTF8"
-}
+# PostgreSQL Database (commented out)
+# resource "azurerm_postgresql_flexible_server_database" "agriwizard" {
+#   name      = "agriwizard"
+#   server_id = azurerm_postgresql_flexible_server.main.id
+#   collation = "en_US.utf8"
+#   charset   = "UTF8"
+# }
 
-# IoT Hub for MQTT communication
-resource "azurerm_iothub" "main" {
-  name                = var.iot_hub_name
-  location            = data.azurerm_resource_group.main.location
-  resource_group_name = data.azurerm_resource_group.main.name
+# IoT Hub for MQTT communication (commented out)
+# resource "azurerm_iothub" "main" {
+#   name                = var.iot_hub_name
+#   location            = data.azurerm_resource_group.main.location
+#   resource_group_name = data.azurerm_resource_group.main.name
+#
+#   sku {
+#     name     = "S1"
+#     capacity = 1
+#   }
+#
+#   tags = local.common_tags
+# }
 
-  sku {
-    name     = "S1"
-    capacity = 1
-  }
+# IoT Hub Consumer Group (commented out)
+# resource "azurerm_iothub_consumer_group" "main" {
+#   name                   = "agriwizard-consumer"
+#   iothub_name            = azurerm_iothub.main.name
+#   resource_group_name    = data.azurerm_resource_group.main.name
+#   eventhub_endpoint_name = "events"
+# }
 
-  tags = local.common_tags
-}
+# API Management Service (commented out - using Kong instead)
+# resource "azurerm_api_management" "main" {
+#   name                = var.apim_name
+#   location            = data.azurerm_resource_group.main.location
+#   resource_group_name = data.azurerm_resource_group.main.name
+#   publisher_name      = "AgriWizard Team"
+#   publisher_email     = var.apim_publisher_email
+#   sku_name            = var.apim_sku_name
+#
+#   # Identity for Key Vault integration
+#   identity {
+#     type = "SystemAssigned"
+#   }
+#
+#   tags = local.common_tags
+#
+#   lifecycle {
+#     ignore_changes = [
+#       tags["LastModified"]
+#     ]
+#   }
+# }
 
-# IoT Hub Consumer Group
-resource "azurerm_iothub_consumer_group" "main" {
-  name                   = "agriwizard-consumer"
-  iothub_name            = azurerm_iothub.main.name
-  resource_group_name    = data.azurerm_resource_group.main.name
-  eventhub_endpoint_name = "events"
-}
+# API Management - AgriWizard API (commented out)
+# resource "azurerm_api_management_api" "agriwizard" {
+#   name                  = "agriwizard-api"
+#   resource_group_name   = data.azurerm_resource_group.main.name
+#   api_management_name   = azurerm_api_management.main.name
+#   revision              = "1"
+#   display_name          = "AgriWizard API"
+#   path                  = "api/v1"
+#   protocols             = ["https"]
+#   service_url           = null
+#   subscription_required = true
+# }
 
-# API Management Service
-resource "azurerm_api_management" "main" {
-  name                = var.apim_name
-  location            = data.azurerm_resource_group.main.location
-  resource_group_name = data.azurerm_resource_group.main.name
-  publisher_name      = "AgriWizard Team"
-  publisher_email     = var.apim_publisher_email
-  sku_name            = var.apim_sku_name
+# API Management - Products (commented out)
+# resource "azurerm_api_management_product" "agriwizard" {
+#   product_id            = "agriwizard-product"
+#   api_management_name   = azurerm_api_management.main.name
+#   resource_group_name   = data.azurerm_resource_group.main.name
+#   display_name          = "AgriWizard Product"
+#   description           = "Access to AgriWizard microservices APIs"
+#   subscription_required = true
+#   approval_required     = false
+#   published             = true
+# }
 
-  # Identity for Key Vault integration
-  identity {
-    type = "SystemAssigned"
-  }
-
-  tags = local.common_tags
-
-  lifecycle {
-    ignore_changes = [
-      tags["LastModified"]
-    ]
-  }
-}
-
-# API Management - AgriWizard API
-resource "azurerm_api_management_api" "agriwizard" {
-  name                  = "agriwizard-api"
-  resource_group_name   = data.azurerm_resource_group.main.name
-  api_management_name   = azurerm_api_management.main.name
-  revision              = "1"
-  display_name          = "AgriWizard API"
-  path                  = "api/v1"
-  protocols             = ["https"]
-  service_url           = null
-  subscription_required = true
-}
-
-# API Management - Products
-resource "azurerm_api_management_product" "agriwizard" {
-  product_id            = "agriwizard-product"
-  api_management_name   = azurerm_api_management.main.name
-  resource_group_name   = data.azurerm_resource_group.main.name
-  display_name          = "AgriWizard Product"
-  description           = "Access to AgriWizard microservices APIs"
-  subscription_required = true
-  approval_required     = false
-  published             = true
-}
-
-# API Management - Product API Association
-resource "azurerm_api_management_product_api" "main" {
-  product_id          = azurerm_api_management_product.agriwizard.product_id
-  api_name            = azurerm_api_management_api.agriwizard.name
-  api_management_name = azurerm_api_management.main.name
-  resource_group_name = data.azurerm_resource_group.main.name
-}
+# API Management - Product API Association (commented out)
+# resource "azurerm_api_management_product_api" "main" {
+#   product_id          = azurerm_api_management_product.agriwizard.product_id
+#   api_name            = azurerm_api_management_api.agriwizard.name
+#   api_management_name = azurerm_api_management.main.name
+#   resource_group_name = data.azurerm_resource_group.main.name
+# }
 
 # =============================================================================
 # Azure Service Bus (Event-Driven Architecture)

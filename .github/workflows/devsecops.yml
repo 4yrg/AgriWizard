@@ -211,19 +211,19 @@ jobs:
       - name: Health check - Weather Service
         run: curl -f http://localhost:8084/health
 
-      - name: Health check - API Gateway
+      - name: Health check - Kong Gateway
         run: |
-          echo "Testing gateway health..."
+          echo "Testing Kong gateway health..."
           for i in 1 2 3 4 5; do
-            if curl -sf http://localhost:9090/ping; then
-              echo "✅ Gateway is healthy (ping on port 9090)"
+            if curl -sf http://localhost:8001/health; then
+              echo "✅ Kong Gateway is healthy (admin on port 8001)"
               exit 0
             fi
             echo "Attempt $i failed, retrying in 5s..."
             sleep 5
           done
-          echo "❌ Gateway health check failed after 5 attempts"
-          docker compose logs gateway
+          echo "❌ Kong Gateway health check failed after 5 attempts"
+          docker compose logs kong
           exit 1
 
       - name: On Failure - Show Debug Info

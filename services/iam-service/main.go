@@ -57,6 +57,7 @@ func main() {
 	dbPass := getEnv("DB_PASSWORD", "agriwizard_secret")
 	dbName := getEnv("DB_NAME", "agriwizard")
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
+	jwtIssuer := getEnv("JWT_ISSUER", "agriwizard-iam")
 	jwtTTLHours := getEnv("JWT_TTL_HOURS", "24")
 	port := getEnv("PORT", "8081")
 
@@ -135,7 +136,7 @@ func main() {
 	}()
 
 	// Setup API routes (will return 503 until DB is ready)
-	h := NewHandler(dbStatus, jwtSecret, ttlDur)
+	h := NewHandler(dbStatus, jwtSecret, jwtIssuer, ttlDur)
 
 	// Public routes
 	public := r.Group("/api/v1/iam")

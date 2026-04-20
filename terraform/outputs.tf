@@ -52,102 +52,105 @@ output "container_apps_environment_id" {
 }
 
 # -----------------------------------------------------------------------------
-# Container Apps - Service URLs
+# Container Apps - Service URLs (managed manually)
 # -----------------------------------------------------------------------------
 
-output "iam_service_fqdn" {
-  description = "IAM Service fully qualified domain name"
-  value       = module.container_apps.iam_service_url
-}
+# NOTE: Container Apps are deployed manually and not managed by Terraform
+# These outputs are commented out to avoid module reference errors
 
-output "hardware_service_fqdn" {
-  description = "Hardware Service fully qualified domain name"
-  value       = module.container_apps.hardware_service_url
-}
+# output "iam_service_fqdn" {
+#   description = "IAM Service fully qualified domain name"
+#   value       = module.container_apps.iam_service_url
+# }
 
-output "analytics_service_fqdn" {
-  description = "Analytics Service fully qualified domain name"
-  value       = module.container_apps.analytics_service_url
-}
+# output "hardware_service_fqdn" {
+#   description = "Hardware Service fully qualified domain name"
+#   value       = module.container_apps.hardware_service_url
+# }
 
-output "weather_service_fqdn" {
-  description = "Weather Service fully qualified domain name"
-  value       = module.container_apps.weather_service_url
-}
+# output "analytics_service_fqdn" {
+#   description = "Analytics Service fully qualified domain name"
+#   value       = module.container_apps.analytics_service_url
+# }
 
-output "all_service_fqdns" {
-  description = "All service FQDNs"
-  value       = module.container_apps.all_service_urls
-}
+# output "weather_service_fqdn" {
+#   description = "Weather Service fully qualified domain name"
+#   value       = module.container_apps.weather_service_url
+# }
 
-# -----------------------------------------------------------------------------
-# API Management
-# -----------------------------------------------------------------------------
-
-output "apim_name" {
-  description = "API Management service name"
-  value       = azurerm_api_management.main.name
-}
-
-output "apim_gateway_url" {
-  description = "API Management gateway URL"
-  value       = azurerm_api_management.main.gateway_url
-}
-
-output "apim_portal_url" {
-  description = "API Management developer portal URL"
-  value       = azurerm_api_management.main.developer_portal_url
-}
-
-output "api_management_endpoint" {
-  description = "Base API Management endpoint"
-  value       = azurerm_api_management.main.gateway_url
-}
+# output "all_service_fqdns" {
+#   description = "All service FQDNs"
+#   value       = module.container_apps.all_service_urls
+# }
 
 # -----------------------------------------------------------------------------
-# Database
+# API Management (commented out - using Kong instead)
 # -----------------------------------------------------------------------------
 
-output "postgresql_server_name" {
-  description = "PostgreSQL server name"
-  value       = azurerm_postgresql_flexible_server.main.name
-}
+# output "apim_name" {
+#   description = "API Management service name"
+#   value       = azurerm_api_management.main.name
+# }
 
-output "postgresql_fqdn" {
-  description = "PostgreSQL server fully qualified domain name"
-  value       = azurerm_postgresql_flexible_server.main.fqdn
-}
+# output "apim_gateway_url" {
+#   description = "API Management gateway URL"
+#   value       = azurerm_api_management.main.gateway_url
+# }
 
-output "postgresql_database_name" {
-  description = "PostgreSQL database name"
-  value       = azurerm_postgresql_flexible_server_database.agriwizard.name
-}
+# output "apim_portal_url" {
+#   description = "API Management developer portal URL"
+#   value       = azurerm_api_management.main.developer_portal_url
+# }
 
-output "postgresql_connection_string" {
-  description = "PostgreSQL connection string"
-  value       = "host=${azurerm_postgresql_flexible_server.main.fqdn} port=5432 database=agriwizard user=${var.postgresql_admin_username} password=${var.postgresql_admin_password} sslmode=require"
-  sensitive   = true
-}
+# output "api_management_endpoint" {
+#   description = "Base API Management endpoint"
+#   value       = azurerm_api_management.main.gateway_url
+# }
 
 # -----------------------------------------------------------------------------
-# IoT Hub
+# Database (commented out - not deployed due to subscription limits)
 # -----------------------------------------------------------------------------
 
-output "iot_hub_name" {
-  description = "IoT Hub name"
-  value       = azurerm_iothub.main.name
-}
+# output "postgresql_server_name" {
+#   description = "PostgreSQL server name"
+#   value       = azurerm_postgresql_flexible_server.main.name
+# }
 
-output "iot_hub_hostname" {
-  description = "IoT Hub hostname for device connections"
-  value       = "${azurerm_iothub.main.name}.azure-devices.net"
-}
+# output "postgresql_fqdn" {
+#   description = "PostgreSQL server fully qualified domain name"
+#   value       = azurerm_postgresql_flexible_server.main.fqdn
+# }
 
-output "iot_hub_event_hub_endpoint" {
-  description = "IoT Hub Event Hub-compatible endpoint"
-  value       = "https://${azurerm_iothub.main.name}.azure-devices.net/events"
-  sensitive   = true
-}
+# output "postgresql_database_name" {
+#   description = "PostgreSQL database name"
+#   value       = azurerm_postgresql_flexible_server_database.agriwizard.name
+# }
+
+# output "postgresql_connection_string" {
+#   description = "PostgreSQL connection string"
+#   value       = "host=${azurerm_postgresql_flexible_server.main.fqdn} port=5432 database=agriwizard user=${var.postgresql_admin_username} password=${var.postgresql_admin_password} sslmode=require"
+#   sensitive   = true
+# }
+
+# -----------------------------------------------------------------------------
+# IoT Hub (commented out)
+# -----------------------------------------------------------------------------
+
+# output "iot_hub_name" {
+#   description = "IoT Hub name"
+#   value       = azurerm_iothub.main.name
+# }
+
+# output "iot_hub_hostname" {
+#   description = "IoT Hub hostname for device connections"
+#   value       = "${azurerm_iothub.main.name}.azure-devices.net"
+# }
+
+# output "iot_hub_event_hub_endpoint" {
+#   description = "IoT Hub Event Hub-compatible endpoint"
+#   value       = "https://${azurerm_iothub.main.name}.azure-devices.net/events"
+#   sensitive   = true
+# }
 
 # -----------------------------------------------------------------------------
 # Key Vault
@@ -220,15 +223,15 @@ output "deployment_summary" {
     environment    = var.environment
 
     services = {
-      iam       = module.container_apps.iam_service_url
-      hardware  = module.container_apps.hardware_service_url
-      analytics = module.container_apps.analytics_service_url
-      weather   = module.container_apps.weather_service_url
+      iam       = "Manually deployed to Container Apps"
+      hardware  = "Manually deployed to Container Apps"
+      analytics = "Manually deployed to Container Apps"
+      weather   = "Manually deployed to Container Apps"
     }
 
-    api_gateway = azurerm_api_management.main.gateway_url
-    database    = azurerm_postgresql_flexible_server.main.fqdn
-    iot_hub     = "${azurerm_iothub.main.name}.azure-devices.net"
+    api_gateway = "Kong VM (to be deployed via terraform)"
+    database    = "Use external PostgreSQL database"
+    # iot_hub     = "${azurerm_iothub.main.name}.azure-devices.net"
     key_vault   = azurerm_key_vault.main.vault_uri
   }
 }
