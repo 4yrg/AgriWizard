@@ -139,7 +139,7 @@ jobs:
             --registry-server ${{ env.REGISTRY }} \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password "${{ secrets.ACR_PASSWORD }}" \
-            --env-vars "PORT=8081" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "JWT_ISSUER=agriwizard-iam" "JWT_TTL_HOURS=24" "GIN_MODE=release"
+            --env-vars "PORT=8081" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "DB_SSLMODE=require" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "JWT_ISSUER=agriwizard-iam" "JWT_TTL_HOURS=24" "GIN_MODE=release"
 
       - name: Deploy Hardware Service
         run: |
@@ -151,7 +151,7 @@ jobs:
             --registry-server ${{ env.REGISTRY }} \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password "${{ secrets.ACR_PASSWORD }}" \
-            --env-vars "PORT=8082" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "ANALYTICS_SERVICE_URL=https://analytics-service.${{ env.FQDN_SUFFIX }}" "MQTT_BROKER=${{ secrets.MQTT_BROKER }}" "MQTT_USERNAME=${{ secrets.MQTT_USERNAME }}" "MQTT_PASSWORD=${{ secrets.MQTT_PASSWORD }}" "GIN_MODE=release"
+            --env-vars "PORT=8082" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "DB_SSLMODE=require" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "ANALYTICS_SERVICE_URL=https://analytics-service.${{ env.FQDN_SUFFIX }}" "MQTT_BROKER=${{ secrets.MQTT_BROKER }}" "MQTT_USERNAME=${{ secrets.MQTT_USERNAME }}" "MQTT_PASSWORD=${{ secrets.MQTT_PASSWORD }}" "GIN_MODE=release"
 
       - name: Deploy Analytics Service
         run: |
@@ -163,7 +163,7 @@ jobs:
             --registry-server ${{ env.REGISTRY }} \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password "${{ secrets.ACR_PASSWORD }}" \
-            --env-vars "PORT=8083" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "HARDWARE_SERVICE_URL=https://hardware-service.${{ env.FQDN_SUFFIX }}" "WEATHER_SERVICE_URL=https://weather-service.${{ env.FQDN_SUFFIX }}" "GIN_MODE=release"
+            --env-vars "PORT=8083" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "DB_SSLMODE=require" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "HARDWARE_SERVICE_URL=https://hardware-service.${{ env.FQDN_SUFFIX }}" "WEATHER_SERVICE_URL=https://weather-service.${{ env.FQDN_SUFFIX }}" "GIN_MODE=release"
 
       - name: Deploy Weather Service
         run: |
@@ -187,7 +187,7 @@ jobs:
             --registry-server ${{ env.REGISTRY }} \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password "${{ secrets.ACR_PASSWORD }}" \
-            --env-vars "PORT=8085" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "SMTP_HOST=${{ secrets.SMTP_HOST }}" "SMTP_PORT=587" "SMTP_FROM=${{ secrets.SMTP_FROM }}" "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" "GIN_MODE=release"
+            --env-vars "PORT=8085" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "DB_SSLMODE=require" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "SMTP_HOST=${{ secrets.SMTP_HOST }}" "SMTP_PORT=587" "SMTP_FROM=${{ secrets.SMTP_FROM }}" "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" "GIN_MODE=release"
 
       - name: Deploy Kong Gateway
         run: |

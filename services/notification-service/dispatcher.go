@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -75,19 +76,25 @@ func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) erro
 	sender, ok := d.channels[req.Channel]
 	if !ok {
 		errMsg := fmt.Sprintf("unknown channel: %s", req.Channel)
-		d.store.UpdateStatus(n.ID, "failed", errMsg, nil)
-		return fmt.Errorf(errMsg)
+		if statusErr := d.store.UpdateStatus(n.ID, "failed", errMsg, nil); statusErr != nil {
+			log.Printf("[ERROR] Failed to update notification status to failed: %v", statusErr)
+		}
+		return errors.New(errMsg)
 	}
 
 	// 5. Deliver
 	if err := sender.Send(ctx, n); err != nil {
-		d.store.UpdateStatus(n.ID, "failed", err.Error(), nil)
+		if statusErr := d.store.UpdateStatus(n.ID, "failed", err.Error(), nil); statusErr != nil {
+			log.Printf("[ERROR] Failed to update notification status to failed: %v", statusErr)
+		}
 		return fmt.Errorf("send via %s: %w", req.Channel, err)
 	}
 
 	// 6. Mark as sent
 	now := time.Now().UTC()
-	d.store.UpdateStatus(n.ID, "sent", "", &now)
+	if statusErr := d.store.UpdateStatus(n.ID, "sent", "", &now); statusErr != nil {
+		log.Printf("[ERROR] Failed to update notification status to sent: %v", statusErr)
+	}
 	log.Printf("[INFO] Notification %s sent via %s to %s", n.ID, n.Channel, n.Recipient)
 	return nil
 }

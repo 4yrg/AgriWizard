@@ -259,6 +259,7 @@ get_default_env_vars() {
   local db_password="${DB_PASSWORD:-}"
   local db_name="${DB_NAME:-agriwizard}"
   local postgres_port="${DB_PORT:-5432}"
+  local db_sslmode="${DB_SSLMODE:-require}"
   
   local rabbitmq_host="agriwizard-rabbitmq"
   local rabbitmq_user="${RABBITMQ_USERNAME:-guest}"
@@ -267,7 +268,7 @@ get_default_env_vars() {
   local env_vars=""
   
   if [[ -n "${db_host}" ]]; then
-    env_vars="DB_HOST=${db_host}|DB_PORT=${postgres_port}|DB_USER=${db_user}|DB_PASSWORD=${db_password}|DB_NAME=${db_name}|JWT_SECRET=${jwt_secret}"
+    env_vars="DB_HOST=${db_host}|DB_PORT=${postgres_port}|DB_USER=${db_user}|DB_PASSWORD=${db_password}|DB_NAME=${db_name}|DB_SSLMODE=${db_sslmode}|JWT_SECRET=${jwt_secret}"
   fi
   
   # Add RabbitMQ env vars

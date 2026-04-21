@@ -19,6 +19,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "notification")
 	dbPass := getEnv("DB_PASSWORD", "notification_secret")
 	dbName := getEnv("DB_NAME", "notification")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
 	smtpHost := getEnv("SMTP_HOST", "localhost")
 	smtpPort := getEnv("SMTP_PORT", "1025")
@@ -29,8 +30,12 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	serviceBusConnection := getServiceBusNotificationConnection()
+	serviceBusTopic := getServiceBusNotificationTopic()
+	serviceBusSubscription := getServiceBusNotificationSubscription()
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	// ---- Database ----
 	db, err := ConnectDB(dsn)
@@ -82,6 +87,21 @@ func main() {
 		}()
 	}
 
+	// ---- Azure Service Bus for notifications ----
+	sbNotificationConsumer, err := NewAzureServiceBusNotificationConsumer(serviceBusConnection, serviceBusTopic, serviceBusSubscription, dispatcher)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification consumer initialization failed: %v", err)
+	}
+	if sbNotificationConsumer != nil && sbNotificationConsumer.IsConnected() {
+		go func() {
+			<-sbNotificationConsumer.Ready()
+			log.Println("[INFO] Azure Service Bus notification consumer ready")
+			if err := sbNotificationConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] Azure Service Bus notification consumer error: %v", err)
+			}
+		}()
+	}
+
 	// ---- HTTP server ----
 	mux := http.NewServeMux()
 	handler := NewHandler(store, dispatcher)
@@ -113,7 +133,9 @@ func main() {
 	log.Println("[INFO] Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	server.Shutdown(ctx)
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("[ERROR] Graceful shutdown failed: %v", err)
+	}
 	log.Println("[INFO] Notification Service stopped")
 }
 

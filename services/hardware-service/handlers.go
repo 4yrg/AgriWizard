@@ -22,11 +22,12 @@ type Handler struct {
 	jwtSecret    string
 	analyticsURL string
 	rmqPublisher *RabbitMQPublisher
+	sbPublisher  *AzureServiceBusPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher, sbPublisher: sbPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -88,13 +89,11 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 		return
 	}
 
-	// Subscribe to the newly created equipment topic to receive status updates
+	// Subscribe to the newly created equipment topic to receive status updates.
 	if client := h.mqttClient(); client != nil && client.IsConnected() {
 		if token := client.Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
 			log.Printf("[WARN] CreateEquipment: mqtt subscribe failed: %v", token.Error())
 		}
-	} else {
-		log.Printf("[WARN] CreateEquipment: MQTT not connected, skipping subscription for %s", id)
 	}
 
 	log.Printf("[INFO] CreateEquipment: registered id=%s name=%s topic=%s", id, req.Name, mqttTopic)
@@ -204,16 +203,18 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	}
 	msgBytes, _ := json.Marshal(mqttMsg)
 
-	if client := h.mqttClient(); client != nil && client.IsConnected() {
-		token := client.Publish(eq.MQTTTopic, 1, false, msgBytes)
-		token.Wait()
-		if token.Error() != nil {
-			log.Printf("[ERROR] DispatchControl: mqtt publish: %v", token.Error())
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "mqtt_error", Message: token.Error().Error()})
-			return
-		}
-	} else {
-		log.Printf("[WARN] DispatchControl: MQTT not connected, command not published via MQTT")
+	client := h.mqttClient()
+	if client == nil || !client.IsConnected() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "mqtt_unavailable", Message: "mqtt connection is not available"})
+		return
+	}
+
+	token := client.Publish(eq.MQTTTopic, 1, false, msgBytes)
+	token.Wait()
+	if token.Error() != nil {
+		log.Printf("[ERROR] DispatchControl: mqtt publish: %v", token.Error())
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "mqtt_error", Message: token.Error().Error()})
+		return
 	}
 
 	// Optimistically update status in DB
@@ -270,11 +271,11 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 		return
 	}
 
-	// Subscribe to telemetry topic for incoming data
+	// Subscribe to telemetry topic for incoming data when MQTT is available.
 	if client := h.mqttClient(); client != nil && client.IsConnected() {
-		client.Subscribe(mqttTopic, 1, h.handleTelemetry)
-	} else {
-		log.Printf("[WARN] CreateSensor: MQTT not connected, skipping subscription for %s", id)
+		if token := client.Subscribe(mqttTopic, 1, h.handleTelemetry); token.Wait() && token.Error() != nil {
+			log.Printf("[WARN] CreateSensor: mqtt subscribe failed: %v", token.Error())
+		}
 	}
 
 	log.Printf("[INFO] CreateSensor: provisioned id=%s name=%s topic=%s", id, req.Name, mqttTopic)
@@ -459,8 +460,15 @@ func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
 			Timestamp:   payload.Timestamp,
 			Metadata:    nil,
 		}
-		if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
-			log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+		if h.rmqPublisher != nil && h.rmqPublisher.IsConnected() {
+			if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+			}
+		}
+		if h.sbPublisher != nil && h.sbPublisher.IsConnected() {
+			if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+			}
 		}
 	}
 }

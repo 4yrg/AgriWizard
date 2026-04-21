@@ -60,7 +60,9 @@ func (s *Store) GetNotification(id string) (*Notification, error) {
 		n.SentAt = &sentAt.Time
 	}
 	if metaJSON != nil {
-		json.Unmarshal(metaJSON, &n.Metadata)
+		if err := json.Unmarshal(metaJSON, &n.Metadata); err != nil {
+			return nil, fmt.Errorf("decode notification metadata for %s: %w", n.ID, err)
+		}
 	}
 	return n, nil
 }
@@ -94,7 +96,9 @@ func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
 			n.SentAt = &sentAt.Time
 		}
 		if metaJSON != nil {
-			json.Unmarshal(metaJSON, &n.Metadata)
+			if err := json.Unmarshal(metaJSON, &n.Metadata); err != nil {
+				return nil, fmt.Errorf("decode notification metadata for %s: %w", n.ID, err)
+			}
 		}
 		list = append(list, n)
 	}

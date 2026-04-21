@@ -151,6 +151,7 @@ az containerapp create \
     DB_USER=$POSTGRES_USER \
     DB_PASSWORD=$POSTGRES_PASSWORD \
     DB_NAME=$POSTGRES_DB \
+    DB_SSLMODE=require \
     JWT_SECRET="$JWT_SECRET" \
     JWT_TTL_HOURS=24 \
     GIN_MODE=release
@@ -176,6 +177,7 @@ az containerapp create \
     DB_USER=$POSTGRES_USER \
     DB_PASSWORD=$POSTGRES_PASSWORD \
     DB_NAME=$POSTGRES_DB \
+    DB_SSLMODE=require \
     JWT_SECRET="$JWT_SECRET" \
     MQTT_BROKER="ssl://<your-hivemq-broker>:8883" \
     MQTT_USERNAME="<mqtt-username>" \
@@ -204,6 +206,7 @@ az containerapp create \
     DB_USER=$POSTGRES_USER \
     DB_PASSWORD=$POSTGRES_PASSWORD \
     DB_NAME=$POSTGRES_DB \
+    DB_SSLMODE=require \
     JWT_SECRET="$JWT_SECRET" \
     HARDWARE_SERVICE_URL="http://hardware-service.internal.azurecontainerapps.io:8082" \
     WEATHER_SERVICE_URL="http://weather-service.internal.azurecontainerapps.io:8084" \
@@ -250,11 +253,17 @@ az containerapp create \
   --memory 1.0 \
   --env-vars \
     PORT=8085 \
+    DB_HOST=$POSTGRES_HOST \
+    DB_PORT=5432 \
+    DB_USER=$POSTGRES_USER \
+    DB_PASSWORD=$POSTGRES_PASSWORD \
+    DB_NAME=$POSTGRES_DB \
+    DB_SSLMODE=require \
     NATS_URL="nats://<nats-server>:4222" \
     SMTP_HOST="<smtp-server>" \
     SMTP_PORT=587 \
-    SMTP_USER="<smtp-user>" \
-    SMTP_PASS="<smtp-password>"
+    SMTP_USERNAME="<smtp-user>" \
+    SMTP_PASSWORD="<smtp-password>"
 ```
 
 ---

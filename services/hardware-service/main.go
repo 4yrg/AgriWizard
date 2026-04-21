@@ -75,6 +75,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "agriwizard")
 	dbPass := getEnv("DB_PASSWORD", "agriwizard_secret")
 	dbName := getEnv("DB_NAME", "agriwizard")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	mqttBroker := getEnv("MQTT_BROKER", "tcp://localhost:1883")
 	mqttUsername := getEnv("MQTT_USERNAME", "")
 	mqttPassword := getEnv("MQTT_PASSWORD", "")
@@ -85,14 +86,22 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	serviceBusConnection := getServiceBusConnection()
+	serviceBusTopic := getServiceBusTopic()
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	status := &ServiceStatus{}
 
 	rmqPublisher, err := NewRabbitMQPublisher(rabbitmqUrl, queueName)
 	if err != nil {
 		log.Printf("[WARN] RabbitMQ publisher initialization failed: %v", err)
+	}
+
+	sbPublisher, err := NewAzureServiceBusPublisher(serviceBusConnection, serviceBusTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus publisher initialization failed: %v", err)
 	}
 
 	// --- Router ---
@@ -111,13 +120,18 @@ func main() {
 		if !status.IsReady() {
 			s = "starting"
 		}
+		mqttClient := status.GetMQTTClient()
+		mqttConnected := mqttClient != nil && mqttClient.IsConnected()
+		rmqConnected := rmqPublisher != nil && rmqPublisher.IsConnected()
+		sbConnected := sbPublisher != nil && sbPublisher.IsConnected()
 		c.JSON(http.StatusOK, gin.H{
 			"status":    s,
 			"service":   "hardware-service",
 			"db_ready":  status.IsReady(),
 			"migrated":  status.migrated,
-			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
-			"rmq_conn":  rmqPublisher.IsConnected(),
+			"mqtt_conn": mqttConnected,
+			"rmq_conn":  rmqConnected,
+			"sb_conn":   sbConnected,
 		})
 	})
 
@@ -174,7 +188,7 @@ func main() {
 			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
 			if mqttClient != nil {
 				status.SetReady(db, mqttClient)
-				restoreSubscriptions(db, mqttClient, rmqPublisher)
+				restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
 				log.Println("[INFO] MQTT connected, subscriptions restored")
 			}
 		}()
@@ -182,7 +196,7 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher)
+	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher, sbPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
@@ -267,7 +281,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
-func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher) {
+func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) {
 	if !client.IsConnected() {
 		return
 	}
@@ -279,9 +293,12 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQ
 			if rows.Scan(&topic) == nil {
 				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
-					// Also publish to RabbitMQ for analytics
+					// Also publish to RabbitMQ/Service Bus for analytics
 					if rmqPublisher != nil && rmqPublisher.IsConnected() {
 						log.Printf("[DEBUG] Would publish to RabbitMQ: %s", msg.Topic())
+					}
+					if sbPublisher != nil && sbPublisher.IsConnected() {
+						log.Printf("[DEBUG] Would publish to Service Bus: %s", msg.Topic())
 					}
 				})
 			}

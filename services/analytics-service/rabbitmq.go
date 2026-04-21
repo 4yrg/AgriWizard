@@ -114,9 +114,13 @@ func (r *RabbitMQConsumer) Start(ctx context.Context) error {
 			}
 			if err := r.processMessage(ctx, msg); err != nil {
 				log.Printf("[ERROR] Failed to process message: %v", err)
-				msg.Nack(false, true) // requeue
+				if nackErr := msg.Nack(false, true); nackErr != nil { // requeue
+					log.Printf("[ERROR] Failed to NACK message: %v", nackErr)
+				}
 			} else {
-				msg.Ack(false)
+				if ackErr := msg.Ack(false); ackErr != nil {
+					log.Printf("[ERROR] Failed to ACK message: %v", ackErr)
+				}
 			}
 		}
 	}
