@@ -21,12 +21,12 @@ type Handler struct {
 	status       *ServiceStatus
 	jwtSecret    string
 	analyticsURL string
-	sbPublisher  *ServiceBusPublisher
+	rmqPublisher *RabbitMQPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, sbPublisher *ServiceBusPublisher) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, sbPublisher: sbPublisher}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -409,7 +409,7 @@ func (h *Handler) IngestTelemetry(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "storage_error"})
 		return
 	}
-	h.publishTelemetryToServiceBus(payload)
+	h.publishTelemetryToRabbitMQ(payload)
 	c.JSON(http.StatusCreated, SuccessResponse{Message: "telemetry ingested"})
 }
 
@@ -430,11 +430,11 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 	if err := h.storeTelemetry(payload); err != nil {
 		log.Printf("[ERROR] handleTelemetry: store error: %v", err)
 	}
-	h.publishTelemetryToServiceBus(payload)
+	h.publishTelemetryToRabbitMQ(payload)
 }
 
-func (h *Handler) publishTelemetryToServiceBus(payload TelemetryPayload) {
-	if h.sbPublisher == nil || !h.sbPublisher.IsConnected() {
+func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
+	if h.rmqPublisher == nil || !h.rmqPublisher.IsConnected() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -447,8 +447,8 @@ func (h *Handler) publishTelemetryToServiceBus(payload TelemetryPayload) {
 			Timestamp:   payload.Timestamp,
 			Metadata:    nil,
 		}
-		if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
-			log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+		if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+			log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
 		}
 	}
 }

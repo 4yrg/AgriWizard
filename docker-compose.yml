@@ -185,6 +185,25 @@ services:
   #  Message Queue & Notification Service
   # ────────────────────────────────────────────
 
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: agriwizard-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - agriwizard-net
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   nats:
     image: nats:2.10-alpine
     container_name: agriwizard-nats

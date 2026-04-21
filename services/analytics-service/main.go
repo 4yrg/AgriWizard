@@ -22,7 +22,7 @@ type ServiceStatus struct {
 	migrated bool
 }
 
-var sbConsumer *ServiceBusConsumer
+var rmqConsumer *RabbitMQConsumer
 
 func (s *ServiceStatus) GetDB() *sql.DB {
 	s.mu.RLock()
@@ -60,10 +60,8 @@ func main() {
 	weatherURL := getEnv("WEATHER_SERVICE_URL", "http://weather-service:8084")
 	port := getEnv("PORT", "8083")
 
-	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
-	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
-	sbTopic := getEnv("SERVICE_BUS_TOPIC", "telemetry-events")
-	sbSubscription := getEnv("SERVICE_BUS_SUBSCRIPTION", "analytics-service")
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
@@ -90,7 +88,7 @@ func main() {
 			"service":   "analytics-service",
 			"db_ready":  status.IsReady(),
 			"migrated":  status.migrated,
-			"sb_ready":  sbConsumer != nil && sbConsumer.IsConnected(),
+			"rmq_ready": rmqConsumer != nil && rmqConsumer.IsConnected(),
 		})
 	})
 
@@ -107,18 +105,18 @@ func main() {
 	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
 
 	// Initialize Service Bus consumer
-	sbConsumer, err := NewServiceBusConsumer(sbConnection, sbNamespace, sbTopic, sbSubscription, h)
+	rmqConsumer, err := NewRabbitMQConsumer(rabbitmqUrl, queueName, h)
 	if err != nil {
-		log.Printf("[WARN] Service Bus consumer initialization failed: %v", err)
+		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
 	}
 
-	// Start Service Bus consumer in background
-	if sbConsumer != nil && sbConsumer.IsConnected() {
+	// Start RabbitMQ consumer in background
+	if rmqConsumer != nil && rmqConsumer.IsConnected() {
 		go func() {
-			<-sbConsumer.Ready()
-			log.Println("[INFO] Service Bus consumer ready")
-			if err := sbConsumer.Start(context.Background()); err != nil {
-				log.Printf("[ERROR] Service Bus consumer error: %v", err)
+			<-rmqConsumer.Ready()
+			log.Println("[INFO] RabbitMQ consumer ready")
+			if err := rmqConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
 			}
 		}()
 	}

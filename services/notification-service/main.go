@@ -26,10 +26,8 @@ func main() {
 	smtpUser := getEnv("SMTP_USERNAME", "")
 	smtpPass := getEnv("SMTP_PASSWORD", "")
 
-	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
-	sbNamespace := getEnv("SERVICE_BUS_NAMESPACE", "agriwizard-sb")
-	sbTopic := getEnv("SERVICE_BUS_TOPIC", "notifications")
-	sbSubscription := getEnv("SERVICE_BUS_SUBSCRIPTION", "notification-service")
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
@@ -70,16 +68,16 @@ func main() {
 	}
 
 	// ---- Azure Service Bus consumer ----
-	sbConsumer, err := NewServiceBusConsumer(sbConnection, sbNamespace, sbTopic, sbSubscription, dispatcher)
+	rmqConsumer, err := NewRabbitMQConsumer(rabbitmqUrl, queueName, dispatcher)
 	if err != nil {
-		log.Printf("[WARN] Service Bus consumer initialization failed: %v", err)
+		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
 	}
-	if sbConsumer != nil && sbConsumer.IsConnected() {
+	if rmqConsumer != nil && rmqConsumer.IsConnected() {
 		go func() {
-			<-sbConsumer.Ready()
-			log.Println("[INFO] Service Bus consumer ready")
-			if err := sbConsumer.Start(context.Background()); err != nil {
-				log.Printf("[ERROR] Service Bus consumer error: %v", err)
+			<-rmqConsumer.Ready()
+			log.Println("[INFO] RabbitMQ consumer ready")
+			if err := rmqConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
 			}
 		}()
 	}

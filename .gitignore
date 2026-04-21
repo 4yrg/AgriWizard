@@ -105,3 +105,5 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+docs/SECRETS.md

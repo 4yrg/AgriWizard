@@ -70,17 +70,17 @@ func main() {
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
 
-	sbConnection := getEnv("SERVICE_BUS_CONNECTION", "")
-	sbTopic := getEnv("SERVICE_BUS_TOPIC", "telemetry-events")
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
 
-	sbPublisher, err := NewServiceBusPublisher(sbConnection, sbTopic)
+	rmqPublisher, err := NewRabbitMQPublisher(rabbitmqUrl, queueName)
 	if err != nil {
-		log.Printf("[WARN] Service Bus publisher initialization failed: %v", err)
+		log.Printf("[WARN] RabbitMQ publisher initialization failed: %v", err)
 	}
 
 	// --- Router ---
@@ -105,7 +105,7 @@ func main() {
 			"db_ready":  status.IsReady(),
 			"migrated":  status.migrated,
 			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
-			"sb_conn":   sbPublisher.IsConnected(),
+			"rmq_conn":  rmqPublisher.IsConnected(),
 		})
 	})
 
@@ -142,7 +142,7 @@ func main() {
 			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
 			if mqttClient != nil {
 				status.SetReady(db, mqttClient)
-				restoreSubscriptions(db, mqttClient, sbPublisher)
+				restoreSubscriptions(db, mqttClient, rmqPublisher)
 				log.Println("[INFO] MQTT connected, subscriptions restored")
 			}
 		}()
@@ -150,7 +150,7 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL, sbPublisher)
+	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
@@ -235,7 +235,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
-func restoreSubscriptions(db *sql.DB, client mqtt.Client, sbPublisher *ServiceBusPublisher) {
+func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher) {
 	if !client.IsConnected() {
 		return
 	}
@@ -247,10 +247,9 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, sbPublisher *ServiceBu
 			if rows.Scan(&topic) == nil {
 				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
-					// Also publish to Service Bus for analytics
-					if sbPublisher != nil {
-						// Parse and publish to SB - simplified for now
-						log.Printf("[DEBUG] Would publish to Service Bus: %s", msg.Topic())
+					// Also publish to RabbitMQ for analytics
+					if rmqPublisher != nil && rmqPublisher.IsConnected() {
+						log.Printf("[DEBUG] Would publish to RabbitMQ: %s", msg.Topic())
 					}
 				})
 			}

@@ -257,24 +257,6 @@ Full OpenAPI spec is in `swagger.yaml`. Import it into [Swagger Editor](https://
 3. **Trivy** — filesystem + container image CVE scanning
 4. **GitHub Secrets** — no credentials in source code
 
-### Required GitHub Secrets for CI/CD
-
-| Secret | Description |
-|--------|-------------|
-| `ACR_REGISTRY` | Azure Container Registry URL (e.g. `agriwizard.azurecr.io`) |
-| `ACR_NAME` | ACR name (e.g. `agriwizard`) |
-| `ACR_USERNAME` | ACR service principal client ID |
-| `ACR_PASSWORD` | ACR service principal client secret |
-| `AZURE_CREDENTIALS` | Azure SP credentials JSON |
-| `AZURE_RESOURCE_GROUP` | Resource group name |
-| `DB_HOST` | Production DB host |
-| `DB_USER` | Production DB user |
-| `DB_PASSWORD` | Production DB password |
-| `JWT_SECRET` | Production JWT signing secret (min 32 chars) |
-| `SONAR_TOKEN` | SonarCloud token |
-| `SONAR_ORG` | SonarCloud organization key |
-| `SNYK_TOKEN` | Snyk authentication token |
-
 ---
 
 ## Weather Service — Live vs Mock
@@ -339,3 +321,199 @@ docker compose up -d hardware-service
 ```bash
 docker compose logs -f analytics-service
 ```
+
+---
+
+## 🚀 Deployment (Azure Container Apps)
+
+AgriWizard uses GitHub Actions for CI/CD with Azure Container Apps. Deployment is based on **publish profile authentication** (no Service Principals required).
+
+### Prerequisites
+
+1. **Azure Subscription** with contributor access
+2. **GitHub repository** with secrets configured
+
+### 1. Infrastructure Setup (One-Time)
+
+Run the bootstrap script to create Azure resources:
+
+```bash
+# Copy and configure environment
+cp infrastructure/aca/aca.env.example infrastructure/aca/aca.env
+# Edit aca.env with your values
+
+# Run bootstrap
+./scripts/bootstrap-azure.sh
+```
+
+This creates:
+- Resource Group
+- Azure Container Registry (ACR)
+- Container Apps Environment
+- Log Analytics & Application Insights
+
+### 2. Configure GitHub Secrets
+
+Required secrets in GitHub repository settings:
+
+| Secret | Description | How to Get |
+|--------|------------|------------|
+| `AZURE_CONTAINERAPP_PUBLISH_PROFILE` | Azure deployment auth | Azure Portal → Container App → Publishing profile |
+| `ACR_USERNAME` | ACR admin username | Azure Portal → your ACR → Access keys |
+| `ACR_PASSWORD` | ACR admin password | Azure Portal → your ACR → Access keys |
+| `SONAR_TOKEN` | SonarCloud token | sonarcloud.io → My Account → Security |
+
+### 3. CI/CD Flow
+
+| Event | Pipeline | Actions |
+|-------|---------|---------|
+| PR to main | **CI** | Lint, build, security scan |
+| Push to main | **CD** | Build → Push to ACR → Deploy to ACA |
+
+### 4. Manual Deployment
+
+```bash
+# Build and push a service
+docker build -t agriwizard.azurecr.io/agriwizard-iam-service:latest ./services/iam-service
+docker push agriwizard.azurecr.io/agriwizard-iam-service:latest
+
+# Deploy to Container Apps
+az containerapp update \
+  --name iam-service \
+  --resource-group agriwizard-rg \
+  --image agriwizard.azurecr.io/agriwizard-iam-service:latest
+```
+
+---
+
+## 🧱 Infrastructure Setup
+
+### Bootstrap Script
+
+The `scripts/bootstrap-azure.sh` script provisions all Azure resources idempotently:
+
+```bash
+./scripts/bootstrap-azure.sh
+```
+
+**Configuration:** Edit `infrastructure/aca/aca.env`:
+
+```bash
+SUBSCRIPTION_ID=<your-subscription-id>
+RESOURCE_GROUP=agriwizard-rg
+LOCATION=centralindia
+ACA_ENV_NAME=agriwizard-aca-env
+ACR_NAME=agriwizardacr
+LOG_ANALYTICS_NAME=agriwizard-law
+APP_INSIGHTS_NAME=agriwizard-appinsights
+JWT_SECRET=<your-32-char-min-secret>
+```
+
+**Required Providers:** The script auto-registers:
+- Microsoft.App
+- Microsoft.OperationalInsights
+- Microsoft.Insights
+- Microsoft.ContainerRegistry
+
+---
+
+## 🔐 Required GitHub Secrets
+
+| Secret | Required | Description |
+|--------|----------|------------|
+| `AZURE_CREDENTIALS` | Yes | Azure service principal JSON (see format below) |
+| `ACR_USERNAME` | Yes | ACR admin username |
+| `ACR_PASSWORD` | Yes | ACR admin password |
+| `SONAR_TOKEN` | No | SonarCloud authentication |
+
+### AZURE_CREDENTIALS Format
+
+Create a JSON with these values:
+```json
+{
+  "clientId": "your-app-client-id",
+  "clientSecret": "your-client-secret",
+  "subscriptionId": "71dc1447-483b-4aa3-b549-021a60ec7241",
+  "tenantId": "44e3cf94-19c9-4e32-96c3-14f5bf01391a"
+}
+```
+
+### How to Create Service Principal
+
+1. Go to **Azure Portal** → **Microsoft Entra ID** → **App registrations**
+2. Click **New registration** → Name: `AgriWizard-GitHub`
+3. Note the **Application (client) ID**
+4. Go to **Certificates & secrets** → **New client secret**
+5. Note the **Value** (this is clientSecret)
+6. Go to **Enterprise applications** → find your app
+7. Assign **Contributor** role to: `/subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-rg`
+
+---
+
+## ⚠️ Why Terraform Was Removed
+
+**Reason:** Terraform configuration relied on Azure Service Principals (Azure AD) for authentication, which were no longer available.
+
+### Before (Terraform)
+- `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` + `AZURE_TENANT_ID`
+- Complex provider configuration
+- State management required
+- Drift detection overhead
+
+### After (Script + GitHub Actions)
+- `AZURE_CONTAINERAPP_PUBLISH_PROFILE` only
+- Idempotent bash script for infra
+- No state to manage
+- Simpler CI/CD pipeline
+
+For production-grade infrastructure-as-code, consider using Bicep or Pulumi (both support publish profile auth).
+
+---
+
+## 📚 Documentation
+
+Detailed documentation is available in the `docs/` folder:
+
+| Document | Description |
+|----------|------------|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Step-by-step deployment guide for Azure Container Apps |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Detailed architecture and service design |
+| [docs/SECRETS.md](docs/SECRETS.md) | GitHub secrets configuration guide |
+
+---
+
+## 🐇 Messaging Architecture
+
+AgriWizard uses RabbitMQ for inter-service messaging (replacing Azure Service Bus):
+
+```
+Hardware Service ──publish──▶ RabbitMQ ──consume──▶ Analytics Service
+                              │
+                              └──consume──▶ Notification Service
+```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `RABBITMQ_URL` | RabbitMQ connection URL (e.g., `amqp://guest:guest@rabbitmq:5672`) |
+| `RABBITMQ_QUEUE` | Queue name for telemetry (`telemetry`) |
+
+### IoT Messaging
+
+HiveMQ Cloud is used for IoT device communication:
+
+```
+IoT Devices ──MQTT──▶ HiveMQ Cloud ──subscribe──▶ Hardware Service
+```
+
+---
+
+## 🚀 Auto-Deploy
+
+The CD pipeline automatically deploys to Azure Container Apps when:
+
+1. Code is pushed to `main` branch
+2. A version tag is created (e.g., `v1.0.0`)
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.
