@@ -6,8 +6,9 @@
 x-common-env: &common-env
   DB_HOST: postgres
   DB_PORT: "5432"
-  DB_USER: "${DB_USER:-agriwizard}"
-  DB_PASSWORD: "${DB_PASSWORD:-agriwizard_secret}"
+  DB_USER: agriwizard
+  DB_PASSWORD: agriwizard_secret
+  DB_NAME: agriwizard
   JWT_SECRET: super-secret-jwt-key-change-in-production
   JWT_ISSUER: agriwizard-iam
   GIN_MODE: release
@@ -19,8 +20,6 @@ networks:
 volumes:
   postgres-data:
   nats-data:
-  mosquitto-data:
-  mosquitto-config:
 
 services:
   # ────────────────────────────────────────────
@@ -45,18 +44,17 @@ services:
     container_name: agriwizard-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: "${DB_USER:-agriwizard}"
-      POSTGRES_PASSWORD: "${DB_PASSWORD:-agriwizard_secret}"
-      POSTGRES_DB: postgres
+      POSTGRES_USER: agriwizard
+      POSTGRES_PASSWORD: agriwizard_secret
+      POSTGRES_DB: agriwizard
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres/init/01-create-service-dbs.sql:/docker-entrypoint-initdb.d/01-create-service-dbs.sql:ro
     networks:
       - agriwizard-net
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-agriwizard} -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U agriwizard -d agriwizard"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -75,7 +73,6 @@ services:
     environment:
       <<: *common-env
       PORT: "8081"
-      DB_NAME: "${IAM_DB_NAME:-iam_db}"
       JWT_TTL_HOURS: "24"
     networks:
       - agriwizard-net
@@ -102,7 +99,6 @@ services:
     environment:
       <<: *common-env
       PORT: "8082"
-      DB_NAME: "${HARDWARE_DB_NAME:-hardware_db}"
       MQTT_BROKER: "${MQTT_BROKER}"
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
@@ -134,7 +130,6 @@ services:
     environment:
       <<: *common-env
       PORT: "8083"
-      DB_NAME: "${ANALYTICS_DB_NAME:-analytics_db}"
       HARDWARE_SERVICE_URL: "http://hardware-service:8082"
       WEATHER_SERVICE_URL: "http://weather-service:8084"
     networks:
