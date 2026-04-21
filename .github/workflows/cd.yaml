@@ -18,6 +18,8 @@ env:
   RESOURCE_GROUP: agriwizard-rg
   SUBSCRIPTION_ID: 71dc1447-483b-4aa3-b549-021a60ec7241
   LOCATION: centralindia
+  ENVIRONMENT: agriwizard-aca-env
+  FQDN_SUFFIX: purplesand-4413bcdd.centralindia.azurecontainerapps.io
 
 jobs:
   determine-tag:
@@ -129,39 +131,75 @@ jobs:
 
       - name: Deploy IAM Service
         run: |
-          az containerapp revision copy \
-            -n iam-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-iam-service:latest
+          az containerapp up \
+            --name iam-service -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-iam-service:latest \
+            --ingress external --target-port 8081 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "PORT=8081" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "JWT_ISSUER=agriwizard-iam" "JWT_TTL_HOURS=24" "GIN_MODE=release"
 
       - name: Deploy Hardware Service
         run: |
-          az containerapp revision copy \
-            -n hardware-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:latest
+          az containerapp up \
+            --name hardware-service -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:latest \
+            --ingress external --target-port 8082 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "PORT=8082" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "ANALYTICS_SERVICE_URL=https://analytics-service.${{ env.FQDN_SUFFIX }}" "MQTT_BROKER=${{ secrets.MQTT_BROKER }}" "MQTT_USERNAME=${{ secrets.MQTT_USERNAME }}" "MQTT_PASSWORD=${{ secrets.MQTT_PASSWORD }}" "GIN_MODE=release"
 
       - name: Deploy Analytics Service
         run: |
-          az containerapp revision copy \
-            -n analytics-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:latest
+          az containerapp up \
+            --name analytics-service -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:latest \
+            --ingress external --target-port 8083 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "PORT=8083" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "HARDWARE_SERVICE_URL=https://hardware-service.${{ env.FQDN_SUFFIX }}" "WEATHER_SERVICE_URL=https://weather-service.${{ env.FQDN_SUFFIX }}" "GIN_MODE=release"
 
       - name: Deploy Weather Service
         run: |
-          az containerapp revision copy \
-            -n weather-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-weather-service:latest
+          az containerapp up \
+            --name weather-service -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-weather-service:latest \
+            --ingress external --target-port 8084 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "PORT=8084" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "USE_MOCK=true" "OWM_API_KEY=" "OWM_BASE_URL=https://api.openweathermap.org/data/2.5" "LOCATION_LAT=6.9271" "LOCATION_LON=79.8612" "LOCATION_CITY=Colombo" "GIN_MODE=release"
 
       - name: Deploy Notification Service
         run: |
-          az containerapp revision copy \
-            -n notification-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-notification-service:latest
+          az containerapp up \
+            --name notification-service -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-notification-service:latest \
+            --ingress external --target-port 8085 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "PORT=8085" "DB_HOST=${{ secrets.DB_HOST }}" "DB_PORT=5432" "DB_USER=${{ secrets.DB_USER }}" "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" "DB_NAME=${{ secrets.DB_NAME }}" "JWT_SECRET=${{ secrets.JWT_SECRET }}" "SMTP_HOST=${{ secrets.SMTP_HOST }}" "SMTP_PORT=587" "SMTP_FROM=${{ secrets.SMTP_FROM }}" "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}" "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" "GIN_MODE=release"
 
       - name: Deploy Kong Gateway
         run: |
-          az containerapp revision copy \
-            -n kong-gateway -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-kong:latest
+          az containerapp up \
+            --name kong-gateway -g ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.ENVIRONMENT }} \
+            --image ${{ env.REGISTRY }}/agriwizard-kong:latest \
+            --ingress external --target-port 8000 \
+            --registry-server ${{ env.REGISTRY }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --env-vars "KONG_DATABASE=off" "KONG_PROXY_LISTEN=0.0.0.0:8000" "KONG_ADMIN_LISTEN=127.0.0.1:8001" "KONG_LOG_LEVEL=info" "KONG_JWT_SHARED_SECRET=${{ secrets.JWT_SECRET }}" "CORS_ALLOW_ORIGIN=*" "ACA_FQDN_SUFFIX=${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_HOST=https://iam-service.${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_PORT=443" "HARDWARE_UPSTREAM_HOST=https://hardware-service.${{ env.FQDN_SUFFIX }}" "HARDWARE_UPSTREAM_PORT=443" "ANALYTICS_UPSTREAM_HOST=https://analytics-service.${{ env.FQDN_SUFFIX }}" "ANALYTICS_UPSTREAM_PORT=443" "WEATHER_UPSTREAM_HOST=https://weather-service.${{ env.FQDN_SUFFIX }}" "WEATHER_UPSTREAM_PORT=443" "NOTIFICATION_UPSTREAM_HOST=https://notification-service.${{ env.FQDN_SUFFIX }}" "NOTIFICATION_UPSTREAM_PORT=443"
 
   summary:
     name: Deployment Summary

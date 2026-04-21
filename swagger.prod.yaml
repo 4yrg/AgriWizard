@@ -42,8 +42,18 @@ info:
 servers:
   - url: https://kong-gateway.purplesand-4413bcdd.centralindia.azurecontainerapps.io
     description: Production (Kong Gateway)
+  - url: https://iam-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: IAM Service (direct)
+  - url: https://hardware-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Hardware Service (direct)
+  - url: https://analytics-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Analytics Service (direct)
+  - url: https://weather-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Weather Service (direct)
+  - url: https://notification-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Notification Service (direct)
   - url: http://localhost:8080
-    description: Local development (via Kong gateway)
+    description: Local development
 
 components:
   securitySchemes:
