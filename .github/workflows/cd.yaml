@@ -131,37 +131,37 @@ jobs:
         run: |
           az containerapp revision copy \
             -n iam-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-iam-service:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-iam-service:latest
 
       - name: Deploy Hardware Service
         run: |
           az containerapp revision copy \
             -n hardware-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:latest
 
       - name: Deploy Analytics Service
         run: |
           az containerapp revision copy \
             -n analytics-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:latest
 
       - name: Deploy Weather Service
         run: |
           az containerapp revision copy \
             -n weather-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-weather-service:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-weather-service:latest
 
       - name: Deploy Notification Service
         run: |
           az containerapp revision copy \
             -n notification-service -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-notification-service:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-notification-service:latest
 
       - name: Deploy Kong Gateway
         run: |
           az containerapp revision copy \
             -n kong-gateway -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.REGISTRY }}/agriwizard-kong:${{ needs.determine-tag.outputs.tag }}
+            --image ${{ env.REGISTRY }}/agriwizard-kong:latest
 
   summary:
     name: Deployment Summary
