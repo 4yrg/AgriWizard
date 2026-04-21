@@ -32,6 +32,8 @@ This folder contains Azure CLI scripts to deploy AgriWizard to **Azure Container
    - Deploys `kong-gateway` with **external ingress** on port 8000.
 5. `05-test-gateway.sh`
    - Runs smoke tests via Kong and checks service exposure flags.
+6. `09-remediate-jwt-sync.sh`
+   - Re-aligns live IAM/Kong JWT env values (`JWT_SECRET`, `JWT_ISSUER`) and re-runs gateway smoke tests.
 
 ## Internal DNS Convention
 

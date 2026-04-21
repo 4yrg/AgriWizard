@@ -3,13 +3,11 @@ _transform: true
 
 # NOTE:
 # This file is rendered by `infrastructure/kong/entrypoint.sh` using env vars.
-# Updated for Azure Container Apps Consumption mode - uses PUBLIC FQDN URLs
-# because internal DNS resolution is not available between containers.
 
 consumers:
   - username: agriwizard-clients
     jwt_secrets:
-      - key: agriwizard-iam
+      - key: "${KONG_JWT_ISSUER}"
         algorithm: HS256
         secret: "${KONG_JWT_SHARED_SECRET}"
 
@@ -44,10 +42,8 @@ plugins:
       fault_tolerant: true
       hide_client_headers: false
 
-# IAM Service - uses PUBLIC URL in Consumption mode
 services:
   - name: iam-service
-    protocol: https
     host: ${IAM_UPSTREAM_HOST}
     port: ${IAM_UPSTREAM_PORT}
     path: /api/v1/iam
@@ -62,7 +58,6 @@ services:
         strip_path: true
 
   - name: hardware-service
-    protocol: https
     host: ${HARDWARE_UPSTREAM_HOST}
     port: ${HARDWARE_UPSTREAM_PORT}
     path: /api/v1/hardware
@@ -83,7 +78,6 @@ services:
             - exp
 
   - name: analytics-service
-    protocol: https
     host: ${ANALYTICS_UPSTREAM_HOST}
     port: ${ANALYTICS_UPSTREAM_PORT}
     path: /api/v1/analytics
@@ -104,7 +98,6 @@ services:
             - exp
 
   - name: weather-service
-    protocol: https
     host: ${WEATHER_UPSTREAM_HOST}
     port: ${WEATHER_UPSTREAM_PORT}
     path: /api/v1/weather
@@ -125,7 +118,6 @@ services:
             - exp
 
   - name: notification-service
-    protocol: https
     host: ${NOTIFICATION_UPSTREAM_HOST}
     port: ${NOTIFICATION_UPSTREAM_PORT}
     path: /api/v1/notifications
@@ -146,7 +138,6 @@ services:
             - exp
 
   - name: templates-service
-    protocol: https
     host: ${NOTIFICATION_UPSTREAM_HOST}
     port: ${NOTIFICATION_UPSTREAM_PORT}
     path: /api/v1/templates
