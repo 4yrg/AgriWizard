@@ -22,11 +22,12 @@ type Handler struct {
 	jwtSecret    string
 	analyticsURL string
 	rmqPublisher *RabbitMQPublisher
+	sbPublisher  *AzureServiceBusPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher, sbPublisher: sbPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -459,8 +460,15 @@ func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
 			Timestamp:   payload.Timestamp,
 			Metadata:    nil,
 		}
-		if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
-			log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+		if h.rmqPublisher != nil && h.rmqPublisher.IsConnected() {
+			if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+			}
+		}
+		if h.sbPublisher != nil && h.sbPublisher.IsConnected() {
+			if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+			}
 		}
 	}
 }

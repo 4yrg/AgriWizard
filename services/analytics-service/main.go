@@ -23,6 +23,7 @@ type ServiceStatus struct {
 }
 
 var rmqConsumer *RabbitMQConsumer
+var sbConsumer *AzureServiceBusConsumer
 
 func (s *ServiceStatus) GetDB() *sql.DB {
 	s.mu.RLock()
@@ -64,6 +65,10 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
+	serviceBusConnection := getServiceBusConnection()
+	serviceBusTopic := getServiceBusTopic()
+	serviceBusSubscription := getServiceBusSubscription()
+
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
@@ -85,11 +90,12 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":    s,
-			"service":   "analytics-service",
-			"db_ready":  status.IsReady(),
-			"migrated":  status.migrated,
-			"rmq_ready": rmqConsumer != nil && rmqConsumer.IsConnected(),
+			"status":       s,
+			"service":      "analytics-service",
+			"db_ready":     status.IsReady(),
+			"migrated":     status.migrated,
+			"rmq_ready":    rmqConsumer != nil && rmqConsumer.IsConnected(),
+			"sb_connected": sbConsumer != nil && sbConsumer.IsConnected(),
 		})
 	})
 
@@ -111,6 +117,12 @@ func main() {
 		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
 	}
 
+	// Initialize Azure Service Bus consumer
+	sbConsumer, err = NewAzureServiceBusConsumer(serviceBusConnection, serviceBusTopic, serviceBusSubscription, h)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus consumer initialization failed: %v", err)
+	}
+
 	// Start RabbitMQ consumer in background
 	if rmqConsumer != nil && rmqConsumer.IsConnected() {
 		go func() {
@@ -118,6 +130,17 @@ func main() {
 			log.Println("[INFO] RabbitMQ consumer ready")
 			if err := rmqConsumer.Start(context.Background()); err != nil {
 				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
+			}
+		}()
+	}
+
+	// Start Azure Service Bus consumer in background
+	if sbConsumer != nil && sbConsumer.IsConnected() {
+		go func() {
+			<-sbConsumer.Ready()
+			log.Println("[INFO] Azure Service Bus consumer ready")
+			if err := sbConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] Azure Service Bus consumer error: %v", err)
 			}
 		}()
 	}
