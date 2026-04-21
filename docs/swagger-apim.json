@@ -1,0 +1,686 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AgriWizard API",
+    "description": "Smart Greenhouse Management Platform - Microservices API Gateway",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://agriwizard-apim-prod.azure-api.net",
+      "description": "Azure API Management Gateway"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "full_name"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "test@agriwizard.com" },
+          "password": { "type": "string", "minLength": 8, "example": "Test123456!" },
+          "full_name": { "type": "string", "example": "Test User" },
+          "phone": { "type": "string", "example": "+94771234567" },
+          "role": { "type": "string", "enum": ["Admin", "Agromist"], "default": "Agromist" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "test@agriwizard.com" },
+          "password": { "type": "string", "example": "Test123456!" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/iam/register": {
+      "post": {
+        "operationId": "iam-register",
+        "summary": "Register a new user",
+        "tags": ["IAM"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created" },
+          "400": { "description": "Validation error" }
+        }
+      }
+    },
+    "/api/v1/iam/login": {
+      "post": {
+        "operationId": "iam-login",
+        "summary": "Authenticate user",
+        "tags": ["IAM"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/v1/iam/introspect": {
+      "get": {
+        "operationId": "iam-introspect",
+        "summary": "Validate JWT token",
+        "tags": ["IAM"],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Token validation result" }
+        }
+      }
+    },
+    "/api/v1/iam/profile": {
+      "get": {
+        "operationId": "iam-get-profile",
+        "summary": "Get current user profile",
+        "tags": ["IAM"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User profile" }
+        }
+      },
+      "put": {
+        "operationId": "iam-update-profile",
+        "summary": "Update user profile",
+        "tags": ["IAM"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": { "type": "string" },
+                  "phone": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated" }
+        }
+      }
+    },
+    "/api/v1/hardware/equipments": {
+      "get": {
+        "operationId": "hardware-list-equipments",
+        "summary": "List all equipment",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of equipment" }
+        }
+      },
+      "post": {
+        "operationId": "hardware-create-equipment",
+        "summary": "Register new equipment",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "supported_operations"],
+                "properties": {
+                  "name": { "type": "string", "example": "Water Pump" },
+                  "supported_operations": { "type": "array", "items": { "type": "string" }, "example": ["ON", "OFF"] },
+                  "api_url": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Equipment created" }
+        }
+      }
+    },
+    "/api/v1/hardware/sensors": {
+      "get": {
+        "operationId": "hardware-list-sensors",
+        "summary": "List all sensors",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of sensors" }
+        }
+      },
+      "post": {
+        "operationId": "hardware-create-sensor",
+        "summary": "Register new sensor",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "mqtt_topic"],
+                "properties": {
+                  "name": { "type": "string", "example": "Soil Moisture Sensor" },
+                  "mqtt_topic": { "type": "string", "example": "agriwizard/sensor/soil-moisture/data" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Sensor created" }
+        }
+      }
+    },
+    "/api/v1/hardware/parameters": {
+      "get": {
+        "operationId": "hardware-list-parameters",
+        "summary": "List all parameters",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of parameters" }
+        }
+      },
+      "post": {
+        "operationId": "hardware-create-parameter",
+        "summary": "Create new parameter",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sensor_id", "name", "unit", "min_value", "max_value"],
+                "properties": {
+                  "sensor_id": { "type": "string" },
+                  "name": { "type": "string", "example": "Soil Moisture" },
+                  "unit": { "type": "string", "example": "%" },
+                  "min_value": { "type": "number", "example": 0 },
+                  "max_value": { "type": "number", "example": 100 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Parameter created" }
+        }
+      }
+    },
+    "/api/v1/hardware/telemetry": {
+      "post": {
+        "operationId": "hardware-ingest-telemetry",
+        "summary": "Ingest telemetry data",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sensor_id", "readings"],
+                "properties": {
+                  "sensor_id": { "type": "string" },
+                  "readings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "parameter_id": { "type": "string" },
+                        "value": { "type": "number" }
+                      }
+                    }
+                  },
+                  "timestamp": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Telemetry ingested" }
+        }
+      }
+    },
+    "/api/v1/hardware/control/{id}": {
+      "post": {
+        "operationId": "hardware-control",
+        "summary": "Send control command to equipment",
+        "tags": ["Hardware"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["operation"],
+                "properties": {
+                  "operation": { "type": "string", "enum": ["ON", "OFF", "LOCK", "UNLOCK"] },
+                  "payload": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Command dispatched" }
+        }
+      }
+    },
+    "/api/v1/analytics/thresholds": {
+      "post": {
+        "operationId": "analytics-upsert-threshold",
+        "summary": "Create or update threshold",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["parameter_id", "min_value", "max_value"],
+                "properties": {
+                  "parameter_id": { "type": "string" },
+                  "min_value": { "type": "number", "example": 20 },
+                  "max_value": { "type": "number", "example": 80 },
+                  "is_enabled": { "type": "boolean", "default": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Threshold saved" }
+        }
+      }
+    },
+    "/api/v1/analytics/thresholds/{parameterId}": {
+      "get": {
+        "operationId": "analytics-get-threshold",
+        "summary": "Get threshold for parameter",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "parameterId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Threshold details" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/analytics/rules": {
+      "post": {
+        "operationId": "analytics-create-rule",
+        "summary": "Create automation rule",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["threshold_id", "equipment_id", "low_action", "high_action"],
+                "properties": {
+                  "threshold_id": { "type": "string" },
+                  "equipment_id": { "type": "string" },
+                  "low_action": { "type": "string", "example": "ON" },
+                  "high_action": { "type": "string", "example": "OFF" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Rule created" }
+        }
+      }
+    },
+    "/api/v1/analytics/rules/{parameterId}": {
+      "get": {
+        "operationId": "analytics-get-rules",
+        "summary": "Get rules for parameter",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "parameterId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "List of rules" }
+        }
+      }
+    },
+    "/api/v1/analytics/decisions/summary": {
+      "get": {
+        "operationId": "analytics-decision-summary",
+        "summary": "Get decision summary",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Decision summary" }
+        }
+      }
+    },
+    "/api/v1/analytics/ingest": {
+      "post": {
+        "operationId": "analytics-ingest",
+        "summary": "Ingest telemetry for analysis",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sensor_id", "timestamp", "readings"],
+                "properties": {
+                  "sensor_id": { "type": "string" },
+                  "timestamp": { "type": "string", "format": "date-time" },
+                  "readings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "parameter_id": { "type": "string" },
+                        "value": { "type": "number" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Data ingested" }
+        }
+      }
+    },
+    "/api/v1/analytics/summaries": {
+      "get": {
+        "operationId": "analytics-daily-summaries",
+        "summary": "Get daily summaries",
+        "tags": ["Analytics"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Daily summaries" }
+        }
+      }
+    },
+    "/api/v1/weather/current": {
+      "get": {
+        "operationId": "weather-current",
+        "summary": "Get current weather",
+        "tags": ["Weather"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Current weather data" }
+        }
+      }
+    },
+    "/api/v1/weather/forecast": {
+      "get": {
+        "operationId": "weather-forecast",
+        "summary": "Get weather forecast",
+        "tags": ["Weather"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Weather forecast" }
+        }
+      }
+    },
+    "/api/v1/weather/alerts": {
+      "get": {
+        "operationId": "weather-alerts",
+        "summary": "Get active alerts",
+        "tags": ["Weather"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Active alerts" }
+        }
+      }
+    },
+    "/api/v1/weather/recommendations": {
+      "get": {
+        "operationId": "weather-recommendations",
+        "summary": "Get farming recommendations",
+        "tags": ["Weather"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Recommendations" }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "notifications-list",
+        "summary": "List notifications",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of notifications" }
+        }
+      }
+    },
+    "/api/v1/notifications/send": {
+      "post": {
+        "operationId": "notifications-send",
+        "summary": "Send notification",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["channel", "recipient", "template_id", "variables"],
+                "properties": {
+                  "channel": { "type": "string", "enum": ["email", "sms"] },
+                  "recipient": { "type": "string" },
+                  "template_id": { "type": "string" },
+                  "variables": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Notification queued" }
+        }
+      }
+    },
+    "/api/v1/notifications/{id}": {
+      "get": {
+        "operationId": "notifications-get",
+        "summary": "Get notification details",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Notification details" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/templates": {
+      "get": {
+        "operationId": "templates-list",
+        "summary": "List templates",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of templates" }
+        }
+      },
+      "post": {
+        "operationId": "templates-create",
+        "summary": "Create template",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "channel", "subject", "body"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "channel": { "type": "string", "enum": ["email", "sms"] },
+                  "subject": { "type": "string" },
+                  "body": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Template created" }
+        }
+      }
+    },
+    "/api/v1/templates/{id}": {
+      "get": {
+        "operationId": "templates-get",
+        "summary": "Get template",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Template details" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "put": {
+        "operationId": "templates-update",
+        "summary": "Update template",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "channel", "subject", "body"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "channel": { "type": "string", "enum": ["email", "sms"] },
+                  "subject": { "type": "string" },
+                  "body": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Template updated" }
+        }
+      },
+      "delete": {
+        "operationId": "templates-delete",
+        "summary": "Delete template",
+        "tags": ["Notifications"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Template deleted" }
+        }
+      }
+    }
+  }
+}

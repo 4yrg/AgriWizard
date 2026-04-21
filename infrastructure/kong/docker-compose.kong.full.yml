@@ -1,15 +1,19 @@
-# ─────────────────────────────────────────────
-#  AgriWizard — Smart Greenhouse Monorepo
-#  docker-compose.yml
-# ─────────────────────────────────────────────
+version: "3.9"
+
+# =============================================================================
+# AgriWizard - Docker Compose with Kong Gateway
+# =============================================================================
+# NOTE: This legacy full-stack compose file is retained for backward
+# compatibility. Prefer root `docker-compose.yml` for DB-less Kong mode.
+# =============================================================================
 
 x-common-env: &common-env
   DB_HOST: postgres
   DB_PORT: "5432"
-  DB_USER: "${DB_USER:-agriwizard}"
-  DB_PASSWORD: "${DB_PASSWORD:-agriwizard_secret}"
+  DB_USER: agriwizard
+  DB_PASSWORD: agriwizard_secret
+  DB_NAME: agriwizard
   JWT_SECRET: super-secret-jwt-key-change-in-production
-  JWT_ISSUER: agriwizard-iam
   GIN_MODE: release
 
 networks:
@@ -19,13 +23,12 @@ networks:
 volumes:
   postgres-data:
   nats-data:
-  mosquitto-data:
-  mosquitto-config:
+  kong-db-data:
 
 services:
-  # ────────────────────────────────────────────
-  #  Infrastructure
-  # ────────────────────────────────────────────
+  # -----------------------------------------------------------------------------
+  # Infrastructure
+  # -----------------------------------------------------------------------------
 
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
@@ -34,7 +37,7 @@ services:
     environment:
       SWAGGER_JSON: /app/swagger.yaml
     volumes:
-      - ./swagger.yaml:/app/swagger.yaml:ro
+      - ../../swagger.yaml:/app/swagger.yaml:ro
     networks:
       - agriwizard-net
     ports:
@@ -45,37 +48,91 @@ services:
     container_name: agriwizard-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: "${DB_USER:-agriwizard}"
-      POSTGRES_PASSWORD: "${DB_PASSWORD:-agriwizard_secret}"
-      POSTGRES_DB: postgres
+      POSTGRES_USER: agriwizard
+      POSTGRES_PASSWORD: agriwizard_secret
+      POSTGRES_DB: agriwizard
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./postgres/init/01-create-service-dbs.sql:/docker-entrypoint-initdb.d/01-create-service-dbs.sql:ro
     networks:
       - agriwizard-net
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-agriwizard} -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U agriwizard -d agriwizard"]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # ────────────────────────────────────────────
-  #  Microservices
-  # ────────────────────────────────────────────
+  # -----------------------------------------------------------------------------
+  # Kong Gateway Database
+  # -----------------------------------------------------------------------------
+
+  kong-database:
+    image: postgres:16-alpine
+    container_name: agriwizard-kong-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kong_secure_password
+      POSTGRES_DB: kong
+    volumes:
+      - kong-db-data:/var/lib/postgresql/data
+    networks:
+      - agriwizard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # -----------------------------------------------------------------------------
+  # Kong Gateway
+  # -----------------------------------------------------------------------------
+
+  kong:
+    image: kong:3.4
+    container_name: agriwizard-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PORT: "5432"
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong_secure_password
+      KONG_PG_DATABASE: kong
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_LOG_LEVEL: info
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stderr
+    volumes:
+      - ./kong.yml:/usr/local/kong/kong.yml:ro
+    networks:
+      - agriwizard-net
+    ports:
+      - "8000:8000"   # HTTP proxy
+      - "8443:8443"   # HTTPS proxy
+      - "8001:8001"  # Admin API
+    depends_on:
+      kong-database:
+        condition: service_healthy
+
+  # -----------------------------------------------------------------------------
+  # Microservices
+  # -----------------------------------------------------------------------------
 
   iam-service:
     build:
-      context: .
+      context: ../../
       dockerfile: services/iam-service/Dockerfile
     container_name: agriwizard-iam
     restart: unless-stopped
     environment:
       <<: *common-env
       PORT: "8081"
-      DB_NAME: "${IAM_DB_NAME:-iam_db}"
       JWT_TTL_HOURS: "24"
     networks:
       - agriwizard-net
@@ -84,8 +141,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kong:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
       interval: 5s
@@ -95,14 +150,13 @@ services:
 
   hardware-service:
     build:
-      context: .
+      context: ../../
       dockerfile: services/hardware-service/Dockerfile
     container_name: agriwizard-hardware
     restart: unless-stopped
     environment:
       <<: *common-env
       PORT: "8082"
-      DB_NAME: "${HARDWARE_DB_NAME:-hardware_db}"
       MQTT_BROKER: "${MQTT_BROKER}"
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
@@ -116,8 +170,6 @@ services:
         condition: service_healthy
       iam-service:
         condition: service_healthy
-      kong:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
       interval: 5s
@@ -127,14 +179,13 @@ services:
 
   analytics-service:
     build:
-      context: .
+      context: ../../
       dockerfile: services/analytics-service/Dockerfile
     container_name: agriwizard-analytics
     restart: unless-stopped
     environment:
       <<: *common-env
       PORT: "8083"
-      DB_NAME: "${ANALYTICS_DB_NAME:-analytics_db}"
       HARDWARE_SERVICE_URL: "http://hardware-service:8082"
       WEATHER_SERVICE_URL: "http://weather-service:8084"
     networks:
@@ -146,8 +197,6 @@ services:
         condition: service_healthy
       iam-service:
         condition: service_healthy
-      kong:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
       interval: 5s
@@ -157,15 +206,15 @@ services:
 
   weather-service:
     build:
-      context: .
+      context: ../../
       dockerfile: services/weather-service/Dockerfile
     container_name: agriwizard-weather
     restart: unless-stopped
     environment:
       <<: *common-env
       PORT: "8084"
-      USE_MOCK: "true" # Set to "false" and provide OWM_API_KEY for live data
-      OWM_API_KEY: "" # Replace with your OpenWeatherMap API key
+      USE_MOCK: "true"
+      OWM_API_KEY: ""
       OWM_BASE_URL: "https://api.openweathermap.org/data/2.5"
       LOCATION_LAT: "6.9271"
       LOCATION_LON: "79.8612"
@@ -177,8 +226,6 @@ services:
     depends_on:
       iam-service:
         condition: service_healthy
-      kong:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
       interval: 5s
@@ -186,28 +233,9 @@ services:
       retries: 5
       start_period: 15s
 
-  # ────────────────────────────────────────────
-  #  Message Queue & Notification Service
-  # ────────────────────────────────────────────
-
-  rabbitmq:
-    image: rabbitmq:3.12-management
-    container_name: agriwizard-rabbitmq
-    restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    networks:
-      - agriwizard-net
-    ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "15672:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+  # -----------------------------------------------------------------------------
+  # Message Queue & Notification Service
+  # -----------------------------------------------------------------------------
 
   nats:
     image: nats:2.10-alpine
@@ -240,7 +268,7 @@ services:
 
   notification-service:
     build:
-      context: .
+      context: ../../
       dockerfile: services/notification-service/Dockerfile
     container_name: agriwizard-notification
     restart: unless-stopped
@@ -266,52 +294,9 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
-      kong:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8085/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 30s
-
-  # ────────────────────────────────────────────
-  #  API Gateway (Kong)
-  # ────────────────────────────────────────────
-
-  kong:
-    build:
-      context: .
-      dockerfile: infrastructure/kong/Dockerfile
-    container_name: agriwizard-kong
-    restart: unless-stopped
-    environment:
-      KONG_DATABASE: "off"
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_PROXY_LISTEN: 0.0.0.0:8000
-      KONG_LOG_LEVEL: info
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_JWT_SHARED_SECRET: "${JWT_SECRET:-super-secret-jwt-key-change-in-production}"
-      CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
-      IAM_UPSTREAM_HOST: iam-service
-      IAM_UPSTREAM_PORT: "8081"
-      HARDWARE_UPSTREAM_HOST: hardware-service
-      HARDWARE_UPSTREAM_PORT: "8082"
-      ANALYTICS_UPSTREAM_HOST: analytics-service
-      ANALYTICS_UPSTREAM_PORT: "8083"
-      WEATHER_UPSTREAM_HOST: weather-service
-      WEATHER_UPSTREAM_PORT: "8084"
-      NOTIFICATION_UPSTREAM_HOST: notification-service
-      NOTIFICATION_UPSTREAM_PORT: "8085"
-    networks:
-      - agriwizard-net
-    ports:
-      - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
-    healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
       start_period: 30s

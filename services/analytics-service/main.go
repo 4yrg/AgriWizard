@@ -22,6 +22,8 @@ type ServiceStatus struct {
 	migrated bool
 }
 
+var rmqConsumer *RabbitMQConsumer
+
 func (s *ServiceStatus) GetDB() *sql.DB {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -64,12 +66,17 @@ func main() {
 	weatherURL := getEnv("WEATHER_SERVICE_URL", "http://weather-service:8084")
 	port := getEnv("PORT", "8083")
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
 
-	if getEnv("GIN_MODE", "debug") == "release" {
+	if getEnv("GIN_MODE", "debug") == "debug" {
+		gin.SetMode(gin.DebugMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -83,10 +90,11 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":   s,
-			"service":  "analytics-service",
-			"db_ready": status.IsReady(),
-			"migrated": status.IsMigrated(),
+			"status":    s,
+			"service":   "analytics-service",
+			"db_ready":  status.IsReady(),
+			"migrated":  status.migrated,
+			"rmq_ready": rmqConsumer != nil && rmqConsumer.IsConnected(),
 		})
 	})
 
@@ -99,7 +107,27 @@ func main() {
 		}
 	}()
 
-	// Connect to database in background (retry until ready)
+	// Setup handler first (before SB consumer needs it)
+	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
+
+	// Initialize Service Bus consumer
+	rmqConsumer, err := NewRabbitMQConsumer(rabbitmqUrl, queueName, h)
+	if err != nil {
+		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
+	}
+
+	// Start RabbitMQ consumer in background
+	if rmqConsumer != nil && rmqConsumer.IsConnected() {
+		go func() {
+			<-rmqConsumer.Ready()
+			log.Println("[INFO] RabbitMQ consumer ready")
+			if err := rmqConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
+			}
+		}()
+	}
+
+	// Connect to database in background
 	go func() {
 		for {
 			db, err := connectDB(dsn)
@@ -126,7 +154,6 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
 	api := r.Group("/api/v1/analytics")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{

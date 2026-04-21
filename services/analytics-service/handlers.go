@@ -319,6 +319,21 @@ func (h *Handler) Ingest(c *gin.Context) {
 		payload.Timestamp = time.Now().UTC()
 	}
 
+	decisions, err := h.ProcessIngest(payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "processing_error", Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "ingest processed",
+		Data:    gin.H{"decisions_triggered": len(decisions), "decisions": decisions},
+	})
+}
+
+// ProcessIngest processes telemetry data and applies threshold automation logic.
+// This is used by both the REST API and Service Bus consumer.
+func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, error) {
 	var decisions []AutomationDecision
 
 	for _, reading := range payload.Readings {
@@ -382,10 +397,7 @@ func (h *Handler) Ingest(c *gin.Context) {
 		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
 	}
 
-	c.JSON(http.StatusOK, SuccessResponse{
-		Message: "ingest processed",
-		Data:    gin.H{"decisions_triggered": len(decisions), "decisions": decisions},
-	})
+	return decisions, nil
 }
 
 // GetDailySummaries godoc
@@ -459,12 +471,24 @@ func (h *Handler) getWeatherScaleFactor() float64 {
 	if h.weatherURL == "" {
 		return 1.0
 	}
-	resp, err := http.Get(h.weatherURL + "/api/v1/weather/recommendations")
+	req, err := http.NewRequest("GET", h.weatherURL+"/api/v1/weather/recommendations", nil)
+	if err != nil {
+		log.Printf("[WARN] getWeatherScaleFactor: request build failed: %v", err)
+		return 1.0
+	}
+	req.Header.Set("X-Internal-Service", "analytics-service")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("[WARN] getWeatherScaleFactor: %v", err)
 		return 1.0
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[WARN] getWeatherScaleFactor: weather returned status=%d", resp.StatusCode)
+		return 1.0
+	}
 
 	var result struct {
 		Data struct {
@@ -472,6 +496,7 @@ func (h *Handler) getWeatherScaleFactor() float64 {
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[WARN] getWeatherScaleFactor: decode failed: %v", err)
 		return 1.0
 	}
 	return result.Data.Scale

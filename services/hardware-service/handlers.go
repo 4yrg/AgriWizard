@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,11 +21,12 @@ type Handler struct {
 	status       *ServiceStatus
 	jwtSecret    string
 	analyticsURL string
+	rmqPublisher *RabbitMQPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -419,6 +421,7 @@ func (h *Handler) IngestTelemetry(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "storage_error"})
 		return
 	}
+	h.publishTelemetryToRabbitMQ(payload)
 	c.JSON(http.StatusCreated, SuccessResponse{Message: "telemetry ingested"})
 }
 
@@ -438,6 +441,27 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 	}
 	if err := h.storeTelemetry(payload); err != nil {
 		log.Printf("[ERROR] handleTelemetry: store error: %v", err)
+	}
+	h.publishTelemetryToRabbitMQ(payload)
+}
+
+func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
+	if h.rmqPublisher == nil || !h.rmqPublisher.IsConnected() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, reading := range payload.Readings {
+		event := TelemetryEvent{
+			SensorID:    payload.SensorID,
+			ParameterID: reading.ParameterID,
+			Value:       reading.Value,
+			Timestamp:   payload.Timestamp,
+			Metadata:    nil,
+		}
+		if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+			log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+		}
 	}
 }
 
@@ -499,6 +523,11 @@ func (h *Handler) forwardToAnalytics(payload TelemetryPayload) {
 // JWTAuthMiddleware validates Bearer tokens for protected routes.
 func (h *Handler) JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Allow trusted internal calls from other services inside ACA/local network.
+		if c.GetHeader("X-Internal-Service") != "" {
+			c.Next()
+			return
+		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{Error: "missing_token"})

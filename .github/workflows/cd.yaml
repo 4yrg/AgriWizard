@@ -1,0 +1,192 @@
+name: CD - Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Custom image tag override'
+        required: false
+        type: string
+
+env:
+  REGISTRY: agriwizardacr.azurecr.io
+  REGISTRY_NAME: agriwizardacr
+  RESOURCE_GROUP: agriwizard-rg
+  SUBSCRIPTION_ID: 71dc1447-483b-4aa3-b549-021a60ec7241
+  LOCATION: centralindia
+
+jobs:
+  determine-tag:
+    name: Determine Image Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [[ "${{ github.event.inputs.image_tag }}" != "" ]]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+          echo "========================================"
+          echo "Deploying with image tag: ${{ steps.tag.outputs.tag }}"
+          echo "========================================"
+
+  build-push-services:
+    name: Build & Push Service Images
+    needs: determine-tag
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iam-service
+            context: .
+            dockerfile: services/iam-service/Dockerfile
+            port: 8081
+          - name: hardware-service
+            context: .
+            dockerfile: services/hardware-service/Dockerfile
+            port: 8082
+          - name: analytics-service
+            context: .
+            dockerfile: services/analytics-service/Dockerfile
+            port: 8083
+          - name: weather-service
+            context: .
+            dockerfile: services/weather-service/Dockerfile
+            port: 8084
+          - name: notification-service
+            context: .
+            dockerfile: services/notification-service/Dockerfile
+            port: 8085
+          - name: kong
+            context: .
+            dockerfile: infrastructure/kong/Dockerfile
+            port: 8000
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/agriwizard-${{ matrix.name }}:${{ needs.determine-tag.outputs.tag }}
+            ${{ env.REGISTRY }}/agriwizard-${{ matrix.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  deploy-services:
+    name: Deploy Services
+    needs: [determine-tag, build-push-services]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set subscription
+        run: az account set --subscription ${{ env.SUBSCRIPTION_ID }}
+
+      - name: Get ACR credentials
+        id: acr-creds
+        run: |
+          echo "password=$(az acr credential show -n ${{ env.REGISTRY_NAME }} --query passwords[0].value -o tsv)" >> $GITHUB_OUTPUT
+
+      - name: Deploy IAM Service
+        run: |
+          az containerapp revision copy \
+            -n iam-service -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-iam-service:latest
+
+      - name: Deploy Hardware Service
+        run: |
+          az containerapp revision copy \
+            -n hardware-service -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-hardware-service:latest
+
+      - name: Deploy Analytics Service
+        run: |
+          az containerapp revision copy \
+            -n analytics-service -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-analytics-service:latest
+
+      - name: Deploy Weather Service
+        run: |
+          az containerapp revision copy \
+            -n weather-service -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-weather-service:latest
+
+      - name: Deploy Notification Service
+        run: |
+          az containerapp revision copy \
+            -n notification-service -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-notification-service:latest
+
+      - name: Deploy Kong Gateway
+        run: |
+          az containerapp revision copy \
+            -n kong-gateway -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/agriwizard-kong:latest
+
+  summary:
+    name: Deployment Summary
+    needs: [determine-tag, deploy-services]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "========================================"
+          echo "Deployment Results"
+          echo "========================================"
+          echo "Image tag: ${{ needs.determine-tag.outputs.tag }}"
+          echo ""
+          echo "Services deployed:"
+          echo "  - iam-service"
+          echo "  - hardware-service"
+          echo "  - analytics-service"
+          echo "  - weather-service"
+          echo "  - notification-service"
+          echo "  - kong-gateway"
+          echo ""
+          if [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
+            echo "Deployment FAILED"
+            exit 1
+          else
+            echo "Deployment completed successfully!"
+          fi

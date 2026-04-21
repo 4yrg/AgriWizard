@@ -17,12 +17,13 @@ import (
 type Handler struct {
 	dbStatus  *DBStatus
 	jwtSecret string
+	jwtIssuer string
 	jwtTTL    time.Duration
 }
 
 // NewHandler creates a new Handler instance.
-func NewHandler(dbStatus *DBStatus, jwtSecret string, jwtTTL time.Duration) *Handler {
-	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtTTL: jwtTTL}
+func NewHandler(dbStatus *DBStatus, jwtSecret, jwtIssuer string, jwtTTL time.Duration) *Handler {
+	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtIssuer: jwtIssuer, jwtTTL: jwtTTL}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -139,7 +140,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	var user User
 	err := db.QueryRow(
-		`SELECT id, email, password_hash, role, full_name, phone FROM iam.users WHERE email = $1`,
+		`SELECT id, email, password_hash, role, full_name, COALESCE(phone, '') FROM iam.users WHERE email = $1`,
 		req.Email,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.FullName, &user.Phone)
 	if err == sql.ErrNoRows {
@@ -162,6 +163,7 @@ func (h *Handler) Login(c *gin.Context) {
 		"user_id": user.ID,
 		"email":   user.Email,
 		"role":    string(user.Role),
+		"iss":     h.jwtIssuer,
 		"exp":     expiresAt.Unix(),
 		"iat":     time.Now().Unix(),
 	})
@@ -246,7 +248,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user User
 	err := db.QueryRow(
-		`SELECT id, email, role, full_name, phone, created_at FROM iam.users WHERE id = $1`,
+		`SELECT id, email, role, full_name, COALESCE(phone, ''), created_at FROM iam.users WHERE id = $1`,
 		userID,
 	).Scan(&user.ID, &user.Email, &user.Role, &user.FullName, &user.Phone, &user.CreatedAt)
 	if err == sql.ErrNoRows {

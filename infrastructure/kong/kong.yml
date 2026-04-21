@@ -1,0 +1,165 @@
+_format_version: "3.0"
+_transform: true
+
+# NOTE:
+# This file is rendered by `infrastructure/kong/entrypoint.sh` using env vars.
+# It supports both local Docker and ACA internal DNS names.
+
+consumers:
+  - username: agriwizard-clients
+    jwt_secrets:
+      - key: agriwizard-iam
+        algorithm: HS256
+        secret: "${KONG_JWT_SHARED_SECRET}"
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "${CORS_ALLOW_ORIGIN}"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+        - X-Request-ID
+        - X-Internal-Service
+      exposed_headers:
+        - X-Kong-Upstream-Latency
+        - X-Kong-Proxy-Latency
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+  - name: rate-limiting
+    config:
+      minute: 120
+      hour: 2000
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+
+services:
+  - name: iam-service
+    protocol: http
+    host: ${IAM_UPSTREAM_HOST}
+    port: ${IAM_UPSTREAM_PORT}
+    path: /api/v1/iam
+    routes:
+      - name: iam-route-legacy
+        paths:
+          - /api/v1/iam
+        strip_path: true
+      - name: auth-route
+        paths:
+          - /auth
+        strip_path: true
+
+  - name: hardware-service
+    protocol: http
+    host: ${HARDWARE_UPSTREAM_HOST}
+    port: ${HARDWARE_UPSTREAM_PORT}
+    path: /api/v1/hardware
+    routes:
+      - name: hardware-route-legacy
+        paths:
+          - /api/v1/hardware
+        strip_path: true
+      - name: hardware-route
+        paths:
+          - /hardware
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp
+
+  - name: analytics-service
+    protocol: http
+    host: ${ANALYTICS_UPSTREAM_HOST}
+    port: ${ANALYTICS_UPSTREAM_PORT}
+    path: /api/v1/analytics
+    routes:
+      - name: analytics-route-legacy
+        paths:
+          - /api/v1/analytics
+        strip_path: true
+      - name: analytics-route
+        paths:
+          - /analytics
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp
+
+  - name: weather-service
+    protocol: http
+    host: ${WEATHER_UPSTREAM_HOST}
+    port: ${WEATHER_UPSTREAM_PORT}
+    path: /api/v1/weather
+    routes:
+      - name: weather-route-legacy
+        paths:
+          - /api/v1/weather
+        strip_path: true
+      - name: weather-route
+        paths:
+          - /weather
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp
+
+  - name: notification-service
+    protocol: http
+    host: ${NOTIFICATION_UPSTREAM_HOST}
+    port: ${NOTIFICATION_UPSTREAM_PORT}
+    path: /api/v1/notifications
+    routes:
+      - name: notification-route-legacy
+        paths:
+          - /api/v1/notifications
+        strip_path: true
+      - name: notification-route
+        paths:
+          - /notifications
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp
+
+  - name: templates-service
+    protocol: http
+    host: ${NOTIFICATION_UPSTREAM_HOST}
+    port: ${NOTIFICATION_UPSTREAM_PORT}
+    path: /api/v1/templates
+    routes:
+      - name: templates-route-legacy
+        paths:
+          - /api/v1/templates
+        strip_path: true
+      - name: templates-route
+        paths:
+          - /templates
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          key_claim_name: iss
+          claims_to_verify:
+            - exp

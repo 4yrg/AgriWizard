@@ -26,7 +26,10 @@ func main() {
 	smtpUser := getEnv("SMTP_USERNAME", "")
 	smtpPass := getEnv("SMTP_PASSWORD", "")
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	// ---- Database ----
@@ -56,12 +59,27 @@ func main() {
 		Password: smtpPass,
 	})
 
-	// ---- NATS JetStream consumer ----
+	// ---- NATS JetStream consumer (fallback) ----
 	consumer, err := StartConsumer(natsURL, dispatcher)
 	if err != nil {
-		log.Printf("[WARN] NATS consumer failed to start: %v (REST API still available)", err)
+		log.Printf("[WARN] NATS consumer failed to start: %v", err)
 	} else {
 		defer consumer.Close()
+	}
+
+	// ---- Azure Service Bus consumer ----
+	rmqConsumer, err := NewRabbitMQConsumer(rabbitmqUrl, queueName, dispatcher)
+	if err != nil {
+		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
+	}
+	if rmqConsumer != nil && rmqConsumer.IsConnected() {
+		go func() {
+			<-rmqConsumer.Ready()
+			log.Println("[INFO] RabbitMQ consumer ready")
+			if err := rmqConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
+			}
+		}()
 	}
 
 	// ---- HTTP server ----

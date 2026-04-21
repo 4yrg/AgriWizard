@@ -82,13 +82,23 @@ func main() {
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	rabbitmqUrl := getRabbitMQUrl()
+	queueName := getQueueName()
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
 
+	rmqPublisher, err := NewRabbitMQPublisher(rabbitmqUrl, queueName)
+	if err != nil {
+		log.Printf("[WARN] RabbitMQ publisher initialization failed: %v", err)
+	}
+
 	// --- Router ---
-	if getEnv("GIN_MODE", "debug") == "release" {
+	if getEnv("GIN_MODE", "debug") == "debug" {
+		gin.SetMode(gin.DebugMode)
+	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -105,8 +115,9 @@ func main() {
 			"status":    s,
 			"service":   "hardware-service",
 			"db_ready":  status.IsReady(),
-			"migrated":  status.IsMigrated(),
-			"mqtt_conn": status.IsMQTTConnected(),
+			"migrated":  status.migrated,
+			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
+			"rmq_conn":  rmqPublisher.IsConnected(),
 		})
 	})
 
@@ -146,10 +157,32 @@ func main() {
 			log.Println("[INFO] Hardware Service fully ready")
 			return
 		}
+
+		if err := runMigrations(db); err != nil {
+			log.Printf("[ERROR] Migrations: %v", err)
+			db.Close()
+			return
+		}
+
+		// Set ready with DB first (MQTT is optional)
+		status.SetReady(db, nil)
+		status.SetMigrated()
+		log.Println("[INFO] Hardware Service ready (DB connected)")
+
+		// Try MQTT in background (non-blocking)
+		go func() {
+			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
+			if mqttClient != nil {
+				status.SetReady(db, mqttClient)
+				restoreSubscriptions(db, mqttClient, rmqPublisher)
+				log.Println("[INFO] MQTT connected, subscriptions restored")
+			}
+		}()
+		log.Println("[INFO] Hardware Service fully ready")
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL)
+	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
@@ -195,6 +228,11 @@ func connectDB(dsn string) (*sql.DB, error) {
 }
 
 func connectMQTT(broker, username, password string) mqtt.Client {
+	if broker == "" {
+		log.Println("[INFO] MQTT broker not configured, skipping MQTT")
+		return nil
+	}
+
 	opts := mqtt.NewClientOptions().
 		AddBroker(broker).
 		SetClientID("agriwizard-hardware-service").
@@ -229,7 +267,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
-func restoreSubscriptions(db *sql.DB, client mqtt.Client) {
+func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher) {
 	if !client.IsConnected() {
 		return
 	}
@@ -241,6 +279,10 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client) {
 			if rows.Scan(&topic) == nil {
 				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
+					// Also publish to RabbitMQ for analytics
+					if rmqPublisher != nil && rmqPublisher.IsConnected() {
+						log.Printf("[DEBUG] Would publish to RabbitMQ: %s", msg.Topic())
+					}
 				})
 			}
 		}
