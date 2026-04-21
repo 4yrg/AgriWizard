@@ -44,7 +44,7 @@ A secure, cloud-native microservice backend for intelligent greenhouse automatio
 | Hardware Service | 8082 | IoT device management |
 | Analytics Service | 8083 | Threshold logic & decisions |
 | Weather Service | 8084 | Weather intelligence |
-| PostgreSQL | 5432 | Shared DB (seperate schemas) |
+| PostgreSQL | 5432 | Shared DB (separate schemas) |
 | HiveMQ Cloud MQTT | external (typically 8883 TLS) | IoT message broker |
 
 *Direct service port is 8084 (gateway entry remains 8080).
