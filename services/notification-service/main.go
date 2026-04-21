@@ -133,7 +133,9 @@ func main() {
 	log.Println("[INFO] Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	server.Shutdown(ctx)
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("[ERROR] Graceful shutdown failed: %v", err)
+	}
 	log.Println("[INFO] Notification Service stopped")
 }
 
