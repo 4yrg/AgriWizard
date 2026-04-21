@@ -73,7 +73,7 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 		dbHost, dbPort, dbUser, dbPass, dbName)
 
 	status := &ServiceStatus{}
