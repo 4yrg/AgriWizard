@@ -73,7 +73,7 @@ jobs:
           curl -sf http://localhost:8084/health || exit 1
           
           echo "Checking Kong gateway..."
-          curl -sf http://localhost:8001/health || exit 1
+          curl -sf http://localhost:8001/status || exit 1
 
       - name: Cleanup
         if: always()
