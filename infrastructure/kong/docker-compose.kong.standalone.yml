@@ -21,6 +21,7 @@ services:
       KONG_LOG_LEVEL: info
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_JWT_SHARED_SECRET: ${KONG_JWT_SHARED_SECRET:-super-secret-jwt-key-change-in-production}
+      KONG_JWT_ISSUER: ${KONG_JWT_ISSUER:-agriwizard-iam}
       CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
       IAM_UPSTREAM_HOST: ${IAM_UPSTREAM_HOST:-iam-service}
       IAM_UPSTREAM_PORT: ${IAM_UPSTREAM_PORT:-8081}
