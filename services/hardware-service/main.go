@@ -63,6 +63,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "agriwizard")
 	dbPass := getEnv("DB_PASSWORD", "agriwizard_secret")
 	dbName := getEnv("DB_NAME", "agriwizard")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	mqttBroker := getEnv("MQTT_BROKER", "tcp://localhost:1883")
 	mqttUsername := getEnv("MQTT_USERNAME", "")
 	mqttPassword := getEnv("MQTT_PASSWORD", "")
@@ -73,8 +74,8 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	status := &ServiceStatus{}
 
@@ -99,13 +100,16 @@ func main() {
 		if !status.IsReady() {
 			s = "starting"
 		}
+		mqttClient := status.GetMQTTClient()
+		mqttConnected := mqttClient != nil && mqttClient.IsConnected()
+		rmqConnected := rmqPublisher != nil && rmqPublisher.IsConnected()
 		c.JSON(http.StatusOK, gin.H{
 			"status":    s,
 			"service":   "hardware-service",
 			"db_ready":  status.IsReady(),
 			"migrated":  status.migrated,
-			"mqtt_conn": status.mqttClient != nil && status.mqttClient.IsConnected(),
-			"rmq_conn":  rmqPublisher.IsConnected(),
+			"mqtt_conn": mqttConnected,
+			"rmq_conn":  rmqConnected,
 		})
 	})
 

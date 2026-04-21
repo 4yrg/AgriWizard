@@ -56,6 +56,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "agriwizard")
 	dbPass := getEnv("DB_PASSWORD", "agriwizard_secret")
 	dbName := getEnv("DB_NAME", "agriwizard")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	jwtIssuer := getEnv("JWT_ISSUER", "agriwizard-iam")
 	jwtTTLHours := getEnv("JWT_TTL_HOURS", "24")
@@ -67,8 +68,8 @@ func main() {
 	}
 
 	// --- Database Connection ---
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	dbStatus := &DBStatus{}
 

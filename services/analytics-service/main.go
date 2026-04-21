@@ -55,6 +55,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "agriwizard")
 	dbPass := getEnv("DB_PASSWORD", "agriwizard_secret")
 	dbName := getEnv("DB_NAME", "agriwizard")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	hardwareURL := getEnv("HARDWARE_SERVICE_URL", "http://hardware-service:8082")
 	weatherURL := getEnv("WEATHER_SERVICE_URL", "http://weather-service:8084")
@@ -63,8 +64,8 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	status := &ServiceStatus{}
 

@@ -18,7 +18,7 @@ body:json {
   {
     "name": "threshold_alert",
     "channel": "email",
-    "subject_template": "Alert: {{.param}} out of range",
-    "body_template": "<h2>{{.param}}</h2><p>Current value: <b>{{.value}}{{.unit}}</b></p><p>Please check your greenhouse.</p>"
+    "subject_template": "Alert: \u007b\u007b.param\u007d\u007d out of range",
+    "body_template": "<h2>\u007b\u007b.param\u007d\u007d</h2><p>Current value: <b>\u007b\u007b.value\u007d\u007d\u007b\u007b.unit\u007d\u007d</b></p><p>Please check your greenhouse.</p>"
   }
 }

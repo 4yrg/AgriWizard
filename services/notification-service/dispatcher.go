@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -76,7 +77,7 @@ func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) erro
 	if !ok {
 		errMsg := fmt.Sprintf("unknown channel: %s", req.Channel)
 		d.store.UpdateStatus(n.ID, "failed", errMsg, nil)
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 
 	// 5. Deliver

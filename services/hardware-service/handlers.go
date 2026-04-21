@@ -88,9 +88,11 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 		return
 	}
 
-	// Subscribe to the newly created equipment topic to receive status updates
-	if token := h.mqttClient().Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
-		log.Printf("[WARN] CreateEquipment: mqtt subscribe failed: %v", token.Error())
+	// Subscribe to the newly created equipment topic to receive status updates.
+	if client := h.mqttClient(); client != nil && client.IsConnected() {
+		if token := client.Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
+			log.Printf("[WARN] CreateEquipment: mqtt subscribe failed: %v", token.Error())
+		}
 	}
 
 	log.Printf("[INFO] CreateEquipment: registered id=%s name=%s topic=%s", id, req.Name, mqttTopic)
@@ -200,7 +202,13 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	}
 	msgBytes, _ := json.Marshal(mqttMsg)
 
-	token := h.mqttClient().Publish(eq.MQTTTopic, 1, false, msgBytes)
+	client := h.mqttClient()
+	if client == nil || !client.IsConnected() {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: "mqtt_unavailable", Message: "mqtt connection is not available"})
+		return
+	}
+
+	token := client.Publish(eq.MQTTTopic, 1, false, msgBytes)
 	token.Wait()
 	if token.Error() != nil {
 		log.Printf("[ERROR] DispatchControl: mqtt publish: %v", token.Error())
@@ -262,8 +270,12 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 		return
 	}
 
-	// Subscribe to telemetry topic for incoming data
-	h.mqttClient().Subscribe(mqttTopic, 1, h.handleTelemetry)
+	// Subscribe to telemetry topic for incoming data when MQTT is available.
+	if client := h.mqttClient(); client != nil && client.IsConnected() {
+		if token := client.Subscribe(mqttTopic, 1, h.handleTelemetry); token.Wait() && token.Error() != nil {
+			log.Printf("[WARN] CreateSensor: mqtt subscribe failed: %v", token.Error())
+		}
+	}
 
 	log.Printf("[INFO] CreateSensor: provisioned id=%s name=%s topic=%s", id, req.Name, mqttTopic)
 	c.JSON(http.StatusCreated, SuccessResponse{

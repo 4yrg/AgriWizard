@@ -9,6 +9,7 @@ x-common-env: &common-env
   DB_USER: agriwizard
   DB_PASSWORD: agriwizard_secret
   DB_NAME: agriwizard
+  DB_SSLMODE: "${DB_SSLMODE:-disable}"
   JWT_SECRET: super-secret-jwt-key-change-in-production
   JWT_ISSUER: agriwizard-iam
   GIN_MODE: release
@@ -246,6 +247,7 @@ services:
       DB_USER: agriwizard
       DB_PASSWORD: agriwizard_secret
       DB_NAME: agriwizard
+      DB_SSLMODE: "${DB_SSLMODE:-disable}"
       NATS_URL: nats://nats:4222
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"

@@ -39,6 +39,7 @@ SMTP_PORT="${SMTP_PORT:-1025}"
 SMTP_FROM="${SMTP_FROM:-noreply@agriwizard.local}"
 SMTP_USERNAME="${SMTP_USERNAME:-}"
 SMTP_PASSWORD="${SMTP_PASSWORD:-}"
+DB_SSLMODE="${DB_SSLMODE:-require}"
 
 USE_MOCK="${USE_MOCK:-true}"
 OWM_API_KEY="${OWM_API_KEY:-}"
@@ -88,6 +89,7 @@ deploy_internal_app "iam-service" "agriwizard-iam-service" "8081" "1" "3" "${LIG
   "DB_USER=${POSTGRES_USER}" \
   "DB_PASSWORD=${POSTGRES_PASSWORD}" \
   "DB_NAME=${POSTGRES_DB}" \
+  "DB_SSLMODE=${DB_SSLMODE}" \
   "JWT_SECRET=${JWT_SECRET}" \
   "JWT_ISSUER=${JWT_ISSUER}" \
   "JWT_TTL_HOURS=24" \
@@ -101,6 +103,7 @@ deploy_internal_app "hardware-service" "agriwizard-hardware-service" "8082" "1" 
   "DB_USER=${POSTGRES_USER}" \
   "DB_PASSWORD=${POSTGRES_PASSWORD}" \
   "DB_NAME=${POSTGRES_DB}" \
+  "DB_SSLMODE=${DB_SSLMODE}" \
   "JWT_SECRET=${JWT_SECRET}" \
   "ANALYTICS_SERVICE_URL=http://analytics-service:8083" \
   "MQTT_BROKER=${MQTT_BROKER}" \
@@ -118,6 +121,7 @@ deploy_internal_app "analytics-service" "agriwizard-analytics-service" "8083" "1
   "DB_USER=${POSTGRES_USER}" \
   "DB_PASSWORD=${POSTGRES_PASSWORD}" \
   "DB_NAME=${POSTGRES_DB}" \
+  "DB_SSLMODE=${DB_SSLMODE}" \
   "JWT_SECRET=${JWT_SECRET}" \
   "HARDWARE_SERVICE_URL=http://hardware-service:8082" \
   "WEATHER_SERVICE_URL=http://weather-service:8084" \
@@ -147,6 +151,7 @@ deploy_internal_app "notification-service" "agriwizard-notification-service" "80
   "DB_USER=${POSTGRES_USER}" \
   "DB_PASSWORD=${POSTGRES_PASSWORD}" \
   "DB_NAME=${POSTGRES_DB}" \
+  "DB_SSLMODE=${DB_SSLMODE}" \
   "NATS_URL=${NATS_URL}" \
   "SMTP_HOST=${SMTP_HOST}" \
   "SMTP_PORT=${SMTP_PORT}" \

@@ -39,6 +39,7 @@ az containerapp update \
   --name ${PREFIX}-iam-service \
   --resource-group ${RESOURCE_GROUP} \
   --image ${REGISTRY}/agriwizard-iam-service:${TAG} \
+  --set-env-vars DB_SSLMODE=require \
   --format json > /dev/null 2>&1 && echo "  ✓ IAM Service deployed" || echo "  ✗ IAM Service failed"
 
 # Hardware Service
@@ -47,6 +48,7 @@ az containerapp update \
   --name ${PREFIX}-hardware-service \
   --resource-group ${RESOURCE_GROUP} \
   --image ${REGISTRY}/agriwizard-hardware-service:${TAG} \
+  --set-env-vars DB_SSLMODE=require \
   --format json > /dev/null 2>&1 && echo "  ✓ Hardware Service deployed" || echo "  ✗ Hardware Service failed"
 
 # Analytics Service
@@ -55,6 +57,7 @@ az containerapp update \
   --name ${PREFIX}-analytics-service \
   --resource-group ${RESOURCE_GROUP} \
   --image ${REGISTRY}/agriwizard-analytics-service:${TAG} \
+  --set-env-vars DB_SSLMODE=require \
   --format json > /dev/null 2>&1 && echo "  ✓ Analytics Service deployed" || echo "  ✗ Analytics Service failed"
 
 # Weather Service
@@ -71,6 +74,7 @@ az containerapp update \
   --name ${PREFIX}-notification-service \
   --resource-group ${RESOURCE_GROUP} \
   --image ${REGISTRY}/agriwizard-notification-service:${TAG} \
+  --set-env-vars DB_SSLMODE=require \
   --format json > /dev/null 2>&1 && echo "  ✓ Notification Service deployed" || echo "  ✗ Notification Service failed"
 
 echo ""

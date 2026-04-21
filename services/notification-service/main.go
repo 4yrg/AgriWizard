@@ -19,6 +19,7 @@ func main() {
 	dbUser := getEnv("DB_USER", "notification")
 	dbPass := getEnv("DB_PASSWORD", "notification_secret")
 	dbName := getEnv("DB_NAME", "notification")
+	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
 	smtpHost := getEnv("SMTP_HOST", "localhost")
 	smtpPort := getEnv("SMTP_PORT", "1025")
@@ -29,8 +30,8 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
 	// ---- Database ----
 	db, err := ConnectDB(dsn)
