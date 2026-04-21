@@ -179,7 +179,7 @@ function WeatherCard() {
                     : ""
                 }
               >
-                {recommendation.scale.toFixed(1)}x
+                {recommendation.scale != null ? recommendation.scale.toFixed(1) : "0.0"}x
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -257,7 +257,7 @@ function DecisionSummaryCard({
                   </div>
                   <div className="text-right">
                     <p className="font-medium">
-                      {entry.latest_value !== null
+                      {entry.latest_value != null
                         ? entry.latest_value.toFixed(1)
                         : "-"}
                     </p>

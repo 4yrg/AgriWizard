@@ -101,7 +101,7 @@ function getWeatherIcon(description: string) {
 
 function IrrigationGauge({ scale }: { scale: number }) {
   const percentage = Math.min(Math.max((scale / 2) * 100, 0), 100);
-  const displayScale = scale.toFixed(1);
+  const displayScale = scale != null ? scale.toFixed(1) : "0.0";
 
   let color = "bg-emerald-500";
   let recommendation = "Normal irrigation";
@@ -261,7 +261,7 @@ export default function WeatherPage() {
                     <Thermometer className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm font-medium">
-                        {recommendation.current_temperature_celsius}°C
+                        {recommendation.current_temperature_celsius != null ? recommendation.current_temperature_celsius.toFixed(1) : "0.0"}°C
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Temperature

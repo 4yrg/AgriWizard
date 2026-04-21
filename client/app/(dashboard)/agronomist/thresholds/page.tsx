@@ -422,7 +422,7 @@ function ThresholdRow({
       </TableCell>
       <TableCell>
         <span className="font-medium">
-          {entry.latest_value !== null ? entry.latest_value.toFixed(2) : "-"}
+          {entry.latest_value != null ? entry.latest_value.toFixed(2) : "-"}
         </span>
       </TableCell>
       <TableCell>
