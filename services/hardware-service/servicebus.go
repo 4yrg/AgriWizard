@@ -30,7 +30,7 @@ func NewAzureServiceBusPublisher(connectionString, topicName string) (*AzureServ
 	sender, err := client.NewSender(topicName, nil)
 	if err != nil {
 		log.Printf("[WARN] Failed to create Service Bus sender: %v", err)
-		client.Close(nil)
+		client.Close(context.TODO())
 		return &AzureServiceBusPublisher{connected: false}, nil
 	}
 
@@ -77,10 +77,10 @@ func (p *AzureServiceBusPublisher) IsConnected() bool {
 
 func (p *AzureServiceBusPublisher) Close() error {
 	if p.sender != nil {
-		p.sender.Close(nil)
+		p.sender.Close(context.TODO())
 	}
 	if p.client != nil {
-		return p.client.Close(nil)
+		return p.client.Close(context.TODO())
 	}
 	return nil
 }

@@ -33,7 +33,7 @@ func NewAzureServiceBusNotificationConsumer(connectionString, topicName, subscri
 	receiver, err := client.NewReceiverForSubscription(topicName, subscription, nil)
 	if err != nil {
 		log.Printf("[WARN] Failed to create Service Bus receiver: %v", err)
-		client.Close(nil)
+		client.Close(context.TODO())
 		return &AzureServiceBusNotificationConsumer{connected: false, ready: make(chan struct{})}, nil
 	}
 

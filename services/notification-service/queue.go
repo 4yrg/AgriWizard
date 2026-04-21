@@ -59,17 +59,23 @@ func StartConsumer(natsURL string, dispatcher *Dispatcher) (*Consumer, error) {
 		var req NotificationRequest
 		if err := json.Unmarshal(msg.Data, &req); err != nil {
 			log.Printf("[ERROR] Unmarshal NATS message: %v", err)
-			msg.Term() // terminal failure — don't redeliver
+			if termErr := msg.Term(); termErr != nil { // terminal failure — don't redeliver
+				log.Printf("[ERROR] Failed to terminate NATS message: %v", termErr)
+			}
 			return
 		}
 
 		if err := dispatcher.Process(context.Background(), &req); err != nil {
 			log.Printf("[ERROR] Process notification: %v", err)
-			msg.Nak() // redelivery
+			if nakErr := msg.Nak(); nakErr != nil { // redelivery
+				log.Printf("[ERROR] Failed to NAK NATS message: %v", nakErr)
+			}
 			return
 		}
 
-		msg.Ack()
+		if ackErr := msg.Ack(); ackErr != nil {
+			log.Printf("[ERROR] Failed to ACK NATS message: %v", ackErr)
+		}
 	},
 		nats.Durable("notification-service"),
 		nats.ManualAck(),
@@ -87,9 +93,13 @@ func StartConsumer(natsURL string, dispatcher *Dispatcher) (*Consumer, error) {
 
 func (c *Consumer) Close() {
 	if c.sub != nil {
-		c.sub.Unsubscribe()
+		if err := c.sub.Unsubscribe(); err != nil {
+			log.Printf("[WARN] Failed to unsubscribe NATS consumer: %v", err)
+		}
 	}
 	if c.nc != nil {
-		c.nc.Drain()
+		if err := c.nc.Drain(); err != nil {
+			log.Printf("[WARN] Failed to drain NATS connection: %v", err)
+		}
 	}
 }
