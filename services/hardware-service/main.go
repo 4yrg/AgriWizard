@@ -164,35 +164,13 @@ func main() {
 			}
 
 			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-			restoreSubscriptions(db, mqttClient)
+			restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
 
 			status.SetReady(db, mqttClient)
 			status.SetMigrated()
 			log.Println("[INFO] Hardware Service fully ready")
 			return
 		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migrations: %v", err)
-			db.Close()
-			return
-		}
-
-		// Set ready with DB first (MQTT is optional)
-		status.SetReady(db, nil)
-		status.SetMigrated()
-		log.Println("[INFO] Hardware Service ready (DB connected)")
-
-		// Try MQTT in background (non-blocking)
-		go func() {
-			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-			if mqttClient != nil {
-				status.SetReady(db, mqttClient)
-				restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
-				log.Println("[INFO] MQTT connected, subscriptions restored")
-			}
-		}()
-		log.Println("[INFO] Hardware Service fully ready")
 	}()
 
 	// Setup API routes
