@@ -1,0 +1,100 @@
+%%{init: {'theme':'base','themeVariables': {
+  'fontFamily': 'Inter, Segoe UI, Arial',
+  'fontSize': '14px',
+  'lineColor': '#5C6B7A',
+  'primaryTextColor': '#0F172A',
+  'edgeLabelBackground': '#F8FAFC'
+}}}%%
+
+flowchart LR
+  %% Clients
+  subgraph Clients
+    WEB[Web / Admin UI]
+    MOBILE[Mobile App]
+    DEVICE[ESP32 Firmware Device]
+  end
+
+  %% Edge
+  subgraph Edge
+    GW[API Gateway\nTraefik :8080]
+  end
+
+  %% Core Services
+  subgraph Services
+    IAM[IAM Service :8081]
+    HW[Hardware Service :8082]
+    AN[Analytics Service :8083]
+    WTH[Weather Service :8084]
+    NOTIF[Notification Service\nEmail / SMS / Push]
+  end
+
+  %% Messaging + Data
+  subgraph MessagingAndData
+    MQTT[MQTT Broker\nHiveMQ Cloud :8883 TLS]
+    EQ[Event Queue\nKafka / RabbitMQ]
+    PG[(PostgreSQL :5432)]
+    OWM[OpenWeatherMap API]
+  end
+
+  %% Client/API flow
+  WEB --> GW
+  MOBILE --> GW
+  GW --> IAM
+  GW --> HW
+  GW --> AN
+  GW --> WTH
+  GW --> NOTIF
+
+  %% Device/MQTT flow
+  DEVICE -- publish telemetry --> MQTT
+  MQTT -- telemetry topic --> HW
+  HW -- command topic --> MQTT
+  MQTT -- equipment commands --> DEVICE
+  DEVICE -- status topic --> MQTT
+  MQTT -- status ack --> HW
+
+  %% Service-to-service calls
+  HW --> AN
+  AN --> HW
+  AN --> WTH
+  WTH --> OWM
+
+  %% Database
+  IAM --> PG
+  HW --> PG
+  AN --> PG
+  WTH --> PG
+  NOTIF --> PG
+
+  %% Event Queue interactions (all services)
+  IAM <--> EQ
+  HW <--> EQ
+  AN <--> EQ
+  WTH <--> EQ
+  NOTIF <--> EQ
+
+  %% Notification fan-out
+  NOTIF --> WEB
+  NOTIF --> MOBILE
+  NOTIF --> DEVICE
+
+  %% Subgraph styling
+  style Clients fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#0F172A
+  style Edge fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#0F172A
+  style Services fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#0F172A
+  style MessagingAndData fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#0F172A
+
+  %% Node classes
+  classDef client fill:#E0F2FE,stroke:#0284C7,stroke-width:1.5px,color:#0C4A6E;
+  classDef gateway fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
+  classDef service fill:#DCFCE7,stroke:#16A34A,stroke-width:1.5px,color:#14532D;
+  classDef messaging fill:#FEF3C7,stroke:#D97706,stroke-width:1.5px,color:#78350F;
+  classDef storage fill:#FCE7F3,stroke:#DB2777,stroke-width:1.5px,color:#831843;
+  classDef external fill:#E5E7EB,stroke:#6B7280,stroke-width:1.5px,color:#111827;
+
+  class WEB,MOBILE,DEVICE client;
+  class GW gateway;
+  class IAM,HW,AN,WTH,NOTIF service;
+  class MQTT,EQ messaging;
+  class PG storage;
+  class OWM external;
