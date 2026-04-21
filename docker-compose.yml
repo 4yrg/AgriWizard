@@ -289,6 +289,7 @@ services:
       KONG_LOG_LEVEL: info
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_JWT_SHARED_SECRET: "${JWT_SECRET:-super-secret-jwt-key-change-in-production}"
+      KONG_JWT_ISSUER: "${JWT_ISSUER:-agriwizard-iam}"
       CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
       IAM_UPSTREAM_PROTOCOL: "http"
       IAM_UPSTREAM_HOST: iam-service

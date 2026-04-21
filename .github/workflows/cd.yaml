@@ -129,6 +129,23 @@ jobs:
         run: |
           echo "password=$(az acr credential show -n ${{ env.REGISTRY_NAME }} --query passwords[0].value -o tsv)" >> $GITHUB_OUTPUT
 
+      - name: Validate required deployment secrets
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          for key in DB_HOST DB_USER DB_PASSWORD DB_NAME JWT_SECRET ACR_USERNAME ACR_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing required secret: ${key}"
+              exit 1
+            fi
+          done
+
       - name: Deploy IAM Service
         run: |
           az containerapp up \
@@ -199,7 +216,7 @@ jobs:
             --registry-server ${{ env.REGISTRY }} \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password "${{ secrets.ACR_PASSWORD }}" \
-            --env-vars "KONG_DATABASE=off" "KONG_PROXY_LISTEN=0.0.0.0:8000" "KONG_ADMIN_LISTEN=127.0.0.1:8001" "KONG_LOG_LEVEL=info" "KONG_JWT_SHARED_SECRET=${{ secrets.JWT_SECRET }}" "CORS_ALLOW_ORIGIN=*" "ACA_FQDN_SUFFIX=${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_HOST=https://iam-service.${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_PORT=443" "HARDWARE_UPSTREAM_HOST=https://hardware-service.${{ env.FQDN_SUFFIX }}" "HARDWARE_UPSTREAM_PORT=443" "ANALYTICS_UPSTREAM_HOST=https://analytics-service.${{ env.FQDN_SUFFIX }}" "ANALYTICS_UPSTREAM_PORT=443" "WEATHER_UPSTREAM_HOST=https://weather-service.${{ env.FQDN_SUFFIX }}" "WEATHER_UPSTREAM_PORT=443" "NOTIFICATION_UPSTREAM_HOST=https://notification-service.${{ env.FQDN_SUFFIX }}" "NOTIFICATION_UPSTREAM_PORT=443"
+            --env-vars "KONG_DATABASE=off" "KONG_PROXY_LISTEN=0.0.0.0:8000" "KONG_ADMIN_LISTEN=127.0.0.1:8001" "KONG_LOG_LEVEL=info" "KONG_JWT_SHARED_SECRET=${{ secrets.JWT_SECRET }}" "KONG_JWT_ISSUER=agriwizard-iam" "CORS_ALLOW_ORIGIN=*" "ACA_FQDN_SUFFIX=${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_HOST=https://iam-service.${{ env.FQDN_SUFFIX }}" "IAM_UPSTREAM_PORT=443" "HARDWARE_UPSTREAM_HOST=https://hardware-service.${{ env.FQDN_SUFFIX }}" "HARDWARE_UPSTREAM_PORT=443" "ANALYTICS_UPSTREAM_HOST=https://analytics-service.${{ env.FQDN_SUFFIX }}" "ANALYTICS_UPSTREAM_PORT=443" "WEATHER_UPSTREAM_HOST=https://weather-service.${{ env.FQDN_SUFFIX }}" "WEATHER_UPSTREAM_PORT=443" "NOTIFICATION_UPSTREAM_HOST=https://notification-service.${{ env.FQDN_SUFFIX }}" "NOTIFICATION_UPSTREAM_PORT=443"
 
   summary:
     name: Deployment Summary

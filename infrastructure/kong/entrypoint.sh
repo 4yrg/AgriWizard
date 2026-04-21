@@ -2,6 +2,7 @@
 set -eu
 
 export KONG_JWT_SHARED_SECRET="${KONG_JWT_SHARED_SECRET:-super-secret-jwt-key-change-in-production}"
+export KONG_JWT_ISSUER="${KONG_JWT_ISSUER:-${JWT_ISSUER:-agriwizard-iam}}"
 export CORS_ALLOW_ORIGIN="${CORS_ALLOW_ORIGIN:-*}"
 
 # Azure Container Apps - Public FQDN suffix
@@ -42,6 +43,7 @@ replace_var() {
 }
 
 replace_var "KONG_JWT_SHARED_SECRET"
+replace_var "KONG_JWT_ISSUER"
 replace_var "CORS_ALLOW_ORIGIN"
 replace_var "IAM_UPSTREAM_PROTOCOL"
 replace_var "IAM_UPSTREAM_HOST"

@@ -3,13 +3,11 @@ _transform: true
 
 # NOTE:
 # This file is rendered by `infrastructure/kong/entrypoint.sh` using env vars.
-# Updated for Azure Container Apps Consumption mode - uses PUBLIC FQDN URLs
-# because internal DNS resolution is not available between containers.
 
 consumers:
   - username: agriwizard-clients
     jwt_secrets:
-      - key: agriwizard-iam
+      - key: "${KONG_JWT_ISSUER}"
         algorithm: HS256
         secret: "${KONG_JWT_SHARED_SECRET}"
 
@@ -44,7 +42,6 @@ plugins:
       fault_tolerant: true
       hide_client_headers: false
 
-# IAM Service - uses PUBLIC URL in Consumption mode
 services:
   - name: iam-service
     protocol: ${IAM_UPSTREAM_PROTOCOL}
