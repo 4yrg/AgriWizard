@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +83,7 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
+	corsAllowOrigin := getEnv("CORS_ALLOW_ORIGIN", "*")
 
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
@@ -113,6 +115,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(corsMiddleware(corsAllowOrigin))
 
 	// Health check - available immediately
 	r.GET("/health", func(c *gin.Context) {
@@ -164,35 +167,13 @@ func main() {
 			}
 
 			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-			restoreSubscriptions(db, mqttClient)
+			restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
 
 			status.SetReady(db, mqttClient)
 			status.SetMigrated()
 			log.Println("[INFO] Hardware Service fully ready")
 			return
 		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migrations: %v", err)
-			db.Close()
-			return
-		}
-
-		// Set ready with DB first (MQTT is optional)
-		status.SetReady(db, nil)
-		status.SetMigrated()
-		log.Println("[INFO] Hardware Service ready (DB connected)")
-
-		// Try MQTT in background (non-blocking)
-		go func() {
-			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-			if mqttClient != nil {
-				status.SetReady(db, mqttClient)
-				restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
-				log.Println("[INFO] MQTT connected, subscriptions restored")
-			}
-		}()
-		log.Println("[INFO] Hardware Service fully ready")
 	}()
 
 	// Setup API routes
@@ -373,4 +354,64 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func corsMiddleware(allowOriginConfig string) gin.HandlerFunc {
+	allowedOrigins := normalizeOrigins(allowOriginConfig)
+	allowAnyOrigin := len(allowedOrigins) == 0
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+
+		switch {
+		case allowAnyOrigin:
+			c.Header("Access-Control-Allow-Origin", "*")
+		case origin != "" && isAllowedOrigin(origin, allowedOrigins):
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		default:
+			c.Header("Access-Control-Allow-Origin", allowedOrigins[0])
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, X-Internal-Service")
+		c.Header("Access-Control-Max-Age", "3600")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func normalizeOrigins(config string) []string {
+	if strings.TrimSpace(config) == "" || strings.TrimSpace(config) == "*" {
+		return nil
+	}
+
+	parts := strings.Split(config, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+
+	if len(origins) == 0 {
+		return nil
+	}
+
+	return origins
+}
+
+func isAllowedOrigin(origin string, allowedOrigins []string) bool {
+	for _, allowed := range allowedOrigins {
+		if strings.EqualFold(origin, allowed) {
+			return true
+		}
+	}
+	return false
 }
