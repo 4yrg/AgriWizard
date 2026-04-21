@@ -1,0 +1,26 @@
+meta {
+  name: Update Profile
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/iam/profile
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "full_name": "{{fullName}}",
+    "phone": "{{phone}}"
+  }
+}

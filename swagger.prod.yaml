@@ -1,0 +1,765 @@
+openapi: "3.0.3"
+info:
+  title: AgriWizard — Smart Greenhouse Management API (Production)
+  description: |
+    Complete REST API for the AgriWizard microservice ecosystem.
+    All protected endpoints require a Bearer JWT token obtained from the IAM service `/login` endpoint.
+
+    ## Base URL
+    ```
+    https://kong-gateway.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    ```
+
+    ## Services
+    | Service | Path | Description |
+    |---------|------|-------------|
+    | IAM Service | /api/v1/iam | Authentication & RBAC |
+    | Hardware Service | /api/v1/hardware | IoT device management & MQTT control |
+    | Analytics Service | /api/v1/analytics | Threshold rules & decision logic |
+    | Weather Service | /api/v1/weather | External weather intelligence |
+    | Notifications | /api/v1/notifications | Email/SMS notifications |
+    | Templates | /api/v1/templates | Notification templates |
+
+    ## Authentication Flow
+    1. `POST /api/v1/iam/register` — Create an account
+    2. `POST /api/v1/iam/login` — Obtain JWT token
+    3. Include `Authorization: Bearer <token>` on all subsequent requests
+
+    ## API Version
+    Current version: **1.0.0**
+
+    ## Deployment
+    - Cloud: Azure Container Apps (Central India)
+    - Gateway: Kong API Gateway
+    - Database: Azure Database for PostgreSQL
+  version: "1.0.0"
+  contact:
+    name: AgriWizard Team
+    email: support@agriwizard.io
+  license:
+    name: MIT
+
+servers:
+  - url: https://kong-gateway.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Production (Kong Gateway)
+  - url: https://iam-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: IAM Service (direct)
+  - url: https://hardware-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Hardware Service (direct)
+  - url: https://analytics-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Analytics Service (direct)
+  - url: https://weather-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Weather Service (direct)
+  - url: https://notification-service.purplesand-4413bcdd.centralindia.azurecontainerapps.io
+    description: Notification Service (direct)
+  - url: http://localhost:8080
+    description: Local development
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from `/api/v1/iam/login`
+
+  responses:
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: invalid_request
+        message:
+          type: string
+          example: field 'email' is required
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    RegisterRequest:
+      type: object
+      required: [email, password, full_name]
+      properties:
+        email:
+          type: string
+          format: email
+          example: farmer@greenhouse.lk
+        password:
+          type: string
+          minLength: 8
+          example: Passw0rd!
+        full_name:
+          type: string
+          example: Kamal Perera
+        phone:
+          type: string
+          example: "+94771234567"
+        role:
+          type: string
+          enum: [Admin, Agromist]
+          default: Agromist
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        expires_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+paths:
+  /api/v1/iam/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: user created successfully
+                  user_id:
+                    type: string
+                    format: uuid
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/iam/login:
+    post:
+      summary: Login and obtain JWT token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/iam/profile:
+    get:
+      summary: Get current user profile
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  full_name:
+                    type: string
+                  role:
+                    type: string
+                  phone:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/hardware/devices:
+    get:
+      summary: List all hardware devices
+      tags: [Hardware]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    greenhouse_id:
+                      type: string
+                      format: uuid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      summary: Register a new device
+      tags: [Hardware]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type, greenhouse_id]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [SENSOR, ACTUATOR, CAMERA]
+                greenhouse_id:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Device created
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/hardware/telemetry:
+    post:
+      summary: Submit telemetry data
+      tags: [Hardware]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, temperature, humidity]
+              properties:
+                device_id:
+                  type: string
+                  format: uuid
+                temperature:
+                  type: number
+                  format: float
+                humidity:
+                  type: number
+                  format: float
+                soil_moisture:
+                  type: number
+                  format: float
+                light_intensity:
+                  type: number
+                  format: float
+                timestamp:
+                  type: string
+                  format: date-time
+      responses:
+        "202":
+          description: Telemetry accepted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/hardware/actuators/{id}/control:
+    post:
+      summary: Control an actuator
+      tags: [Hardware]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [ON, OFF, AUTO]
+      responses:
+        "200":
+          description: Actuator controlled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/analytics/thresholds:
+    get:
+      summary: Get threshold configurations
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of thresholds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    metric:
+                      type: string
+                    operator:
+                      type: string
+                    value:
+                      type: number
+                    action:
+                      type: string
+
+    post:
+      summary: Create a threshold rule
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [metric, operator, value, action]
+              properties:
+                metric:
+                  type: string
+                  enum: [temperature, humidity, soil_moisture, light_intensity]
+                operator:
+                  type: string
+                  enum: [gt, lt, eq, gte, lte]
+                value:
+                  type: number
+                action:
+                  type: string
+                greenhouse_id:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Threshold created
+
+  /api/v1/analytics/rules:
+    get:
+      summary: Get automation rules
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    condition:
+                      type: object
+                    action:
+                      type: object
+                    enabled:
+                      type: boolean
+
+  /api/v1/weather/current:
+    get:
+      summary: Get current weather
+      tags: [Weather]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          schema:
+            type: number
+            default: 6.9271
+        - name: lon
+          in: query
+          schema:
+            type: number
+            default: 79.8612
+      responses:
+        "200":
+          description: Current weather data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temperature:
+                    type: number
+                  humidity:
+                    type: number
+                  description:
+                    type: string
+                  icon:
+                    type: string
+
+  /api/v1/weather/forecast:
+    get:
+      summary: Get weather forecast
+      tags: [Weather]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          schema:
+            type: number
+        - name: lon
+          in: query
+          schema:
+            type: number
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Weather forecast
+
+  /api/v1/notifications/send:
+    post:
+      summary: Send notification
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, subject, body]
+              properties:
+                to:
+                  type: string
+                  format: email
+                subject:
+                  type: string
+                body:
+                  type: string
+                type:
+                  type: string
+                  enum: [email, sms, push]
+                  default: email
+      responses:
+        "202":
+          description: Notification queued
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/notifications/history:
+    get:
+      summary: Get notification history
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Notification history
+
+  /api/v1/templates:
+    get:
+      summary: List notification templates
+      tags: [Templates]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of templates
+
+    post:
+      summary: Create a template
+      tags: [Templates]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, subject, body]
+              properties:
+                name:
+                  type: string
+                subject:
+                  type: string
+                body:
+                  type: string
+                type:
+                  type: string
+                  enum: [email, sms, push]
+      responses:
+        "201":
+          description: Template created
+
+  /api/v1/greenhouses:
+    get:
+      summary: List greenhouses
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of greenhouses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    location:
+                      type: string
+                    area:
+                      type: number
+
+    post:
+      summary: Create a greenhouse
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, location, area]
+              properties:
+                name:
+                  type: string
+                location:
+                  type: string
+                area:
+                  type: number
+      responses:
+        "201":
+          description: Greenhouse created
+
+  /api/v1/greenhouses/{id}:
+    get:
+      summary: Get greenhouse details
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Greenhouse details
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      summary: Update greenhouse
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                location:
+                  type: string
+                area:
+                  type: number
+      responses:
+        "200":
+          description: Greenhouse updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Delete greenhouse
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Greenhouse deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/greenhouses/{id}/metrics:
+    get:
+      summary: Get greenhouse metrics
+      tags: [Greenhouses]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 1d]
+            default: 1h
+      responses:
+        "200":
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temperature:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                        value:
+                          type: number
+                  humidity:
+                    type: array
+                  soil_moisture:
+                    type: array
+                  light_intensity:
+                    type: array
+
+tags:
+  - name: Authentication
+    description: User authentication and management
+  - name: Hardware
+    description: IoT device management and telemetry
+  - name: Analytics
+    description: Threshold rules and automation
+  - name: Weather
+    description: Weather data and forecasts
+  - name: Notifications
+    description: Email and push notifications
+  - name: Templates
+    description: Notification templates
+  - name: Greenhouses
+    description: Greenhouse management

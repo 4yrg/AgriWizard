@@ -1,0 +1,24 @@
+meta {
+  name: Update Template
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{notificationBaseUrl}}/api/v1/templates/{{templateId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "threshold_alert_v2",
+    "channel": "email",
+    "subject_template": "Alert: \u007b\u007b.param\u007d\u007d is critical",
+    "body_template": "<h2>\u007b\u007b.param\u007d\u007d</h2><p>Value: <b>\u007b\u007b.value\u007d\u007d\u007b\u007b.unit\u007d\u007d</b></p><p>Immediate action required.</p>"
+  }
+}
