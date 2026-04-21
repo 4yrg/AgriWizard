@@ -30,6 +30,10 @@ func main() {
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
 
+	serviceBusConnection := getServiceBusNotificationConnection()
+	serviceBusTopic := getServiceBusNotificationTopic()
+	serviceBusSubscription := getServiceBusNotificationSubscription()
+
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
 
@@ -79,6 +83,21 @@ func main() {
 			log.Println("[INFO] RabbitMQ consumer ready")
 			if err := rmqConsumer.Start(context.Background()); err != nil {
 				log.Printf("[ERROR] RabbitMQ consumer error: %v", err)
+			}
+		}()
+	}
+
+	// ---- Azure Service Bus for notifications ----
+	sbNotificationConsumer, err := NewAzureServiceBusNotificationConsumer(serviceBusConnection, serviceBusTopic, serviceBusSubscription, dispatcher)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification consumer initialization failed: %v", err)
+	}
+	if sbNotificationConsumer != nil && sbNotificationConsumer.IsConnected() {
+		go func() {
+			<-sbNotificationConsumer.Ready()
+			log.Println("[INFO] Azure Service Bus notification consumer ready")
+			if err := sbNotificationConsumer.Start(context.Background()); err != nil {
+				log.Printf("[ERROR] Azure Service Bus notification consumer error: %v", err)
 			}
 		}()
 	}
