@@ -20,6 +20,8 @@ networks:
 volumes:
   postgres-data:
   nats-data:
+  mosquitto-data:
+  mosquitto-config:
 
 services:
   # ────────────────────────────────────────────
