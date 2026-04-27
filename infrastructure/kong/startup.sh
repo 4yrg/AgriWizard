@@ -9,6 +9,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 export KONG_JWT_SHARED_SECRET="${KONG_JWT_SHARED_SECRET:-super-secret-jwt-key-change-in-production}"
+export KONG_JWT_ISSUER="${KONG_JWT_ISSUER:-${JWT_ISSUER:-agriwizard-iam}}"
 export CORS_ALLOW_ORIGIN="${CORS_ALLOW_ORIGIN:-*}"
 
 echo "Starting Kong Gateway in DB-less mode..."

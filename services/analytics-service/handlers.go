@@ -232,7 +232,7 @@ func (h *Handler) GetRulesForParameter(c *gin.Context) {
 // @Router       /api/v1/analytics/decisions/summary [get]
 func (h *Handler) GetDecisionSummary(c *gin.Context) {
 	// Fetch all thresholds
-	rows, err := h.db().Query(`SELECT id, parameter_id, min_value, max_value, is_enabled FROM analytics.thresholds WHERE is_enabled=true`)
+	rows, err := h.db().Query(`SELECT id, parameter_id, min_value, max_value, is_enabled, created_at, updated_at FROM analytics.thresholds WHERE is_enabled=true`)
 	if err != nil {
 		log.Printf("[ERROR] GetDecisionSummary: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -243,7 +243,7 @@ func (h *Handler) GetDecisionSummary(c *gin.Context) {
 	var entries []DecisionTableEntry
 	for rows.Next() {
 		var t Threshold
-		if err := rows.Scan(&t.ID, &t.ParameterID, &t.MinValue, &t.MaxValue, &t.IsEnabled); err != nil {
+		if err := rows.Scan(&t.ID, &t.ParameterID, &t.MinValue, &t.MaxValue, &t.IsEnabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			continue
 		}
 

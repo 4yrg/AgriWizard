@@ -38,8 +38,8 @@
                                                     │
             ┌───────────────────────────────────────▼──────────────────────────────┐
             │               HiveMQ Cloud Cluster (external)                         │
-            │   agriwizard/sensor/{id}/telemetry                                    │
-            │   agriwizard/equipment/{id}/command                                  │
+            │   agriwizard/sensor/{serial}/telemetry                                │
+            │   agriwizard/equipment/{serial}/command                               │
             └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -132,6 +132,7 @@ CREATE TABLE iam.users (
 ```sql
 CREATE TABLE hardware.equipments (
     id             TEXT PRIMARY KEY,
+    serial         TEXT NOT NULL UNIQUE,
     name           TEXT NOT NULL,
     operations     TEXT[] NOT NULL DEFAULT '{}',
     mqtt_topic     TEXT NOT NULL,
@@ -142,6 +143,7 @@ CREATE TABLE hardware.equipments (
 
 CREATE TABLE hardware.sensors (
     id               TEXT PRIMARY KEY,
+    serial           TEXT NOT NULL UNIQUE,
     name             TEXT NOT NULL,
     parameter_ids    TEXT[] NOT NULL DEFAULT '{}',
     mqtt_topic       TEXT NOT NULL,
@@ -167,9 +169,25 @@ CREATE TABLE hardware.raw_sensor_data (
 ```
 
 **MQTT Topics**:
-- Subscribe: `agriwizard/sensor/{sensor_id}/telemetry` - Receive sensor data
-- Publish: `agriwizard/equipment/{equipment_id}/command` - Send control commands
-- Subscribe: `agriwizard/equipment/{equipment_id}/command/status` - Receive status updates
+- Subscribe: `agriwizard/sensor/{sensor_serial}/telemetry` - Receive sensor data
+- Publish: `agriwizard/equipment/{equipment_serial}/command` - Send control commands
+- Subscribe: `agriwizard/equipment/{equipment_serial}/command/status` - Receive status updates
+
+**Telemetry Payload (one sensor, multiple parameters)**:
+```json
+{
+    "sensor_id": "soil_probe_zone_a",
+    "readings": [
+        { "parameter_id": "soil_moisture_pct", "value": 41.8 },
+        { "parameter_id": "soil_temp_c", "value": 28.2 },
+        { "parameter_id": "ec_ms_cm", "value": 1.43 }
+    ],
+    "timestamp": "2026-04-26T09:35:00Z"
+}
+```
+
+Firmware should publish this as one message to topic:
+`agriwizard/sensor/<sensor_serial>/telemetry`
 
 ---
 

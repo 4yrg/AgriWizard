@@ -30,8 +30,8 @@ A secure, cloud-native microservice backend for intelligent greenhouse automatio
                                                 │
                     ┌───────────────────────────▼──────────────────────────────────┐
                     │               HiveMQ Cloud Cluster (external)                 │
-                    │   agriwizard/sensor/{id}/telemetry                            │
-                    │   agriwizard/equipment/{id}/command                           │
+                    │   agriwizard/sensor/{serial}/telemetry                        │
+                    │   agriwizard/equipment/{serial}/command                       │
                     └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -105,13 +105,13 @@ curl -s -X POST http://localhost:8080/api/v1/hardware/parameters \
 PUMP_ID=$(curl -s -X POST http://localhost:8080/api/v1/hardware/equipments \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Main Water Pump","supported_operations":["ON","OFF","REVERSE"]}' | jq -r '.data.id')
+  -d '{"serial":"pump_main_01","name":"Main Water Pump","supported_operations":["ON","OFF","REVERSE"]}' | jq -r '.data.id')
 
 # Provision a soil sensor
 curl -s -X POST http://localhost:8080/api/v1/hardware/sensors \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Zone A Soil Probe\",\"parameter_ids\":[\"soil_moisture_pct\"]}"
+  -d "{\"serial\":\"soil_probe_zone_a\",\"name\":\"Zone A Soil Probe\",\"parameter_ids\":[\"soil_moisture_pct\"]}"
 
 # Set threshold (30-70% moisture)
 THRESHOLD_ID=$(curl -s -X POST http://localhost:8080/api/v1/analytics/thresholds \

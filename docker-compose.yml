@@ -289,21 +289,27 @@ services:
       KONG_LOG_LEVEL: info
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_JWT_SHARED_SECRET: "${JWT_SECRET:-super-secret-jwt-key-change-in-production}"
+      KONG_JWT_ISSUER: "${JWT_ISSUER:-agriwizard-iam}"
       CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
+      IAM_UPSTREAM_PROTOCOL: "http"
       IAM_UPSTREAM_HOST: iam-service
       IAM_UPSTREAM_PORT: "8081"
+      HARDWARE_UPSTREAM_PROTOCOL: "http"
       HARDWARE_UPSTREAM_HOST: hardware-service
       HARDWARE_UPSTREAM_PORT: "8082"
+      ANALYTICS_UPSTREAM_PROTOCOL: "http"
       ANALYTICS_UPSTREAM_HOST: analytics-service
       ANALYTICS_UPSTREAM_PORT: "8083"
+      WEATHER_UPSTREAM_PROTOCOL: "http"
       WEATHER_UPSTREAM_HOST: weather-service
       WEATHER_UPSTREAM_PORT: "8084"
+      NOTIFICATION_UPSTREAM_PROTOCOL: "http"
       NOTIFICATION_UPSTREAM_HOST: notification-service
       NOTIFICATION_UPSTREAM_PORT: "8085"
     networks:
       - agriwizard-net
     ports:
-      - "8000:8000"
+      - "${KONG_PROXY_PORT:-8080}:8000"
       - "8443:8443"
       - "8001:8001"
     healthcheck:

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +44,18 @@ func (s *ServiceStatus) IsReady() bool {
 	return s.ready
 }
 
+func (s *ServiceStatus) IsMigrated() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.migrated
+}
+
+func (s *ServiceStatus) IsMQTTConnected() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mqttClient != nil && s.mqttClient.IsConnected()
+}
+
 func (s *ServiceStatus) SetReady(db *sql.DB, mqttClient mqtt.Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -70,9 +83,13 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
+	corsAllowOrigin := getEnv("CORS_ALLOW_ORIGIN", "*")
 
 	rabbitmqUrl := getRabbitMQUrl()
 	queueName := getQueueName()
+
+	serviceBusConnection := getServiceBusConnection()
+	serviceBusTopic := getServiceBusTopic()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
@@ -84,6 +101,11 @@ func main() {
 		log.Printf("[WARN] RabbitMQ publisher initialization failed: %v", err)
 	}
 
+	sbPublisher, err := NewAzureServiceBusPublisher(serviceBusConnection, serviceBusTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus publisher initialization failed: %v", err)
+	}
+
 	// --- Router ---
 	if getEnv("GIN_MODE", "debug") == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -93,6 +115,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(corsMiddleware(corsAllowOrigin))
 
 	// Health check - available immediately
 	r.GET("/health", func(c *gin.Context) {
@@ -103,6 +126,7 @@ func main() {
 		mqttClient := status.GetMQTTClient()
 		mqttConnected := mqttClient != nil && mqttClient.IsConnected()
 		rmqConnected := rmqPublisher != nil && rmqPublisher.IsConnected()
+		sbConnected := sbPublisher != nil && sbPublisher.IsConnected()
 		c.JSON(http.StatusOK, gin.H{
 			"status":    s,
 			"service":   "hardware-service",
@@ -110,6 +134,7 @@ func main() {
 			"migrated":  status.migrated,
 			"mqtt_conn": mqttConnected,
 			"rmq_conn":  rmqConnected,
+			"sb_conn":   sbConnected,
 		})
 	})
 
@@ -122,50 +147,52 @@ func main() {
 		}
 	}()
 
-	// Connect to database and MQTT in background
+	// Connect to database and MQTT in background (retry until ready)
 	go func() {
-		db, err := connectDB(dsn)
-		if err != nil {
-			log.Printf("[ERROR] DB connect: %v", err)
-			return
-		}
-
-		if err := runMigrations(db); err != nil {
-			log.Printf("[ERROR] Migrations: %v", err)
-			db.Close()
-			return
-		}
-
-		// Set ready with DB first (MQTT is optional)
-		status.SetReady(db, nil)
-		status.SetMigrated()
-		log.Println("[INFO] Hardware Service ready (DB connected)")
-
-		// Try MQTT in background (non-blocking)
-		go func() {
-			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
-			if mqttClient != nil {
-				status.SetReady(db, mqttClient)
-				restoreSubscriptions(db, mqttClient, rmqPublisher)
-				log.Println("[INFO] MQTT connected, subscriptions restored")
+		for {
+			db, err := connectDB(dsn)
+			if err != nil {
+				log.Printf("[ERROR] DB connect: %v", err)
+				log.Println("[WARN] Hardware Service init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
 			}
-		}()
-		log.Println("[INFO] Hardware Service fully ready")
+
+			if err := runMigrations(db); err != nil {
+				log.Printf("[ERROR] Migrations: %v", err)
+				db.Close()
+				log.Println("[WARN] Hardware Service init retry in 10s")
+				time.Sleep(10 * time.Second)
+				continue
+			}
+
+			mqttClient := connectMQTT(mqttBroker, mqttUsername, mqttPassword)
+			restoreSubscriptions(db, mqttClient, rmqPublisher, sbPublisher)
+
+			status.SetReady(db, mqttClient)
+			status.SetMigrated()
+			log.Println("[INFO] Hardware Service fully ready")
+			return
+		}
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher)
+	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher, sbPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
 		// Equipment
 		api.POST("/equipments", h.CreateEquipment)
 		api.GET("/equipments", h.ListEquipments)
+		api.PUT("/equipments/:id", h.UpdateEquipment)
+		api.DELETE("/equipments/:id", h.DeleteEquipment)
 		api.POST("/control/:id", h.DispatchControl)
 
 		// Sensors
 		api.POST("/sensors", h.CreateSensor)
 		api.GET("/sensors", h.ListSensors)
+		api.PUT("/sensors/:id", h.UpdateSensor)
+		api.DELETE("/sensors/:id", h.DeleteSensor)
 
 		// Parameters
 		api.POST("/parameters", h.CreateParameter)
@@ -239,7 +266,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
-func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher) {
+func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) {
 	if !client.IsConnected() {
 		return
 	}
@@ -251,9 +278,12 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQ
 			if rows.Scan(&topic) == nil {
 				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
 					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
-					// Also publish to RabbitMQ for analytics
+					// Also publish to RabbitMQ/Service Bus for analytics
 					if rmqPublisher != nil && rmqPublisher.IsConnected() {
 						log.Printf("[DEBUG] Would publish to RabbitMQ: %s", msg.Topic())
+					}
+					if sbPublisher != nil && sbPublisher.IsConnected() {
+						log.Printf("[DEBUG] Would publish to Service Bus: %s", msg.Topic())
 					}
 				})
 			}
@@ -267,6 +297,7 @@ func runMigrations(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS hardware.equipments (
 		id             TEXT PRIMARY KEY,
+		serial         TEXT NOT NULL UNIQUE,
 		name           TEXT NOT NULL,
 		operations     TEXT[] NOT NULL DEFAULT '{}',
 		mqtt_topic     TEXT NOT NULL,
@@ -277,6 +308,7 @@ func runMigrations(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS hardware.sensors (
 		id               TEXT PRIMARY KEY,
+		serial           TEXT NOT NULL UNIQUE,
 		name             TEXT NOT NULL,
 		parameter_ids    TEXT[] NOT NULL DEFAULT '{}',
 		mqtt_topic       TEXT NOT NULL,
@@ -284,6 +316,16 @@ func runMigrations(db *sql.DB) error {
 		update_frequency INT NOT NULL DEFAULT 60,
 		created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
+
+	ALTER TABLE hardware.equipments ADD COLUMN IF NOT EXISTS serial TEXT;
+	UPDATE hardware.equipments SET serial = id WHERE serial IS NULL OR serial = '';
+	ALTER TABLE hardware.equipments ALTER COLUMN serial SET NOT NULL;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_equipments_serial_unique ON hardware.equipments(serial);
+
+	ALTER TABLE hardware.sensors ADD COLUMN IF NOT EXISTS serial TEXT;
+	UPDATE hardware.sensors SET serial = id WHERE serial IS NULL OR serial = '';
+	ALTER TABLE hardware.sensors ALTER COLUMN serial SET NOT NULL;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_sensors_serial_unique ON hardware.sensors(serial);
 
 	CREATE TABLE IF NOT EXISTS hardware.parameters (
 		id          TEXT PRIMARY KEY,
@@ -328,4 +370,64 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func corsMiddleware(allowOriginConfig string) gin.HandlerFunc {
+	allowedOrigins := normalizeOrigins(allowOriginConfig)
+	allowAnyOrigin := len(allowedOrigins) == 0
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+
+		switch {
+		case allowAnyOrigin:
+			c.Header("Access-Control-Allow-Origin", "*")
+		case origin != "" && isAllowedOrigin(origin, allowedOrigins):
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		default:
+			c.Header("Access-Control-Allow-Origin", allowedOrigins[0])
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, X-Internal-Service")
+		c.Header("Access-Control-Max-Age", "3600")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func normalizeOrigins(config string) []string {
+	if strings.TrimSpace(config) == "" || strings.TrimSpace(config) == "*" {
+		return nil
+	}
+
+	parts := strings.Split(config, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+
+	if len(origins) == 0 {
+		return nil
+	}
+
+	return origins
+}
+
+func isAllowedOrigin(origin string, allowedOrigins []string) bool {
+	for _, allowed := range allowedOrigins {
+		if strings.EqualFold(origin, allowed) {
+			return true
+		}
+	}
+	return false
 }

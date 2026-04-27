@@ -1,0 +1,287 @@
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+const char* WIFI_SSID = "Redmi 14C";
+const char* WIFI_PASSWORD = "Variable557";
+
+const char* MQTT_HOST = "0844c36e03374e7682f81036bb673d45.s1.eu.hivemq.cloud";
+const uint16_t MQTT_PORT = 8883;
+const uint16_t MQTT_BUFFER_SIZE = 1024;
+const char* MQTT_USERNAME = "Hasintha";
+const char* MQTT_PASSWORD = "Agriwizard@999";
+
+const char* DEVICE_ID = "esp32-greenhouse-01";
+
+const char* SENSOR_ID = "gh1_sensor";
+const char* SOIL_SENSOR_ID = "soil01";
+const char* TMP_SENSOR_ID = "tmp01";
+
+const char* FAN_EQUIPMENT_ID = "b8cff3e4-7bc3-4480-a23c-a8bfae62aac1"; 
+const char* PUMP_EQUIPMENT_ID = "57aec2ac-8ce2-45fb-a037-ffacb8e9dd06"; 
+
+const char* PARAM_TEMP = "air_temp_c";
+const char* PARAM_HUMIDITY = "air_humidity_pct";
+const char* PARAM_SOIL = "soil_moisture_pct";
+
+const int FAN_PIN = 18;
+const int PUMP_PIN = 19;
+
+const unsigned long TELEMETRY_INTERVAL_MS = 30000;
+
+WiFiClientSecure espClient;
+PubSubClient mqttClient(espClient);
+
+unsigned long lastTelemetryMs = 0;
+
+String commandTopicWildcard = "agriwizard/equipment/+/command";
+String sensorTelemetryTopic = "";
+String soilSensorTelemetryTopic = "";
+String tmpSensorTelemetryTopic = "";
+String fanCommandTopic = "";
+String pumpCommandTopic = "";
+String fanStatusTopic = "";
+String pumpStatusTopic = "";
+
+bool fanOn = false;
+bool pumpOn = false;
+
+void logLine(const String& message) {
+  Serial.println("[FW] " + message);
+}
+
+void setFan(bool on) {
+  fanOn = on;
+  digitalWrite(FAN_PIN, on ? HIGH : LOW);
+  logLine(String("FAN -> ") + (on ? "ON" : "OFF")); 
+}
+
+void setPump(bool on) {
+  pumpOn = on;
+  digitalWrite(PUMP_PIN, on ? HIGH : LOW);
+  logLine(String("PUMP -> ") + (on ? "ON" : "OFF"));
+}
+
+bool operationMeansOn(const String& operation) {
+  String op = operation;
+  op.toUpperCase();
+  return op == "ON" || op == "TURN_ON" || op == "START" || op == "ENABLE";
+}
+
+bool operationMeansOff(const String& operation) {
+  String op = operation;
+  op.toUpperCase();
+  return op == "OFF" || op == "TURN_OFF" || op == "STOP" || op == "DISABLE";
+}
+
+void publishEquipmentStatus(const String& statusTopic, const char* equipmentId, bool isOn) {
+  StaticJsonDocument<160> doc;
+  doc["equipment_id"] = equipmentId;
+  doc["status"] = isOn ? "ON" : "OFF";
+
+  char payload[192];
+  size_t n = serializeJson(doc, payload, sizeof(payload));
+  bool ok = mqttClient.publish(statusTopic.c_str(), (const uint8_t*)payload, n, false);
+  logLine(String("status publish ") + (ok ? "OK" : "FAIL") + " topic=" + statusTopic + " payload=" + String(payload));
+}
+
+String equipmentIdFromTopic(const String& topic) {
+  String prefix = "agriwizard/equipment/";
+  String suffix = "/command";
+  if (!topic.startsWith(prefix) || !topic.endsWith(suffix)) {
+    return "";
+  }
+
+  int start = prefix.length();
+  int end = topic.length() - suffix.length();
+  if (end <= start) {
+    return "";
+  }
+  return topic.substring(start, end);
+}
+
+void handleCommand(const String& topic, const String& payload) {
+  String equipmentId = equipmentIdFromTopic(topic);
+  if (equipmentId.length() == 0) {
+    logLine("ignored command: invalid topic=" + topic);
+    return;
+  }
+
+  logLine("cmd topic=" + topic + " payload=" + payload);
+
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err) {
+    logLine("ignored command: json parse failed");
+    return;
+  }
+
+  String op = doc["operation"] | "";
+  if (op.length() == 0) {
+    logLine("ignored command: missing operation");
+    return;
+  }
+
+  bool turnOn = operationMeansOn(op);
+  bool turnOff = operationMeansOff(op);
+  if (!turnOn && !turnOff) {
+    logLine("ignored command: unsupported operation=" + op);
+    return;
+  }
+
+  if (equipmentId == FAN_EQUIPMENT_ID) {
+    setFan(turnOn && !turnOff);
+    publishEquipmentStatus(fanStatusTopic, FAN_EQUIPMENT_ID, fanOn);
+    return;
+  }
+
+  if (equipmentId == PUMP_EQUIPMENT_ID) {
+    setPump(turnOn && !turnOff);
+    publishEquipmentStatus(pumpStatusTopic, PUMP_EQUIPMENT_ID, pumpOn);
+    return;
+  }
+
+  logLine("ignored command: unknown equipment_id=" + equipmentId);
+}
+
+// SIMULATED SENSOR READINGS
+float readSoilMoisturePct() {
+  return (float)random(300, 700) / 10.0f; // Simulates 30.0% to 70.0%
+}
+
+//param = [PARAM_SOIL , PARAM_TEMP, PARAM_HUMIDITY]
+void publishTelemetry(String param[], int count, String sensorId) {
+  if (!mqttClient.connected()) {
+    logLine("telemetry skipped: MQTT not connected");
+    return;
+  }
+
+  //setup topic based on the sensor
+  sensorTelemetryTopic = "agriwizard/sensor/" + String(sensorId) + "/telemetry";
+
+  // SIMULATED DATA
+  float temperature = (float)random(220, 320) / 10.0f; // 22.0 to 32.0 C
+  float humidity = (float)random(450, 850) / 10.0f;    // 45.0 to 85.0 %
+  float soilPct = readSoilMoisturePct();
+
+  StaticJsonDocument<512> doc;
+  doc["sensor_id"] = sensorId;
+
+  JsonArray readings = doc.createNestedArray("readings");
+
+  for(int i=0; i< count; i++){    
+    if(param[i]==PARAM_TEMP){
+      JsonObject r1 = readings.createNestedObject();
+      r1["parameter_id"] = PARAM_TEMP;
+      r1["value"] = temperature;
+    }
+    else if(param[i]==PARAM_HUMIDITY){
+      JsonObject r2 = readings.createNestedObject();
+      r2["parameter_id"] = PARAM_HUMIDITY;
+      r2["value"] = humidity;
+    }
+    else if(param[i]==PARAM_SOIL){
+      JsonObject r3 = readings.createNestedObject();
+      r3["parameter_id"] = PARAM_SOIL;
+      r3["value"] = soilPct;
+    }  
+    else{
+      logLine("no supported parameter found. Parsed params: " + param[i]);
+    }  
+  }
+
+  char payload[640];
+  size_t n = serializeJson(doc, payload, sizeof(payload));
+  bool ok = mqttClient.publish(sensorTelemetryTopic.c_str(), (const uint8_t*)payload, n, false);
+  
+  if (ok) {
+    logLine("telemetry publish OK topic=" + sensorTelemetryTopic + " payload=" + String(payload));
+  } else {
+    logLine("telemetry publish FAIL rc=" + String(mqttClient.state()));
+  }
+}
+
+void mqttCallback(char* topic, byte* message, unsigned int length) {
+  String topicStr(topic);
+  String payload;
+  payload.reserve(length + 1);
+  for (unsigned int i = 0; i < length; i++) {
+    payload += (char)message[i];
+  }
+  handleCommand(topicStr, payload);
+}
+
+void connectWiFi() {
+  WiFi.mode(WIFI_STA);
+  logLine("connecting WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  logLine("WiFi connected, IP=" + WiFi.localIP().toString());
+}
+
+void connectMQTT() {
+  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+
+  while (!mqttClient.connected()) {
+    logLine("connecting MQTT...");
+    if (mqttClient.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD)) {
+      logLine("MQTT connected");
+      mqttClient.subscribe(commandTopicWildcard.c_str(), 1);
+      publishEquipmentStatus(fanStatusTopic, FAN_EQUIPMENT_ID, fanOn);
+      publishEquipmentStatus(pumpStatusTopic, PUMP_EQUIPMENT_ID, pumpOn);
+    } else {
+      logLine("MQTT failed, rc=" + String(mqttClient.state()));
+      delay(2000);
+    }
+  }
+}
+
+void setupTopics() {
+  //soilSensorTelemetryTopic = "agriwizard/sensor/" + String(SOIL_SENSOR_ID) + "/telemetry";
+ // tmpSensorTelemetryTopic = "agriwizard/sensor/" + String(TMP_SENSOR_ID) + "/telemetry";
+
+  fanCommandTopic = "agriwizard/equipment/" + String(FAN_EQUIPMENT_ID) + "/command";
+  pumpCommandTopic = "agriwizard/equipment/" + String(PUMP_EQUIPMENT_ID) + "/command";
+  fanStatusTopic = fanCommandTopic + "/status";
+  pumpStatusTopic = pumpCommandTopic + "/status";
+}
+
+void setup() {
+  Serial.begin(115200);
+  randomSeed(analogRead(0)); // Initialize random generator
+  
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(PUMP_PIN, LOW);
+
+  setupTopics();
+  connectWiFi();
+  espClient.setInsecure(); 
+  connectMQTT();
+}
+
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) connectWiFi();
+  if (!mqttClient.connected()) connectMQTT();
+
+  mqttClient.loop();
+
+  unsigned long now = millis();
+  if (now - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+    lastTelemetryMs = now;
+    
+    String allParams[] = {PARAM_TEMP, PARAM_HUMIDITY, PARAM_SOIL};
+    publishTelemetry(allParams, 3, SENSOR_ID);
+
+    String tempHum[] = {PARAM_TEMP, PARAM_HUMIDITY};
+    publishTelemetry(tempHum, 2, TMP_SENSOR_ID);
+
+  }
+}

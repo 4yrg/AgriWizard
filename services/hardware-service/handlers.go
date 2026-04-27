@@ -22,11 +22,12 @@ type Handler struct {
 	jwtSecret    string
 	analyticsURL string
 	rmqPublisher *RabbitMQPublisher
+	sbPublisher  *AzureServiceBusPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) *Handler {
+	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher, sbPublisher: sbPublisher}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -72,17 +73,26 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 		return
 	}
+	req.Serial = strings.TrimSpace(req.Serial)
+	if req.Serial == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "serial is required"})
+		return
+	}
 
 	id := uuid.New().String()
-	mqttTopic := fmt.Sprintf("agriwizard/equipment/%s/command", id)
+	mqttTopic := fmt.Sprintf("agriwizard/equipment/%s/command", req.Serial)
 	ops := StringArray(req.SupportedOperations)
 
 	_, err := h.db().Exec(
-		`INSERT INTO hardware.equipments (id, name, operations, mqtt_topic, api_url, current_status)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		id, req.Name, ops, mqttTopic, req.APIURL, string(StatusOff),
+		`INSERT INTO hardware.equipments (id, serial, name, operations, mqtt_topic, api_url, current_status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, req.Serial, req.Name, ops, mqttTopic, req.APIURL, string(StatusOff),
 	)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, ErrorResponse{Error: "serial_exists", Message: "equipment serial already exists"})
+			return
+		}
 		log.Printf("[ERROR] CreateEquipment: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
 		return
@@ -98,7 +108,7 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 	log.Printf("[INFO] CreateEquipment: registered id=%s name=%s topic=%s", id, req.Name, mqttTopic)
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Message: "equipment registered",
-		Data:    gin.H{"id": id, "mqtt_topic": mqttTopic},
+		Data:    gin.H{"id": id, "serial": req.Serial, "mqtt_topic": mqttTopic},
 	})
 }
 
@@ -110,7 +120,7 @@ func (h *Handler) CreateEquipment(c *gin.Context) {
 // @Success      200  {object}  SuccessResponse
 // @Router       /api/v1/hardware/equipments [get]
 func (h *Handler) ListEquipments(c *gin.Context) {
-	rows, err := h.db().Query(`SELECT id, name, operations, mqtt_topic, api_url, current_status, created_at FROM hardware.equipments ORDER BY created_at DESC`)
+	rows, err := h.db().Query(`SELECT id, serial, name, operations, mqtt_topic, api_url, current_status, created_at FROM hardware.equipments ORDER BY created_at DESC`)
 	if err != nil {
 		log.Printf("[ERROR] ListEquipments: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -121,7 +131,7 @@ func (h *Handler) ListEquipments(c *gin.Context) {
 	var equipments []Equipment
 	for rows.Next() {
 		var eq Equipment
-		if err := rows.Scan(&eq.ID, &eq.Name, &eq.SupportedOperations, &eq.MQTTTopic, &eq.APIURL, &eq.CurrentStatus, &eq.CreatedAt); err != nil {
+		if err := rows.Scan(&eq.ID, &eq.Serial, &eq.Name, &eq.SupportedOperations, &eq.MQTTTopic, &eq.APIURL, &eq.CurrentStatus, &eq.CreatedAt); err != nil {
 			log.Printf("[ERROR] ListEquipments scan: %v", err)
 			continue
 		}
@@ -131,6 +141,109 @@ func (h *Handler) ListEquipments(c *gin.Context) {
 		equipments = []Equipment{}
 	}
 	c.JSON(http.StatusOK, SuccessResponse{Data: equipments})
+}
+
+// UpdateEquipment godoc
+// @Summary      Update equipment details
+// @Tags         equipment
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                  true  "Equipment ID"
+// @Param        body  body      UpdateEquipmentRequest  true  "Equipment payload"
+// @Success      200   {object}  SuccessResponse
+// @Failure      400   {object}  ErrorResponse
+// @Failure      404   {object}  ErrorResponse
+// @Router       /api/v1/hardware/equipments/{id} [put]
+func (h *Handler) UpdateEquipment(c *gin.Context) {
+	equipmentID := c.Param("id")
+
+	var req UpdateEquipmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		return
+	}
+
+	req.Serial = strings.TrimSpace(req.Serial)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Serial == "" || req.Name == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "serial and name are required"})
+		return
+	}
+
+	ops := make([]string, 0, len(req.SupportedOperations))
+	for _, op := range req.SupportedOperations {
+		t := strings.TrimSpace(op)
+		if t != "" {
+			ops = append(ops, t)
+		}
+	}
+	if len(ops) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "supported_operations must not be empty"})
+		return
+	}
+
+	mqttTopic := fmt.Sprintf("agriwizard/equipment/%s/command", req.Serial)
+	result, err := h.db().Exec(
+		`UPDATE hardware.equipments
+		 SET serial = $1, name = $2, operations = $3, mqtt_topic = $4, api_url = $5
+		 WHERE id = $6`,
+		req.Serial, req.Name, StringArray(ops), mqttTopic, req.APIURL, equipmentID,
+	)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, ErrorResponse{Error: "serial_exists", Message: "equipment serial already exists"})
+			return
+		}
+		log.Printf("[ERROR] UpdateEquipment: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "equipment_not_found"})
+		return
+	}
+
+	if client := h.mqttClient(); client != nil && client.IsConnected() {
+		if token := client.Subscribe(mqttTopic+"/status", 1, h.handleEquipmentStatus); token.Wait() && token.Error() != nil {
+			log.Printf("[WARN] UpdateEquipment: mqtt subscribe failed: %v", token.Error())
+		}
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "equipment updated",
+		Data:    gin.H{"id": equipmentID, "serial": req.Serial, "mqtt_topic": mqttTopic},
+	})
+}
+
+// DeleteEquipment godoc
+// @Summary      Delete equipment
+// @Tags         equipment
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Equipment ID"
+// @Success      200  {object}  SuccessResponse
+// @Failure      404  {object}  ErrorResponse
+// @Router       /api/v1/hardware/equipments/{id} [delete]
+func (h *Handler) DeleteEquipment(c *gin.Context) {
+	equipmentID := c.Param("id")
+
+	result, err := h.db().Exec(`DELETE FROM hardware.equipments WHERE id = $1`, equipmentID)
+	if err != nil {
+		log.Printf("[ERROR] DeleteEquipment: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "equipment_not_found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "equipment deleted", Data: gin.H{"id": equipmentID}})
 }
 
 // DispatchControl godoc
@@ -150,9 +263,9 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 
 	var eq Equipment
 	err := h.db().QueryRow(
-		`SELECT id, name, operations, mqtt_topic, current_status FROM hardware.equipments WHERE id = $1`,
+		`SELECT id, serial, name, operations, mqtt_topic, current_status FROM hardware.equipments WHERE id = $1 OR serial = $1`,
 		equipmentID,
-	).Scan(&eq.ID, &eq.Name, &eq.SupportedOperations, &eq.MQTTTopic, &eq.CurrentStatus)
+	).Scan(&eq.ID, &eq.Serial, &eq.Name, &eq.SupportedOperations, &eq.MQTTTopic, &eq.CurrentStatus)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "equipment_not_found"})
 		return
@@ -195,7 +308,7 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 
 	// Build and publish MQTT command
 	mqttMsg := MQTTCommandMessage{
-		EquipmentID: equipmentID,
+		EquipmentID: eq.Serial,
 		Operation:   cmd.Operation,
 		Payload:     cmd.Payload,
 		IssuedAt:    time.Now().UTC(),
@@ -226,7 +339,7 @@ func (h *Handler) DispatchControl(c *gin.Context) {
 	log.Printf("[INFO] DispatchControl: published cmd=%s to topic=%s", cmd.Operation, eq.MQTTTopic)
 	c.JSON(http.StatusOK, SuccessResponse{
 		Message: "command dispatched",
-		Data:    gin.H{"equipment_id": equipmentID, "operation": cmd.Operation, "mqtt_topic": eq.MQTTTopic},
+		Data:    gin.H{"equipment_id": equipmentID, "serial": eq.Serial, "operation": cmd.Operation, "mqtt_topic": eq.MQTTTopic},
 	})
 }
 
@@ -250,21 +363,30 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 		return
 	}
+	req.Serial = strings.TrimSpace(req.Serial)
+	if req.Serial == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "serial is required"})
+		return
+	}
 
 	if req.UpdateFrequency == 0 {
 		req.UpdateFrequency = 60
 	}
 
 	id := uuid.New().String()
-	mqttTopic := fmt.Sprintf("agriwizard/sensor/%s/telemetry", id)
+	mqttTopic := fmt.Sprintf("agriwizard/sensor/%s/telemetry", req.Serial)
 	paramIDs := StringArray(req.ParameterIDs)
 
 	_, err := h.db().Exec(
-		`INSERT INTO hardware.sensors (id, name, parameter_ids, mqtt_topic, api_url, update_frequency)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		id, req.Name, paramIDs, mqttTopic, req.APIURL, req.UpdateFrequency,
+		`INSERT INTO hardware.sensors (id, serial, name, parameter_ids, mqtt_topic, api_url, update_frequency)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, req.Serial, req.Name, paramIDs, mqttTopic, req.APIURL, req.UpdateFrequency,
 	)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, ErrorResponse{Error: "serial_exists", Message: "sensor serial already exists"})
+			return
+		}
 		log.Printf("[ERROR] CreateSensor: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
 		return
@@ -280,7 +402,7 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 	log.Printf("[INFO] CreateSensor: provisioned id=%s name=%s topic=%s", id, req.Name, mqttTopic)
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Message: "sensor provisioned",
-		Data:    gin.H{"id": id, "mqtt_topic": mqttTopic},
+		Data:    gin.H{"id": id, "serial": req.Serial, "mqtt_topic": mqttTopic},
 	})
 }
 
@@ -292,7 +414,7 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 // @Success      200  {object}  SuccessResponse
 // @Router       /api/v1/hardware/sensors [get]
 func (h *Handler) ListSensors(c *gin.Context) {
-	rows, err := h.db().Query(`SELECT id, name, parameter_ids, mqtt_topic, api_url, update_frequency, created_at FROM hardware.sensors ORDER BY created_at DESC`)
+	rows, err := h.db().Query(`SELECT id, serial, name, parameter_ids, mqtt_topic, api_url, update_frequency, created_at FROM hardware.sensors ORDER BY created_at DESC`)
 	if err != nil {
 		log.Printf("[ERROR] ListSensors: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
@@ -308,7 +430,7 @@ func (h *Handler) ListSensors(c *gin.Context) {
 	var sensors []SensorWithParams
 	for rows.Next() {
 		var s Sensor
-		if err := rows.Scan(&s.ID, &s.Name, &s.ParameterIDs, &s.MQTTTopic, &s.APIURL, &s.UpdateFrequency, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Serial, &s.Name, &s.ParameterIDs, &s.MQTTTopic, &s.APIURL, &s.UpdateFrequency, &s.CreatedAt); err != nil {
 			log.Printf("[ERROR] ListSensors scan: %v", err)
 			continue
 		}
@@ -330,6 +452,112 @@ func (h *Handler) ListSensors(c *gin.Context) {
 		sensors = []SensorWithParams{}
 	}
 	c.JSON(http.StatusOK, SuccessResponse{Data: sensors})
+}
+
+// UpdateSensor godoc
+// @Summary      Update sensor details
+// @Tags         sensors
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                true  "Sensor ID"
+// @Param        body  body      UpdateSensorRequest   true  "Sensor payload"
+// @Success      200   {object}  SuccessResponse
+// @Failure      400   {object}  ErrorResponse
+// @Failure      404   {object}  ErrorResponse
+// @Router       /api/v1/hardware/sensors/{id} [put]
+func (h *Handler) UpdateSensor(c *gin.Context) {
+	sensorID := c.Param("id")
+
+	var req UpdateSensorRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: err.Error()})
+		return
+	}
+
+	req.Serial = strings.TrimSpace(req.Serial)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Serial == "" || req.Name == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "serial and name are required"})
+		return
+	}
+	if req.UpdateFrequency <= 0 {
+		req.UpdateFrequency = 60
+	}
+
+	parameterIDs := make([]string, 0, len(req.ParameterIDs))
+	for _, id := range req.ParameterIDs {
+		t := strings.TrimSpace(id)
+		if t != "" {
+			parameterIDs = append(parameterIDs, t)
+		}
+	}
+	if len(parameterIDs) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_request", Message: "parameter_ids must not be empty"})
+		return
+	}
+
+	mqttTopic := fmt.Sprintf("agriwizard/sensor/%s/telemetry", req.Serial)
+	result, err := h.db().Exec(
+		`UPDATE hardware.sensors
+		 SET serial = $1, name = $2, parameter_ids = $3, mqtt_topic = $4, api_url = $5, update_frequency = $6
+		 WHERE id = $7`,
+		req.Serial, req.Name, StringArray(parameterIDs), mqttTopic, req.APIURL, req.UpdateFrequency, sensorID,
+	)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, ErrorResponse{Error: "serial_exists", Message: "sensor serial already exists"})
+			return
+		}
+		log.Printf("[ERROR] UpdateSensor: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "sensor_not_found"})
+		return
+	}
+
+	if client := h.mqttClient(); client != nil && client.IsConnected() {
+		if token := client.Subscribe(mqttTopic, 1, h.handleTelemetry); token.Wait() && token.Error() != nil {
+			log.Printf("[WARN] UpdateSensor: mqtt subscribe failed: %v", token.Error())
+		}
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Message: "sensor updated",
+		Data:    gin.H{"id": sensorID, "serial": req.Serial, "mqtt_topic": mqttTopic},
+	})
+}
+
+// DeleteSensor godoc
+// @Summary      Delete sensor
+// @Tags         sensors
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Sensor ID"
+// @Success      200  {object}  SuccessResponse
+// @Failure      404  {object}  ErrorResponse
+// @Router       /api/v1/hardware/sensors/{id} [delete]
+func (h *Handler) DeleteSensor(c *gin.Context) {
+	sensorID := c.Param("id")
+
+	result, err := h.db().Exec(`DELETE FROM hardware.sensors WHERE id = $1`, sensorID)
+	if err != nil {
+		log.Printf("[ERROR] DeleteSensor: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "sensor_not_found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "sensor deleted", Data: gin.H{"id": sensorID}})
 }
 
 // ──────────────────────────────────────────────
@@ -436,6 +664,11 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 		log.Printf("[WARN] handleTelemetry: unmarshal error: %v", err)
 		return
 	}
+	if payload.SensorID == "" {
+		if topicSensorID := sensorIDFromTopic(msg.Topic()); topicSensorID != "" {
+			payload.SensorID = topicSensorID
+		}
+	}
 	if payload.Timestamp.IsZero() {
 		payload.Timestamp = time.Now().UTC()
 	}
@@ -459,8 +692,15 @@ func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
 			Timestamp:   payload.Timestamp,
 			Metadata:    nil,
 		}
-		if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
-			log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+		if h.rmqPublisher != nil && h.rmqPublisher.IsConnected() {
+			if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+			}
+		}
+		if h.sbPublisher != nil && h.sbPublisher.IsConnected() {
+			if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
+				log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+			}
 		}
 	}
 }
@@ -474,12 +714,31 @@ func (h *Handler) handleEquipmentStatus(_ mqtt.Client, msg mqtt.Message) {
 	if err := json.Unmarshal(msg.Payload(), &status); err != nil {
 		return
 	}
+	if status.EquipmentID == "" {
+		status.EquipmentID = equipmentIDFromTopic(msg.Topic())
+	}
 	if _, err := h.db().Exec(
-		`UPDATE hardware.equipments SET current_status=$1 WHERE id=$2`,
+		`UPDATE hardware.equipments SET current_status=$1 WHERE serial=$2`,
 		status.Status, status.EquipmentID,
 	); err != nil {
 		log.Printf("[ERROR] handleEquipmentStatus: %v", err)
 	}
+}
+
+func sensorIDFromTopic(topic string) string {
+	parts := strings.Split(topic, "/")
+	if len(parts) >= 4 && parts[0] == "agriwizard" && parts[1] == "sensor" && parts[3] == "telemetry" {
+		return parts[2]
+	}
+	return ""
+}
+
+func equipmentIDFromTopic(topic string) string {
+	parts := strings.Split(topic, "/")
+	if len(parts) >= 5 && parts[0] == "agriwizard" && parts[1] == "equipment" && parts[3] == "command" && parts[4] == "status" {
+		return parts[2]
+	}
+	return ""
 }
 
 // storeTelemetry persists telemetry data and forwards it to the analytics service.
