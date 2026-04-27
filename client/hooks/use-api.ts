@@ -18,6 +18,53 @@ import type {
   IrrigationRecommendation,
 } from "@/types/api";
 
+function parseRefreshInterval(
+  envValue: string | undefined,
+  fallbackMs: number
+): number {
+  const parsed = Number(envValue);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallbackMs;
+  }
+  return parsed;
+}
+
+const REFRESH_INTERVALS = {
+  equipment: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_EQUIPMENT_MS,
+    0
+  ),
+  sensors: parseRefreshInterval(process.env.NEXT_PUBLIC_REFRESH_SENSORS_MS, 0),
+  parameters: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_PARAMETERS_MS,
+    0
+  ),
+  decisions: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_DECISIONS_MS,
+    0
+  ),
+  dailySummaries: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_DAILY_SUMMARIES_MS,
+    0
+  ),
+  weatherCurrent: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_WEATHER_CURRENT_MS,
+    60000
+  ),
+  weatherForecast: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_WEATHER_FORECAST_MS,
+    300000
+  ),
+  weatherAlerts: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_WEATHER_ALERTS_MS,
+    60000
+  ),
+  irrigationRecommendation: parseRefreshInterval(
+    process.env.NEXT_PUBLIC_REFRESH_IRRIGATION_RECOMMENDATION_MS,
+    300000
+  ),
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // Hardware Service Hooks
 // ════════════════════════════════════════════════════════════════════════════
@@ -26,6 +73,8 @@ export function useEquipment() {
   return useSWR<Equipment[]>("equipment", async () => {
     const response = await hardwareApi.listEquipment();
     return response.data;
+  }, {
+    refreshInterval: REFRESH_INTERVALS.equipment,
   });
 }
 
@@ -33,6 +82,8 @@ export function useSensors() {
   return useSWR<Sensor[]>("sensors", async () => {
     const response = await hardwareApi.listSensors();
     return response.data;
+  }, {
+    refreshInterval: REFRESH_INTERVALS.sensors,
   });
 }
 
@@ -40,6 +91,8 @@ export function useParameters() {
   return useSWR<Parameter[]>("parameters", async () => {
     const response = await hardwareApi.listParameters();
     return response.data;
+  }, {
+    refreshInterval: REFRESH_INTERVALS.parameters,
   });
 }
 
@@ -71,6 +124,8 @@ export function useDecisionSummary() {
   return useSWR<DecisionTableEntry[]>("decisions", async () => {
     const response = await analyticsApi.getDecisionSummary();
     return response.data;
+  }, {
+    refreshInterval: REFRESH_INTERVALS.decisions,
   });
 }
 
@@ -80,6 +135,9 @@ export function useDailySummaries(date?: string) {
     async () => {
       const response = await analyticsApi.getDailySummaries(date);
       return response.data;
+    },
+    {
+      refreshInterval: REFRESH_INTERVALS.dailySummaries,
     }
   );
 }
@@ -93,7 +151,7 @@ export function useCurrentWeather() {
     const response = await weatherApi.getCurrentWeather();
     return response.data;
   }, {
-    refreshInterval: 60000, // Refresh every minute
+    refreshInterval: REFRESH_INTERVALS.weatherCurrent,
   });
 }
 
@@ -102,7 +160,7 @@ export function useWeatherForecast() {
     const response = await weatherApi.getForecast();
     return response.data;
   }, {
-    refreshInterval: 300000, // Refresh every 5 minutes
+    refreshInterval: REFRESH_INTERVALS.weatherForecast,
   });
 }
 
@@ -111,7 +169,7 @@ export function useWeatherAlerts() {
     const response = await weatherApi.getAlerts();
     return response.data;
   }, {
-    refreshInterval: 60000, // Refresh every minute
+    refreshInterval: REFRESH_INTERVALS.weatherAlerts,
   });
 }
 
@@ -120,6 +178,6 @@ export function useIrrigationRecommendation() {
     const response = await weatherApi.getRecommendations();
     return response.data;
   }, {
-    refreshInterval: 300000, // Refresh every 5 minutes
+    refreshInterval: REFRESH_INTERVALS.irrigationRecommendation,
   });
 }

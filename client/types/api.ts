@@ -62,6 +62,14 @@ export interface UpdateProfileRequest {
 export type EquipmentStatus = "ON" | "OFF" | "LOCKED" | "DISABLED";
 
 export interface CreateEquipmentRequest {
+  serial: string;
+  name: string;
+  supported_operations: string[];
+  api_url?: string;
+}
+
+export interface UpdateEquipmentRequest {
+  serial: string;
   name: string;
   supported_operations: string[];
   api_url?: string;
@@ -69,6 +77,7 @@ export interface CreateEquipmentRequest {
 
 export interface Equipment {
   id: string;
+  serial: string;
   name: string;
   supported_operations: string[];
   mqtt_topic: string;
@@ -83,6 +92,15 @@ export interface ControlCommand {
 }
 
 export interface CreateSensorRequest {
+  serial: string;
+  name: string;
+  parameter_ids: string[];
+  api_url?: string;
+  update_frequency_seconds?: number;
+}
+
+export interface UpdateSensorRequest {
+  serial: string;
   name: string;
   parameter_ids: string[];
   api_url?: string;
@@ -91,9 +109,11 @@ export interface CreateSensorRequest {
 
 export interface Sensor {
   id: string;
+  serial: string;
   name: string;
   parameter_ids: string[];
   mqtt_topic: string;
+  api_url?: string;
   update_frequency_seconds: number;
   created_at: string;
 }

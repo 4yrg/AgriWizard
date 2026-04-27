@@ -184,11 +184,15 @@ func main() {
 		// Equipment
 		api.POST("/equipments", h.CreateEquipment)
 		api.GET("/equipments", h.ListEquipments)
+		api.PUT("/equipments/:id", h.UpdateEquipment)
+		api.DELETE("/equipments/:id", h.DeleteEquipment)
 		api.POST("/control/:id", h.DispatchControl)
 
 		// Sensors
 		api.POST("/sensors", h.CreateSensor)
 		api.GET("/sensors", h.ListSensors)
+		api.PUT("/sensors/:id", h.UpdateSensor)
+		api.DELETE("/sensors/:id", h.DeleteSensor)
 
 		// Parameters
 		api.POST("/parameters", h.CreateParameter)
@@ -293,6 +297,7 @@ func runMigrations(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS hardware.equipments (
 		id             TEXT PRIMARY KEY,
+		serial         TEXT NOT NULL UNIQUE,
 		name           TEXT NOT NULL,
 		operations     TEXT[] NOT NULL DEFAULT '{}',
 		mqtt_topic     TEXT NOT NULL,
@@ -303,6 +308,7 @@ func runMigrations(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS hardware.sensors (
 		id               TEXT PRIMARY KEY,
+		serial           TEXT NOT NULL UNIQUE,
 		name             TEXT NOT NULL,
 		parameter_ids    TEXT[] NOT NULL DEFAULT '{}',
 		mqtt_topic       TEXT NOT NULL,
@@ -310,6 +316,16 @@ func runMigrations(db *sql.DB) error {
 		update_frequency INT NOT NULL DEFAULT 60,
 		created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
+
+	ALTER TABLE hardware.equipments ADD COLUMN IF NOT EXISTS serial TEXT;
+	UPDATE hardware.equipments SET serial = id WHERE serial IS NULL OR serial = '';
+	ALTER TABLE hardware.equipments ALTER COLUMN serial SET NOT NULL;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_equipments_serial_unique ON hardware.equipments(serial);
+
+	ALTER TABLE hardware.sensors ADD COLUMN IF NOT EXISTS serial TEXT;
+	UPDATE hardware.sensors SET serial = id WHERE serial IS NULL OR serial = '';
+	ALTER TABLE hardware.sensors ALTER COLUMN serial SET NOT NULL;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_sensors_serial_unique ON hardware.sensors(serial);
 
 	CREATE TABLE IF NOT EXISTS hardware.parameters (
 		id          TEXT PRIMARY KEY,

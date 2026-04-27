@@ -164,8 +164,11 @@ components:
 
     CreateEquipmentRequest:
       type: object
-      required: [name, supported_operations]
+      required: [serial, name, supported_operations]
       properties:
+        serial:
+          type: string
+          example: pump_main_01
         name:
           type: string
           example: Main Water Pump
@@ -184,6 +187,9 @@ components:
         id:
           type: string
           format: uuid
+        serial:
+          type: string
+          example: pump_main_01
         name:
           type: string
         supported_operations:
@@ -192,7 +198,7 @@ components:
             type: string
         mqtt_topic:
           type: string
-          example: agriwizard/equipment/abc123/command
+          example: agriwizard/equipment/pump_main_01/command
         api_url:
           type: string
         current_status:
@@ -215,8 +221,11 @@ components:
 
     CreateSensorRequest:
       type: object
-      required: [name, parameter_ids]
+      required: [serial, name, parameter_ids]
       properties:
+        serial:
+          type: string
+          example: soil_probe_zone_a
         name:
           type: string
           example: Zone A Soil Probe
@@ -237,6 +246,9 @@ components:
         id:
           type: string
           format: uuid
+        serial:
+          type: string
+          example: soil_probe_zone_a
         name:
           type: string
         parameter_ids:
@@ -245,7 +257,7 @@ components:
             type: string
         mqtt_topic:
           type: string
-          example: agriwizard/sensor/xyz789/telemetry
+          example: agriwizard/sensor/soil_probe_zone_a/telemetry
         update_frequency_seconds:
           type: integer
         created_at:
@@ -272,7 +284,7 @@ components:
       properties:
         sensor_id:
           type: string
-          format: uuid
+          example: soil_probe_zone_a
         readings:
           type: array
           items:
@@ -583,6 +595,56 @@ paths:
                         items:
                           $ref: "#/components/schemas/Equipment"
 
+  /api/v1/hardware/equipments/{id}:
+    put:
+      summary: Update an existing equipment controller
+      tags: [Hardware — Equipment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEquipmentRequest"
+      responses:
+        "200":
+          description: Equipment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete an equipment controller
+      tags: [Hardware — Equipment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Equipment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/hardware/control/{id}:
     post:
       summary: Dispatch a command to equipment via MQTT
@@ -645,6 +707,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+
+  /api/v1/hardware/sensors/{id}:
+    put:
+      summary: Update an existing sensor device
+      tags: [Hardware — Sensors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSensorRequest"
+      responses:
+        "200":
+          description: Sensor updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete a sensor device
+      tags: [Hardware — Sensors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Sensor deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/hardware/parameters:
     post:

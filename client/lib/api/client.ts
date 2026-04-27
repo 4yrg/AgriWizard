@@ -11,9 +11,11 @@ import type {
   UpdateProfileRequest,
   Equipment,
   CreateEquipmentRequest,
+  UpdateEquipmentRequest,
   ControlCommand,
   Sensor,
   CreateSensorRequest,
+  UpdateSensorRequest,
   Parameter,
   CreateParameterRequest,
   TelemetryPayload,
@@ -129,6 +131,17 @@ export const hardwareApi = {
       body: JSON.stringify(data),
     }),
 
+  updateEquipment: (id: string, data: UpdateEquipmentRequest) =>
+    apiFetch<SuccessResponse<Equipment>>(`/api/v1/hardware/equipments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteEquipment: (id: string) =>
+    apiFetch<SuccessResponse>(`/api/v1/hardware/equipments/${id}`, {
+      method: "DELETE",
+    }),
+
   controlEquipment: (id: string, command: ControlCommand) =>
     apiFetch<SuccessResponse>(`/api/v1/hardware/control/${id}`, {
       method: "POST",
@@ -143,6 +156,17 @@ export const hardwareApi = {
     apiFetch<SuccessResponse<Sensor>>("/api/v1/hardware/sensors", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+
+  updateSensor: (id: string, data: UpdateSensorRequest) =>
+    apiFetch<SuccessResponse<Sensor>>(`/api/v1/hardware/sensors/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteSensor: (id: string) =>
+    apiFetch<SuccessResponse>(`/api/v1/hardware/sensors/${id}`, {
+      method: "DELETE",
     }),
 
   // Parameters

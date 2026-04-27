@@ -36,26 +36,63 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Activity, Gauge, Clock } from "lucide-react";
+import {
+  Plus,
+  Activity,
+  Gauge,
+  Clock,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  ChevronDown,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Sensor, Parameter } from "@/types/api";
 import { toast } from "sonner";
 
 function AddSensorDialog({ parameters }: { parameters: Parameter[] }) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [serial, setSerial] = useState("");
   const [name, setName] = useState("");
-  const [parameterIds, setParameterIds] = useState("");
+  const [selectedParameterIds, setSelectedParameterIds] = useState<string[]>([]);
   const [updateFrequency, setUpdateFrequency] = useState("60");
   const [apiUrl, setApiUrl] = useState("");
+
+  const toggleParameter = (parameterId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedParameterIds((prev) =>
+        prev.includes(parameterId) ? prev : [...prev, parameterId]
+      );
+      return;
+    }
+
+    setSelectedParameterIds((prev) => prev.filter((id) => id !== parameterId));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      if (selectedParameterIds.length === 0) {
+        toast.error("Select at least one parameter", {
+          description: "Choose one or more parameter definitions from the dropdown.",
+        });
+        return;
+      }
+
       await hardwareApi.createSensor({
+        serial,
         name,
-        parameter_ids: parameterIds.split(",").map((s) => s.trim()),
+        parameter_ids: selectedParameterIds,
         update_frequency_seconds: parseInt(updateFrequency),
         api_url: apiUrl || undefined,
       });
@@ -66,8 +103,9 @@ function AddSensorDialog({ parameters }: { parameters: Parameter[] }) {
 
       mutate("sensors");
       setOpen(false);
+      setSerial("");
       setName("");
-      setParameterIds("");
+      setSelectedParameterIds([]);
       setUpdateFrequency("60");
       setApiUrl("");
     } catch (err) {
@@ -101,6 +139,18 @@ function AddSensorDialog({ parameters }: { parameters: Parameter[] }) {
           <div className="py-4">
             <FieldGroup>
               <Field>
+                <FieldLabel htmlFor="sensorSerial">Sensor Serial</FieldLabel>
+                <Input
+                  id="sensorSerial"
+                  placeholder="soil_probe_zone_a"
+                  value={serial}
+                  onChange={(e) => setSerial(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
                 <FieldLabel htmlFor="sensorName">Sensor Name</FieldLabel>
                 <Input
                   id="sensorName"
@@ -113,24 +163,52 @@ function AddSensorDialog({ parameters }: { parameters: Parameter[] }) {
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="params">Parameter IDs</FieldLabel>
-                <Input
-                  id="params"
-                  placeholder="soil_moisture_pct, soil_temp_c"
-                  value={parameterIds}
-                  onChange={(e) => setParameterIds(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
+                <FieldLabel>Parameters</FieldLabel>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                      disabled={isLoading || parameters.length === 0}
+                    >
+                      {selectedParameterIds.length > 0
+                        ? `${selectedParameterIds.length} selected`
+                        : "Select parameter(s)"}
+                      <ChevronDown className="h-4 w-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[320px]">
+                    {parameters.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        No parameters available
+                      </DropdownMenuItem>
+                    ) : (
+                      parameters.map((parameter) => (
+                        <DropdownMenuCheckboxItem
+                          key={parameter.id}
+                          checked={selectedParameterIds.includes(parameter.id)}
+                          onCheckedChange={(checked) =>
+                            toggleParameter(parameter.id, checked === true)
+                          }
+                        >
+                          {parameter.id} ({parameter.unit})
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {selectedParameterIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedParameterIds.map((parameterId) => (
+                      <Badge key={parameterId} variant="secondary" className="text-xs">
+                        {parameterId}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
-                  Comma-separated list of parameter IDs
-                  {parameters.length > 0 && (
-                    <>
-                      {" "}
-                      (Available:{" "}
-                      {parameters.map((p) => p.id).join(", ")})
-                    </>
-                  )}
+                  Select one or more created parameter definitions
                 </p>
               </Field>
 
@@ -315,7 +393,301 @@ function AddParameterDialog() {
   );
 }
 
-function SensorRow({ sensor }: { sensor: Sensor }) {
+function EditSensorDialog({
+  sensor,
+  parameters,
+}: {
+  sensor: Sensor;
+  parameters: Parameter[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [serial, setSerial] = useState(sensor.serial);
+  const [name, setName] = useState(sensor.name);
+  const [selectedParameterIds, setSelectedParameterIds] = useState<string[]>(
+    sensor.parameter_ids
+  );
+  const [updateFrequency, setUpdateFrequency] = useState(
+    sensor.update_frequency_seconds.toString()
+  );
+  const [apiUrl, setApiUrl] = useState(sensor.api_url || "");
+
+  const toggleParameter = (parameterId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedParameterIds((prev) =>
+        prev.includes(parameterId) ? prev : [...prev, parameterId]
+      );
+      return;
+    }
+
+    setSelectedParameterIds((prev) => prev.filter((id) => id !== parameterId));
+  };
+
+  const resetForm = () => {
+    setSerial(sensor.serial);
+    setName(sensor.name);
+    setSelectedParameterIds(sensor.parameter_ids);
+    setUpdateFrequency(sensor.update_frequency_seconds.toString());
+    setApiUrl(sensor.api_url || "");
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      resetForm();
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      if (selectedParameterIds.length === 0) {
+        toast.error("Select at least one parameter", {
+          description: "Choose one or more parameter definitions from the dropdown.",
+        });
+        return;
+      }
+
+      await hardwareApi.updateSensor(sensor.id, {
+        serial,
+        name,
+        parameter_ids: selectedParameterIds,
+        update_frequency_seconds: parseInt(updateFrequency, 10),
+        api_url: apiUrl || undefined,
+      });
+
+      toast.success("Sensor updated", {
+        description: `${name} has been updated successfully.`,
+      });
+
+      mutate("sensors");
+      setOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error("Failed to update sensor", {
+          description: err.message,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit
+        </DropdownMenuItem>
+      </DialogTrigger>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Edit Sensor</DialogTitle>
+            <DialogDescription>
+              Update sensor details and assigned parameters.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="edit-sensor-serial">Sensor Serial</FieldLabel>
+                <Input
+                  id="edit-sensor-serial"
+                  value={serial}
+                  onChange={(e) => setSerial(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-sensor-name">Sensor Name</FieldLabel>
+                <Input
+                  id="edit-sensor-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel>Parameters</FieldLabel>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                      disabled={isLoading || parameters.length === 0}
+                    >
+                      {selectedParameterIds.length > 0
+                        ? `${selectedParameterIds.length} selected`
+                        : "Select parameter(s)"}
+                      <ChevronDown className="h-4 w-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[320px]">
+                    {parameters.length === 0 ? (
+                      <DropdownMenuItem disabled>
+                        No parameters available
+                      </DropdownMenuItem>
+                    ) : (
+                      parameters.map((parameter) => (
+                        <DropdownMenuCheckboxItem
+                          key={parameter.id}
+                          checked={selectedParameterIds.includes(parameter.id)}
+                          onCheckedChange={(checked) =>
+                            toggleParameter(parameter.id, checked === true)
+                          }
+                        >
+                          {parameter.id} ({parameter.unit})
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {selectedParameterIds.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedParameterIds.map((parameterId) => (
+                      <Badge key={parameterId} variant="secondary" className="text-xs">
+                        {parameterId}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-sensor-frequency">
+                  Update Frequency (seconds)
+                </FieldLabel>
+                <Input
+                  id="edit-sensor-frequency"
+                  type="number"
+                  min="1"
+                  value={updateFrequency}
+                  onChange={(e) => setUpdateFrequency(e.target.value)}
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-sensor-api-url">
+                  API URL <span className="text-muted-foreground font-normal">(optional)</span>
+                </FieldLabel>
+                <Input
+                  id="edit-sensor-api-url"
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  disabled={isLoading}
+                />
+              </Field>
+            </FieldGroup>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteSensorDialog({ sensor }: { sensor: Sensor }) {
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleDelete = async () => {
+    setIsLoading(true);
+    try {
+      await hardwareApi.deleteSensor(sensor.id);
+      toast.success("Sensor deleted", {
+        description: `${sensor.name} has been removed.`,
+      });
+      mutate("sensors");
+      setOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error("Failed to delete sensor", {
+          description: err.message,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setOpen(true);
+          }}
+          className="text-destructive"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Sensor</DialogTitle>
+          <DialogDescription>
+            This will permanently delete {sensor.name}. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Spinner className="mr-2" />
+                Deleting...
+              </>
+            ) : (
+              "Delete"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SensorRow({ sensor, parameters }: { sensor: Sensor; parameters: Parameter[] }) {
   return (
     <TableRow>
       <TableCell>
@@ -326,7 +698,7 @@ function SensorRow({ sensor }: { sensor: Sensor }) {
           <div>
             <p className="font-medium">{sensor.name}</p>
             <p className="text-xs text-muted-foreground font-mono">
-              {sensor.id.slice(0, 8)}...
+              {sensor.serial}
             </p>
           </div>
         </div>
@@ -353,6 +725,21 @@ function SensorRow({ sensor }: { sensor: Sensor }) {
       </TableCell>
       <TableCell>
         {new Date(sensor.created_at).toLocaleDateString()}
+      </TableCell>
+      <TableCell>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <EditSensorDialog sensor={sensor} parameters={parameters} />
+            <DropdownMenuSeparator />
+            <DeleteSensorDialog sensor={sensor} />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
   );
@@ -449,11 +836,16 @@ export default function SensorsPage() {
                       <TableHead>Frequency</TableHead>
                       <TableHead>MQTT Topic</TableHead>
                       <TableHead>Created</TableHead>
+                      <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sensors.map((sensor) => (
-                      <SensorRow key={sensor.id} sensor={sensor} />
+                      <SensorRow
+                        key={sensor.id}
+                        sensor={sensor}
+                        parameters={parameters || []}
+                      />
                     ))}
                   </TableBody>
                 </Table>

@@ -85,6 +85,7 @@ const (
 // Equipment represents an actuator/controller device (e.g., Water Pump, Fan).
 type Equipment struct {
 	ID                  string          `json:"id" db:"id"`
+	Serial              string          `json:"serial" db:"serial"`
 	Name                string          `json:"name" db:"name"`
 	SupportedOperations StringArray     `json:"supported_operations" db:"operations"`
 	MQTTTopic           string          `json:"mqtt_topic" db:"mqtt_topic"`
@@ -95,6 +96,15 @@ type Equipment struct {
 
 // CreateEquipmentRequest is the payload for registering a new equipment.
 type CreateEquipmentRequest struct {
+	Serial              string   `json:"serial" binding:"required"`
+	Name                string   `json:"name" binding:"required"`
+	SupportedOperations []string `json:"supported_operations" binding:"required"`
+	APIURL              string   `json:"api_url"`
+}
+
+// UpdateEquipmentRequest is the payload for updating an existing equipment.
+type UpdateEquipmentRequest struct {
+	Serial              string   `json:"serial" binding:"required"`
 	Name                string   `json:"name" binding:"required"`
 	SupportedOperations []string `json:"supported_operations" binding:"required"`
 	APIURL              string   `json:"api_url"`
@@ -103,6 +113,7 @@ type CreateEquipmentRequest struct {
 // Sensor represents a data-providing IoT device (e.g., Soil Moisture, pH probe).
 type Sensor struct {
 	ID              string      `json:"id" db:"id"`
+	Serial          string      `json:"serial" db:"serial"`
 	Name            string      `json:"name" db:"name"`
 	ParameterIDs    StringArray `json:"parameter_ids" db:"parameter_ids"`
 	MQTTTopic       string      `json:"mqtt_topic" db:"mqtt_topic"`
@@ -113,6 +124,16 @@ type Sensor struct {
 
 // CreateSensorRequest is the payload for provisioning a new sensor.
 type CreateSensorRequest struct {
+	Serial          string   `json:"serial" binding:"required"`
+	Name            string   `json:"name" binding:"required"`
+	ParameterIDs    []string `json:"parameter_ids" binding:"required"`
+	APIURL          string   `json:"api_url"`
+	UpdateFrequency int      `json:"update_frequency_seconds"`
+}
+
+// UpdateSensorRequest is the payload for updating an existing sensor.
+type UpdateSensorRequest struct {
+	Serial          string   `json:"serial" binding:"required"`
 	Name            string   `json:"name" binding:"required"`
 	ParameterIDs    []string `json:"parameter_ids" binding:"required"`
 	APIURL          string   `json:"api_url"`

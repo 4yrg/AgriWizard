@@ -49,11 +49,14 @@ import {
   Server,
   MoreHorizontal,
   Zap,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Equipment, EquipmentStatus } from "@/types/api";
@@ -92,6 +95,7 @@ function getStatusBadge(status: EquipmentStatus) {
 function AddEquipmentDialog() {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [serial, setSerial] = useState("");
   const [name, setName] = useState("");
   const [operations, setOperations] = useState("");
   const [apiUrl, setApiUrl] = useState("");
@@ -102,6 +106,7 @@ function AddEquipmentDialog() {
 
     try {
       await hardwareApi.createEquipment({
+        serial,
         name,
         supported_operations: operations.split(",").map((s) => s.trim()),
         api_url: apiUrl || undefined,
@@ -113,6 +118,7 @@ function AddEquipmentDialog() {
 
       mutate("equipment");
       setOpen(false);
+      setSerial("");
       setName("");
       setOperations("");
       setApiUrl("");
@@ -146,6 +152,18 @@ function AddEquipmentDialog() {
 
           <div className="py-4">
             <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="serial">Equipment Serial</FieldLabel>
+                <Input
+                  id="serial"
+                  placeholder="pump_main_01"
+                  value={serial}
+                  onChange={(e) => setSerial(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
               <Field>
                 <FieldLabel htmlFor="name">Equipment Name</FieldLabel>
                 <Input
@@ -317,6 +335,226 @@ function ControlEquipmentDialog({ equipment }: { equipment: Equipment }) {
   );
 }
 
+function EditEquipmentDialog({ equipment }: { equipment: Equipment }) {
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [serial, setSerial] = useState(equipment.serial);
+  const [name, setName] = useState(equipment.name);
+  const [operations, setOperations] = useState(
+    equipment.supported_operations.join(", ")
+  );
+  const [apiUrl, setApiUrl] = useState(equipment.api_url || "");
+
+  const resetForm = () => {
+    setSerial(equipment.serial);
+    setName(equipment.name);
+    setOperations(equipment.supported_operations.join(", "));
+    setApiUrl(equipment.api_url || "");
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      resetForm();
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      await hardwareApi.updateEquipment(equipment.id, {
+        serial,
+        name,
+        supported_operations: operations
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        api_url: apiUrl || undefined,
+      });
+
+      toast.success("Equipment updated", {
+        description: `${name} has been updated successfully.`,
+      });
+
+      mutate("equipment");
+      setOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error("Failed to update equipment", {
+          description: err.message,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit
+        </DropdownMenuItem>
+      </DialogTrigger>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Edit Equipment</DialogTitle>
+            <DialogDescription>
+              Update equipment details and supported operations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="edit-serial">Equipment Serial</FieldLabel>
+                <Input
+                  id="edit-serial"
+                  value={serial}
+                  onChange={(e) => setSerial(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-name">Equipment Name</FieldLabel>
+                <Input
+                  id="edit-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-operations">
+                  Supported Operations
+                </FieldLabel>
+                <Input
+                  id="edit-operations"
+                  value={operations}
+                  onChange={(e) => setOperations(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-api-url">
+                  API URL <span className="text-muted-foreground font-normal">(optional)</span>
+                </FieldLabel>
+                <Input
+                  id="edit-api-url"
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  disabled={isLoading}
+                />
+              </Field>
+            </FieldGroup>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteEquipmentDialog({ equipment }: { equipment: Equipment }) {
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleDelete = async () => {
+    setIsLoading(true);
+    try {
+      await hardwareApi.deleteEquipment(equipment.id);
+      toast.success("Equipment deleted", {
+        description: `${equipment.name} has been removed.`,
+      });
+      mutate("equipment");
+      setOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error("Failed to delete equipment", {
+          description: err.message,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setOpen(true);
+          }}
+          className="text-destructive"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Equipment</DialogTitle>
+          <DialogDescription>
+            This will permanently delete {equipment.name}. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Spinner className="mr-2" />
+                Deleting...
+              </>
+            ) : (
+              "Delete"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EquipmentRow({ equipment }: { equipment: Equipment }) {
   return (
     <TableRow>
@@ -340,7 +578,7 @@ function EquipmentRow({ equipment }: { equipment: Equipment }) {
           <div>
             <p className="font-medium">{equipment.name}</p>
             <p className="text-xs text-muted-foreground font-mono">
-              {equipment.id.slice(0, 8)}...
+              {equipment.serial}
             </p>
           </div>
         </div>
@@ -373,6 +611,9 @@ function EquipmentRow({ equipment }: { equipment: Equipment }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <ControlEquipmentDialog equipment={equipment} />
+            <EditEquipmentDialog equipment={equipment} />
+            <DropdownMenuSeparator />
+            <DeleteEquipmentDialog equipment={equipment} />
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>

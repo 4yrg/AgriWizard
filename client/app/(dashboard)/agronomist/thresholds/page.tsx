@@ -236,7 +236,7 @@ function AddRuleDialog({ entry, equipment }: { entry: DecisionTableEntry; equipm
   const [lowAction, setLowAction] = useState("");
   const [highAction, setHighAction] = useState("");
 
-  const selectedEquipment = equipment.find((e) => e.id === equipmentId);
+  const selectedEquipment = equipment.find((e) => e.serial === equipmentId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,8 +305,8 @@ function AddRuleDialog({ entry, equipment }: { entry: DecisionTableEntry; equipm
                   </SelectTrigger>
                   <SelectContent>
                     {equipment.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name}
+                      <SelectItem key={e.id} value={e.serial}>
+                        {e.name} ({e.serial})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -405,9 +405,6 @@ function ThresholdRow({
           </div>
           <div>
             <p className="font-medium">{entry.parameter_id}</p>
-            <p className="text-xs text-muted-foreground">
-              {entry.threshold.id.slice(0, 8)}...
-            </p>
           </div>
         </div>
       </TableCell>
@@ -448,7 +445,19 @@ function ThresholdRow({
   );
 }
 
-function RulesCard({ decisions }: { decisions: DecisionTableEntry[] }) {
+function RulesCard({
+  decisions,
+  equipment,
+}: {
+  decisions: DecisionTableEntry[];
+  equipment: Equipment[];
+}) {
+  const equipmentLookup = new Map<string, Equipment>();
+  for (const item of equipment) {
+    equipmentLookup.set(item.id, item);
+    equipmentLookup.set(item.serial, item);
+  }
+
   const allRules = decisions.flatMap((d) =>
     d.rules.map((r) => ({ ...r, parameter_id: d.parameter_id }))
   );
@@ -476,20 +485,28 @@ function RulesCard({ decisions }: { decisions: DecisionTableEntry[] }) {
         ) : (
           <div className="space-y-3">
             {allRules.map((rule) => (
-              <div
-                key={rule.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-              >
-                <div>
-                  <p className="font-medium text-sm">{rule.parameter_id}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Low: {rule.low_action} | High: {rule.high_action}
-                  </p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {rule.equipment_id.slice(0, 8)}...
-                </Badge>
-              </div>
+              (() => {
+                const targetEquipment = equipmentLookup.get(rule.equipment_id);
+
+                return (
+                  <div
+                    key={rule.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{rule.parameter_id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Low: {rule.low_action} | High: {rule.high_action}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {targetEquipment
+                        ? `${targetEquipment.name} (${targetEquipment.serial})`
+                        : rule.equipment_id}
+                    </Badge>
+                  </div>
+                );
+              })()
             ))}
           </div>
         )}
@@ -587,7 +604,7 @@ export default function ThresholdsPage() {
         </TabsContent>
 
         <TabsContent value="rules">
-          <RulesCard decisions={decisions || []} />
+          <RulesCard decisions={decisions || []} equipment={equipment || []} />
         </TabsContent>
       </Tabs>
     </div>
