@@ -58,7 +58,7 @@ If you want to store Terraform state remotely:
 ```bash
 # Variables
 RG="terraform-state-rg"
-LOCATION="eastus"
+LOCATION="centralindia"
 STORAGE_NAME="terraformstate$(date +%s)"
 
 # Create resource group

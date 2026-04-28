@@ -11,7 +11,7 @@ variable "environment" {
 variable "location" {
   description = "Azure region"
   type        = string
-  default     = "eastus"
+  default     = "centralindia"
 }
 
 variable "resource_group_name" {
@@ -77,7 +77,7 @@ variable "container_apps_environment" {
 variable "container_apps_location" {
   description = "Container Apps location (should match Key Vault)"
   type        = string
-  default     = "eastus"
+  default     = "centralindia"
 }
 
 # Service configurations for Container Apps

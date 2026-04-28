@@ -1,7 +1,7 @@
 # Development Environment Variables
 
 environment         = "dev"
-location            = "eastus"
+location            = "centralindia"
 resource_group_name = "agriwizard"
 
 # Database
