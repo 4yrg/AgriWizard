@@ -51,51 +51,103 @@ az account show --output table
 
 ---
 
-## Step 3: Create Backend Storage (Optional)
+## Step 3: Create Backend Storage (Terraform State)
 
-If you want to store Terraform state remotely:
+This creates a separate resource group for Terraform state storage in your approved region.
+
+### 3.1 Create Resource Group
 
 ```bash
-# Variables
-RG="terraform-state-rg"
+# Variables - use centralindia as approved region
+RG="agriwizard-tf-rg"
 LOCATION="centralindia"
-STORAGE_NAME="terraformstate$(date +%s)"
 
 # Create resource group
 az group create --name $RG --location $LOCATION
+```
+
+### 3.2 Create Storage Account
+
+```bash
+# Generate unique name (must be globally unique, 3-24 lowercase chars)
+SUFFIX=$(date +%s | tail -c 5)
+STORAGE_NAME="tfstate${SUFFIX}"
 
 # Create storage account
 az storage account create \
   --name $STORAGE_NAME \
   --resource-group $RG \
+  --location $LOCATION \
   --sku Standard_LRS \
   --kind StorageV2
 
-# Create blob container
-az storage container create \
-  --name tfstate \
-  --account-name $STORAGE_NAME
+# Verify
+az storage account show --name $STORAGE_NAME --resource-group $RG --query provisioningState
 ```
 
-Update `versions.tf`:
+### 3.3 Create Blob Container
+
+```bash
+# Create container with Azure AD authentication
+az storage container create \
+  --name tfstate \
+  --account-name $STORAGE_NAME \
+  --auth-mode login \
+  --public-access off
+```
+
+### 3.4 Grant Access (RBAC)
+
+```bash
+# Get current user ID
+USER_ID=$(az ad signed-in-user show --query id -o tsv)
+
+# Assign Storage Blob Data Contributor role
+az role assignment create \
+  --assignee $USER_ID \
+  --role "Storage Blob Data Contributor" \
+  --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RG}/providers/Microsoft.Storage/storageAccounts/${STORAGE_NAME}"
+```
+
+### 3.5 Create backend.tf
+
+Create `backend.tf` in `infrastructure/azure/terraform/`:
 
 ```hcl
 terraform {
   backend "azurerm" {
-    resource_group_name  = "terraform-state-rg"
-    storage_account_name = "terraformstatestorage"
-    container_name     = "tfstate"
-    key                = "agriwizard.tfstate"
+    resource_group_name  = "agriwizard-tf-rg"
+    storage_account_name = "tfstateXXXXX"
+    container_name       = "tfstate"
+    key                  = "agriwizard/dev/terraform.tfstate"
+    use_azuread_auth    = true
   }
 }
 ```
+
+Replace `tfstateXXXXX` with your actual storage account name from Step 3.2.
+
+### 3.6 Multi-Environment State Keys
+
+For multiple environments, use different keys:
+
+| Environment | State Key |
+|-------------|-----------|
+| Dev | `agriwizard/dev/terraform.tfstate` |
+| Staging | `agriwizard/staging/terraform.tfstate` |
+| Prod | `agriwizard/prod/terraform.tfstate` |
+
+Update `backend.tf` per environment or use workspaces.
 
 ---
 
 ## Step 4: Initialize Terraform
 
 ```bash
-# Initialize providers
+# Navigate to Terraform directory
+cd infrastructure/azure/terraform
+
+# Initialize providers (uses backend.tf)
 terraform init
 
 # Verify
@@ -106,6 +158,12 @@ Expected output:
 ```
 Terraform v1.x.x
 ```
+
+> **Note**: If you skipped Step 3, initialize without backend first:
+> ```bash
+> terraform init -backend=false
+> ```
+> Then configure backend manually.
 
 ---
 
@@ -331,7 +389,7 @@ az servicebus namespace show \
 
 ## Cleanup
 
-### Destroy Resources
+### Destroy Terraform Infrastructure
 
 ```bash
 # Destroy development environment
@@ -350,6 +408,15 @@ for service in iam hardware analytics weather notification; do
     --resource-group agriwizard-dev-rg \
     --yes
 done
+```
+
+### Destroy Terraform Backend (Optional)
+
+> **Warning**: This deletes all Terraform state. Only do this if you want to completely remove Terraform-managed infrastructure.
+
+```bash
+# Delete the entire terraform state resource group
+az group delete --name agriwizard-tf-rg --yes --no-wait
 ```
 
 ---
