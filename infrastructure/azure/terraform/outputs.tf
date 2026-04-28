@@ -135,20 +135,6 @@ output "service_bus_connection_string" {
   sensitive  = true
 }
 
-# =============================================================================
-# Storage
-# =============================================================================
-
-output "storage_account_name" {
-  description = "Storage account name"
-  value       = azurerm_storage_account.main.name
-}
-
-output "storage_connection_string" {
-  description = "Storage connection string"
-  value       = azurerm_storage_account.main.primary_connection_string
-  sensitive  = true
-}
 
 # =============================================================================
 # Application Insights

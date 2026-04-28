@@ -173,24 +173,3 @@ variable "servicebus_sku" {
 }
 
 
-# =============================================================================
-# Storage
-# =============================================================================
-
-variable "storage_account_tier" {
-  description = "Storage account tier"
-  type        = string
-  default     = "Standard"
-}
-
-variable "storage_account_kind" {
-  description = "Storage account kind"
-  type        = string
-  default     = "StorageV2"
-}
-
-variable "storage_replication" {
-  description = "Storage replication type"
-  type        = string
-  default     = "ZRS"
-}
