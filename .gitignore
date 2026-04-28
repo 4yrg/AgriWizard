@@ -107,3 +107,13 @@ go.work.sum
 # .vscode/
 
 docs/SECRETS.md
+
+# ------------------------------
+# Terraform
+# ------------------------------
+*.tfstate
+*.tfstate.*
+.terraform/
+*.plan
+*.tfvars
+*.tfvars.json

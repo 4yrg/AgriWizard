@@ -25,7 +25,7 @@ variable "tags" {
   type        = map(string)
   default = {
     Project     = "AgriWizard"
-    ManagedBy  = "Terraform"
+    ManagedBy   = "Terraform"
     Environment = "dev"
   }
 }
@@ -49,7 +49,7 @@ variable "postgresql_sku_tier" {
 variable "postgresql_storage_mb" {
   description = "PostgreSQL storage in MB"
   type        = number
-  default     = 51200
+  default     = 32768
 }
 
 variable "postgresql_backup_retention_days" {
@@ -84,14 +84,14 @@ variable "container_apps_location" {
 variable "iam_app_config" {
   description = "IAM service container app config"
   type = object({
-    cpu       = number
-    memory    = number
+    cpu          = number
+    memory       = number
     min_replicas = number
     max_replicas = number
   })
   default = {
-    cpu        = 0.5
-    memory    = 1
+    cpu          = 0.5
+    memory       = 1
     min_replicas = 1
     max_replicas = 3
   }
@@ -100,14 +100,14 @@ variable "iam_app_config" {
 variable "hardware_app_config" {
   description = "Hardware service container app config"
   type = object({
-    cpu       = number
-    memory    = number
+    cpu          = number
+    memory       = number
     min_replicas = number
     max_replicas = number
   })
   default = {
-    cpu        = 1.0
-    memory    = 2
+    cpu          = 1.0
+    memory       = 2
     min_replicas = 1
     max_replicas = 5
   }
@@ -116,14 +116,14 @@ variable "hardware_app_config" {
 variable "analytics_app_config" {
   description = "Analytics service container app config"
   type = object({
-    cpu       = number
-    memory    = number
+    cpu          = number
+    memory       = number
     min_replicas = number
     max_replicas = number
   })
   default = {
-    cpu        = 1.0
-    memory    = 2
+    cpu          = 1.0
+    memory       = 2
     min_replicas = 1
     max_replicas = 5
   }
@@ -132,14 +132,14 @@ variable "analytics_app_config" {
 variable "weather_app_config" {
   description = "Weather service container app config"
   type = object({
-    cpu       = number
-    memory    = number
+    cpu          = number
+    memory       = number
     min_replicas = number
     max_replicas = number
   })
   default = {
-    cpu        = 0.25
-    memory    = 0.5
+    cpu          = 0.25
+    memory       = 0.5
     min_replicas = 0
     max_replicas = 2
   }
@@ -148,14 +148,14 @@ variable "weather_app_config" {
 variable "notification_app_config" {
   description = "Notification service container app config"
   type = object({
-    cpu       = number
-    memory    = number
+    cpu          = number
+    memory       = number
     min_replicas = number
     max_replicas = number
   })
   default = {
-    cpu        = 0.5
-    memory    = 1
+    cpu          = 0.5
+    memory       = 1
     min_replicas = 1
     max_replicas = 3
   }
@@ -194,7 +194,7 @@ variable "servicebus_sku" {
 variable "iothub_sku" {
   description = "IoT Hub SKU"
   type        = string
-  default     = "F1"  # Free tier
+  default     = "F1" # Free tier
 }
 
 variable "iothub_units" {

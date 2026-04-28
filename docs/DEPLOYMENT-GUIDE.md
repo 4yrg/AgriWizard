@@ -19,7 +19,6 @@ This guide walks through deploying AgriWizard to Azure using Terraform.
 |------|-------|
 | Contributor | Subscription or Resource Group |
 | Key Vault Contributor | Key Vault (if using RBAC) |
-| Azure Connected Machine | For onboarding |
 
 ---
 
@@ -198,16 +197,16 @@ This will create:
 | Resource Group | agriwizard-dev-rg | Resource Group |
 | Log Analytics | agriwizard-dev-law | Log Analytics |
 | App Insights | agriwizard-dev-ai | Application Insights |
-| PostgreSQL | agriwizard-dev-postgres | Flexible Server |
+| PostgreSQL | agriwizard-dev-postgres | Azure Database for PostgreSQL |
 | Key Vault | agriwizard-dev-kv | Key Vault |
-| Service Bus | agriwizard-dev-sb | Service Bus |
-| IoT Hub | agriwizard-dev-iothub | IoT Hub |
-| Container Apps Env | agriwizard-dev-aca | Container Apps |
-| 5 Container Apps | iam, hardware, analytics, weather, notification | Container Apps |
-| API Management | agriwizard-dev-apim | API Management |
+| Service Bus | agriwizard-dev-sbns | Service Bus |
+| Container Apps Env | agriwizard-dev-aca | Container Apps Environment |
+| Kong API Gateway | agriwizard-dev-kong | Container App (API Gateway) |
+| HiveMQ Broker | agriwizard-dev-hivemq | Container App (MQTT Broker) |
+| 6 Container Apps | iam, hardware, analytics, weather, notification, frontend | Container Apps |
 | Storage | agriwizarddevst | Blob Storage |
 
-Expected time: **10-15 minutes**
+Expected time: **15-20 minutes**
 
 ---
 
@@ -248,7 +247,7 @@ echo "Registry: $ACR_NAME"
 # Login to ACR
 az acr login --name $ACR_NAME
 
-# Build and push each service
+# Build and push backend services
 for service in iam-service hardware-service analytics-service weather-service notification-service; do
   echo "Building $service..."
   
@@ -258,15 +257,23 @@ for service in iam-service hardware-service analytics-service weather-service no
     --file ../../services/${service}/Dockerfile \
     ../../.
 done
+
+# Build and push frontend
+echo "Building frontend..."
+az acr build \
+  --registry $ACR_NAME \
+  --image agriwizard-frontend:latest \
+  --file ../../client/Dockerfile \
+  ../../.
 ```
 
 ---
 
-## Step 9: Deploy to Container Apps
+## Step 9: Deploy Images to Container Apps
 
 ```bash
 # Update each container app with new image
-for service in iam hardware analytics weather notification; do
+for service in kong hivemq iam hardware analytics weather notification frontend; do
   echo "Updating ${service}..."
   
   az containerapp update \
@@ -281,16 +288,57 @@ done
 ## Step 10: Test Deployment
 
 ```bash
-# Get APIM gateway URL
-APIM_URL=$(az apim show -n agriwizard-dev-apim -g agriwizard-dev-rg --query "gatewayUrl" -o tsv)
-echo "Gateway: $APIM_URL"
+# Get Kong gateway URL
+KONG_URL=$(az containerapp show \
+  --name agriwizard-dev-kong \
+  --resource-group agriwizard-dev-rg \
+  --query "properties.provisioningState" -o tsv)
 
-# Test health endpoint
-curl -f ${APIM_URL}/health || echo "Health check failed"
+# Get frontend URL
+FRONTEND_URL=$(az containerapp show \
+  --name agriwizard-dev-frontend \
+  --resource-group agriwizard-dev-rg \
+  --query "properties.configuration.ingress.fqdn" -o tsv)
 
-# Test IAM service
-curl -f ${APIM_URL}/api/v1/iam/health || echo "IAM failed"
+echo "Frontend: https://${FRONTEND_URL}"
+
+# Test Kong health
+curl -f http://${KONG_URL}:8080/health || echo "Kong health check failed"
+
+# Test IAM service through Kong
+curl -f http://${KONG_URL}:8080/api/v1/iam/health || echo "IAM failed"
 ```
+
+---
+
+## Infrastructure Details
+
+### Kong API Gateway
+- **Port**: 8080 (HTTP external)
+- **Admin API**: 8001
+- **Purpose**: API gateway for all backend services
+- **Routes**: `/api/v1/iam/*`, `/api/v1/hardware/*`, `/api/v1/analytics/*`, `/api/v1/weather/*`
+
+### HiveMQ MQTT Broker
+- **MQTT Port**: 1883 (TCP external)
+- **WebSocket Port**: 8083 (WS external)
+- **Purpose**: IoT device communication
+- **Protocol**: MQTT 3.1.1 and 5.0
+
+### Backend Services
+
+| Service | Port | Database | Description |
+|--------|------|----------|-------------|
+| IAM | 8086 | PostgreSQL | Identity & Access Management |
+| Hardware | 8087 | PostgreSQL | Equipment & Sensor Management |
+| Analytics | 8088 | PostgreSQL | Data Analysis & Thresholds |
+| Weather | 8089 | - | Weather Service (mock) |
+| Notification | 8091 | PostgreSQL | Push Notifications |
+
+### Frontend
+- **Port**: 3000
+- **Framework**: Next.js
+- **API URL**: Points to Kong Gateway
 
 ---
 
@@ -346,16 +394,18 @@ az postgres flexible-server show \
   -g agriwizard-dev-rg \
   --query "fullyQualifiedDomainName"
 
-# IoT Hub
-az iot hub connection-string show \
-  -n agriwizard-dev-iothub \
-  -g agriwizard-dev-rg
-
 # Service Bus
 az servicebus namespace show \
-  -n agriwizard-dev-sb \
+  -n agriwizard-dev-sbns \
   -g agriwizard-dev-rg \
   --query "defaultPrimaryConnectionString"
+
+# Get Kong Admin URL
+KONG_ADMIN=$(az containerapp show \
+  --name agriwizard-dev-kong \
+  --resource-group agriwizard-dev-rg \
+  --query "properties.configuration.ingress.fqdn" -o tsv)
+echo "http://${KONG_ADMIN}:8001"
 ```
 
 ---
@@ -378,12 +428,19 @@ az servicebus namespace show \
 | Container crash | Check logs: `az containerapp logs show` |
 | Port not exposed | Update `target_port` in config |
 
-### Network Issues
+### Kong Issues
 
 | Error | Solution |
 |-------|----------|
-| Cannot reach service | Check ingress is enabled |
-| VNET issues | Verify subnet delegation |
+| 404 on routes | Check Kong declarative config |
+| Admin not accessible | Check ingress port 8001 |
+
+### HiveMQ Issues
+
+| Error | Solution |
+|-------|----------|
+| MQTT connection failed | Check port 1883 is exposed |
+| WebSocket failed | Check port 8083 is exposed |
 
 ---
 
@@ -402,7 +459,7 @@ terraform destroy -var-file=environments/dev.tfvars
 
 ```bash
 # Delete container apps only (keep infrastructure)
-for service in iam hardware analytics weather notification; do
+for service in kong hivemq iam hardware analytics weather notification frontend; do
   az containerapp delete \
     --name agriwizard-dev-${service} \
     --resource-group agriwizard-dev-rg \
@@ -423,7 +480,7 @@ az group delete --name agriwizard-tf-rg --yes --no-wait
 
 ## Next Steps
 
-1. **Configure DNS** - Point your domain to APIM gateway
+1. **Configure DNS** - Point your domain to Kong gateway
 2. **Set up CI/CD** - Use GitHub Actions workflow
 3. **Add secrets to Key Vault** - Database passwords, API keys
 4. **Configure monitoring** - Set up alerts in App Insights
@@ -445,4 +502,22 @@ az group delete --name agriwizard-tf-rg --yes --no-wait
  # Build and push images (Step 8)
  # Deploy to Container Apps (Step 9)
  # Test (Step 10)
+```
+
+---
+
+## Terraform File Structure
+
+```
+infrastructure/azure/terraform/
+├── api-messaging.tf     # Kong, HiveMQ, backend containers
+├── backend.tf           # Terraform state storage
+├── database.tf          # Azure PostgreSQL Flexible Server
+├── key-vault.tf         # Key Vault
+├── outputs.tf           # Output values
+├── resource-group.tf    # RG, Log Analytics, App Insights
+├── service-bus.tf       # Azure Service Bus
+├── storage.tf          # Storage account
+├── variables.tf         # Variables
+└── versions.tf           # Provider versions
 ```

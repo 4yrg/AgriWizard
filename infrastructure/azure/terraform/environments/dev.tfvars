@@ -6,7 +6,7 @@ resource_group_name = "agriwizard"
 
 # Database
 postgresql_sku_tier          = "GeneralPurpose"
-postgresql_storage_mb        = 51200
+postgresql_storage_mb        = 32768
 postgresql_high_availability = false
 postgresql_backup_retention_days = 7
 
