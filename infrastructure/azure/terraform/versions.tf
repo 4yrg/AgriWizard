@@ -32,23 +32,5 @@ provider "azurerm" {
   skip_provider_registration = false
 }
 
-# Random password generator for PostgreSQL
-resource "random_password" "postgres_password" {
-  length  = 32
-  special = true
-  override_special = "!#$%&*()-_=+[]{}|?"
-}
-
-# Random password for Key Vault
-resource "random_password" "keyvault_password" {
-  length  = 32
-  special = true
-}
-
-# Random string for resource uniqueness
-resource "random_string" "app_suffix" {
-  length  = 6
-  upper   = false
-  lower   = true
-  numeric = true
-}
+# Data source for current tenant
+data "azurerm_client_config" "current" {}

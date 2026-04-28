@@ -68,13 +68,13 @@ variable "postgresql_high_availability" {
 # Container Apps
 # =============================================================================
 
-variable "container Apps_environment" {
+variable "container_apps_environment" {
   description = "Container Apps environment name"
   type        = string
   default     = "agriwizard-aca"
 }
 
-variable "container Apps_location" {
+variable "container_apps_location" {
   description = "Container Apps location (should match Key Vault)"
   type        = string
   default     = "eastus"

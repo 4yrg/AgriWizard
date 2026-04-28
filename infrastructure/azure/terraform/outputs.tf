@@ -21,12 +21,6 @@ output "postgresql_fqdn" {
   value       = azurerm_postgresql_flexible_server.main.fqdn
 }
 
-output "postgresql_connection_string" {
-  description = "PostgreSQL connection string"
-  value       = "postgres://agriwizard@${azurerm_postgresql_flexible_server.main.name}:${random_password.postgres_password.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/agriwizard?sslmode=require"
-  sensitive  = true
-}
-
 # =============================================================================
 # Key Vault
 # =============================================================================
@@ -47,12 +41,12 @@ output "key_vault_uri" {
 
 output "container_registry_name" {
   description = "Container Registry name"
-  value       = azurerm_container_registry.main.name
+  value       = azurerm_container_registry.acr.name
 }
 
 output "container_registry_login_server" {
   description = "Container Registry login server"
-  value       = azurerm_container_registry.main.login_server
+  value       = azurerm_container_registry.acr.login_server
 }
 
 # =============================================================================
@@ -61,30 +55,30 @@ output "container_registry_login_server" {
 
 output "container_apps_environment_name" {
   description = "Container Apps Environment name"
-  value       = azurerm_container_app_environment.main.name
+  value       = azurerm_container_app_environment.aca.name
 }
 
-output "container_app_iam_fqdn" {
+output "iam_app_fqdn" {
   description = "IAM Container App FQDN"
   value       = azurerm_container_app.iam.fqdn
 }
 
-output "container_app_hardware_fqdn" {
+output "hardware_app_fqdn" {
   description = "Hardware Container App FQDN"
   value       = azurerm_container_app.hardware.fqdn
 }
 
-output "container_app_analytics_fqdn" {
+output "analytics_app_fqdn" {
   description = "Analytics Container App FQDN"
   value       = azurerm_container_app.analytics.fqdn
 }
 
-output "container_app_weather_fqdn" {
+output "weather_app_fqdn" {
   description = "Weather Container App FQDN"
   value       = azurerm_container_app.weather.fqdn
 }
 
-output "container_app_notification_fqdn" {
+output "notification_app_fqdn" {
   description = "Notification Container App FQDN"
   value       = azurerm_container_app.notification.fqdn
 }

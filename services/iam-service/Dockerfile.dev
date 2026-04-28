@@ -1,0 +1,49 @@
+# Multi-stage Dockerfile for IAM Service with development support
+
+# ─────────────────────────────────────────────
+# Build Stage
+# ─────────────────────────────────────────────
+FROM golang:1.26-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+COPY services/iam-service/go.mod ./
+COPY services/iam-service/go.sum* ./
+
+RUN go mod download
+
+COPY services/iam-service/ ./
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/iam-service .
+
+# ─────────────────────────────────────────────
+# Development Stage
+# ─────────────────────────────────────────────
+FROM golang:1.26-alpine AS development
+
+RUN apk add --no-cache git ca-certificates wget
+
+WORKDIR /app
+
+COPY --from=builder /app/iam-service /app/iam-service
+
+COPY services/iam-service/ ./
+
+EXPOSE 8086
+
+CMD ["go", "run", "main.go"]
+
+# ─────────────────────────────────────────────
+# Production Stage
+# ─────────────────────────────────────────────
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates wget
+
+COPY --from=builder /app/iam-service /iam-service
+
+EXPOSE 8086
+
+ENTRYPOINT ["/iam-service"]
