@@ -165,6 +165,17 @@ resource "azurerm_container_app" "iam" {
     type = "SystemAssigned"
   }
 
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
+  }
+
   ingress {
     target_port = 8086
     transport   = "http"
@@ -217,6 +228,17 @@ resource "azurerm_container_app" "hardware" {
     type = "SystemAssigned"
   }
 
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
+  }
+
   ingress {
     target_port = 8087
     transport   = "http"
@@ -263,6 +285,17 @@ resource "azurerm_container_app" "analytics" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
   }
 
   ingress {
@@ -313,6 +346,17 @@ resource "azurerm_container_app" "weather" {
     type = "SystemAssigned"
   }
 
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
+  }
+
   ingress {
     target_port = 8089
     transport   = "http"
@@ -355,6 +399,17 @@ resource "azurerm_container_app" "notification" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
   }
 
   ingress {
@@ -403,6 +458,17 @@ resource "azurerm_container_app" "frontend" {
 
   identity {
     type = "SystemAssigned"
+  }
+
+  registry {
+    server               = azurerm_container_registry.acr.login_server
+    username             = azurerm_container_registry.acr.admin_username
+    password_secret_name = "acr-password"
+  }
+
+  secret {
+    name  = "acr-password"
+    value = azurerm_container_registry.acr.admin_password
   }
 
   ingress {
