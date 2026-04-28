@@ -1,4 +1,4 @@
-# AgriWizard: Smart Greenhouse Management System
+# AgriWizard: Smart Greenhouse Management System Documentation
 
 AgriWizard is a comprehensive, enterprise-grade IoT platform designed for precision agriculture and smart greenhouse management. It leverages a microservices architecture to provide a scalable, resilient, and highly available system for monitoring and controlling agricultural environments.
 
