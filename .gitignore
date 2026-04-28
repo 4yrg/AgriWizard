@@ -117,3 +117,5 @@ docs/SECRETS.md
 *.plan
 *.tfvars
 *.tfvars.json
+
+.env
