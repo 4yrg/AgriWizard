@@ -124,7 +124,7 @@ resource "azurerm_container_app" "hivemq" {
   ingress {
     target_port = 1883
     transport   = "tcp"
-    external_enabled = true
+    external_enabled = false
     traffic_weight {
       latest_revision = true
       percentage      = 100

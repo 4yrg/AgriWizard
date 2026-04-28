@@ -161,21 +161,6 @@ variable "notification_app_config" {
   }
 }
 
-# =============================================================================
-# API Management
-# =============================================================================
-
-variable "apim_publisher_name" {
-  description = "APIM publisher name"
-  type        = string
-  default     = "AgriWizard Team"
-}
-
-variable "apim_sku" {
-  description = "APIM SKU"
-  type        = string
-  default     = "Developer"
-}
 
 # =============================================================================
 # Service Bus
@@ -187,21 +172,6 @@ variable "servicebus_sku" {
   default     = "Standard"
 }
 
-# =============================================================================
-# IoT Hub
-# =============================================================================
-
-variable "iothub_sku" {
-  description = "IoT Hub SKU"
-  type        = string
-  default     = "F1" # Free tier
-}
-
-variable "iothub_units" {
-  description = "IoT Hub units"
-  type        = number
-  default     = 1
-}
 
 # =============================================================================
 # Storage
