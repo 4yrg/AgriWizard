@@ -43,20 +43,13 @@ notification_app_config = {
   max_replicas = 2
 }
 
-# API Management
-apim_sku = "Developer"
+
 
 # Service Bus
 servicebus_sku = "Standard"
 
-# IoT Hub
-iothub_sku   = "F1"
-iothub_units = 1
 
-# Storage
-storage_account_tier   = "Standard"
-storage_account_kind   = "StorageV2"
-storage_replication    = "LRS"
+
 
 # Tags
 tags = {
