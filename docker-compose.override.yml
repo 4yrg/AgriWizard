@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────
+#  AgriWizard — Development Compose Override
+#  docker-compose.override.yml
+# ─────────────────────────────────────────────
+# Usage: docker compose -f docker-compose.yml -f docker-compose.override.yml up
+# This adds debugging, observability tools for development
+
+x-dev-env: &dev-env
+  GIN_MODE: debug
+  LOG_LEVEL: debug
+
+services:
+  # ────────────────────────────────────────────
+  #  Development Service Overrides
+  #  Use volume mounts for code changes to persist
+  # ────────────────────────────────────────────
+
+  iam-service:
+    environment:
+      <<: *dev-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  hardware-service:
+    environment:
+      <<: *dev-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  analytics-service:
+    environment:
+      <<: *dev-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  weather-service:
+    environment:
+      <<: *dev-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  notification-service:
+    environment:
+      <<: *dev-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ────────────────────────────────────────────
+  #  Development Tools (optional)
+  # ────────────────────────────────────────────
+  # Access via: docker compose -f docker-compose.yml -f docker-compose.override.yml -p dev up
+
+  # PostgreSQL admin UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: agriwizard-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@agriwizard.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    networks:
+      - agriwizard-net
+    ports:
+      - "8099:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ────────────────────────────────────────────
+  #  Profiles for optional services
+  # ────────────────────────────────────────────
+
+profiles:
+  admin:
+    - pgadmin

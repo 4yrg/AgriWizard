@@ -53,7 +53,7 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "5432:5432"
+      - "8091:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agriwizard -d agriwizard"]
       interval: 5s
@@ -73,19 +73,19 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      PORT: "8081"
+      PORT: "8086"
       JWT_TTL_HOURS: "24"
     networks:
       - agriwizard-net
     ports:
-      - "${IAM_PORT:-8081}:8081"
+      - "${IAM_PORT:-8081}:8086"
     depends_on:
       postgres:
         condition: service_healthy
       kong:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -99,15 +99,15 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      PORT: "8082"
+      PORT: "8087"
       MQTT_BROKER: "${MQTT_BROKER}"
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
-      ANALYTICS_SERVICE_URL: "http://analytics-service:8083"
+      ANALYTICS_SERVICE_URL: "http://analytics-service:8088"
     networks:
       - agriwizard-net
     ports:
-      - "${HARDWARE_PORT:-8082}:8082"
+      - "${HARDWARE_PORT:-8082}:8087"
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,7 +116,7 @@ services:
       kong:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -130,13 +130,13 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      PORT: "8083"
-      HARDWARE_SERVICE_URL: "http://hardware-service:8082"
-      WEATHER_SERVICE_URL: "http://weather-service:8084"
+      PORT: "8088"
+      HARDWARE_SERVICE_URL: "http://hardware-service:8087"
+      WEATHER_SERVICE_URL: "http://weather-service:8089"
     networks:
       - agriwizard-net
     ports:
-      - "${ANALYTICS_PORT:-8083}:8083"
+      - "${ANALYTICS_PORT:-8083}:8088"
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,7 +145,7 @@ services:
       kong:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -159,7 +159,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
-      PORT: "8084"
+      PORT: "8089"
       USE_MOCK: "true" # Set to "false" and provide OWM_API_KEY for live data
       OWM_API_KEY: "" # Replace with your OpenWeatherMap API key
       OWM_BASE_URL: "https://api.openweathermap.org/data/2.5"
@@ -169,14 +169,14 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "${WEATHER_PORT:-8084}:8084"
+      - "${WEATHER_PORT:-8085}:8089"
     depends_on:
       iam-service:
         condition: service_healthy
       kong:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -196,8 +196,8 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-8092}:5672"
+      - "8093:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -215,8 +215,8 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "${NATS_PORT:-4222}:4222"
-      - "8222:8222"
+      - "${NATS_PORT:-8094}:4222"
+      - "8095:8222"
     healthcheck:
       test: ["CMD", "nats-server", "--help"]
       interval: 5s
@@ -231,8 +231,8 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "8097:1025"
+      - "8098:8025"
 
   notification-service:
     build:
@@ -241,7 +241,7 @@ services:
     container_name: agriwizard-notification
     restart: unless-stopped
     environment:
-      PORT: "8085"
+      PORT: "8091"
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: agriwizard
@@ -255,7 +255,7 @@ services:
     networks:
       - agriwizard-net
     ports:
-      - "${NOTIFICATION_PORT:-8085}:8085"
+      - "${NOTIFICATION_PORT:-8096}:8091"
     depends_on:
       postgres:
         condition: service_healthy
@@ -266,7 +266,7 @@ services:
       kong:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -293,24 +293,24 @@ services:
       CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
       IAM_UPSTREAM_PROTOCOL: "http"
       IAM_UPSTREAM_HOST: iam-service
-      IAM_UPSTREAM_PORT: "8081"
+      IAM_UPSTREAM_PORT: "8086"
       HARDWARE_UPSTREAM_PROTOCOL: "http"
       HARDWARE_UPSTREAM_HOST: hardware-service
-      HARDWARE_UPSTREAM_PORT: "8082"
+      HARDWARE_UPSTREAM_PORT: "8087"
       ANALYTICS_UPSTREAM_PROTOCOL: "http"
       ANALYTICS_UPSTREAM_HOST: analytics-service
-      ANALYTICS_UPSTREAM_PORT: "8083"
+      ANALYTICS_UPSTREAM_PORT: "8088"
       WEATHER_UPSTREAM_PROTOCOL: "http"
       WEATHER_UPSTREAM_HOST: weather-service
-      WEATHER_UPSTREAM_PORT: "8084"
+      WEATHER_UPSTREAM_PORT: "8089"
       NOTIFICATION_UPSTREAM_PROTOCOL: "http"
       NOTIFICATION_UPSTREAM_HOST: notification-service
-      NOTIFICATION_UPSTREAM_PORT: "8085"
+      NOTIFICATION_UPSTREAM_PORT: "8091"
     networks:
       - agriwizard-net
     ports:
-      - "${KONG_PROXY_PORT:-8080}:8000"
-      - "8443:8443"
+      - "${KONG_PROXY_PORT:-8000}:8000"
+      - "8081:8443"
       - "8001:8001"
     healthcheck:
       test: ["CMD", "kong", "health"]

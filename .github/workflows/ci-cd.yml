@@ -1,0 +1,313 @@
+name: AgriWizard CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, azure-production-refactor]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===========================================================================
+  # Lint and Test
+  # ===========================================================================
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Run Go linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: Run tests (IAM)
+        working-directory: services/iam-service
+        run: |
+          go mod download
+          go test -v -race ./...
+
+      - name: Run tests (Hardware)
+        working-directory: services/hardware-service
+        run: |
+          go mod download
+          go test -v -race ./...
+
+      - name: Run tests (Analytics)
+        working-directory: services/analytics-service
+        run: |
+          go mod download
+          go test -v -race ./...
+
+      - name: Run tests (Weather)
+        working-directory: services/weather-service
+        run: |
+          go mod download
+          go test -v -race ./...
+
+      - name: Run tests (Notification)
+        working-directory: services/notification-service
+        run: |
+          go mod download
+          go test -v -race ./...
+
+  # ===========================================================================
+  # Build Docker Images
+  # ===========================================================================
+  build:
+    name: Build Images
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    outputs:
+      iam: ${{ steps.meta.outputs.tags }}
+      hardware: ${{ steps.meta.outputs.tags }}
+      analytics: ${{ steps.meta.outputs.tags }}
+      weather: ${{ steps.meta.outputs.tags }}
+      notification: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push IAM Service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/iam-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-iam-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-iam-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Hardware Service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/hardware-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-hardware-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-hardware-service:latest
+
+      - name: Build and push Analytics Service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/analytics-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-analytics-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-analytics-service:latest
+
+      - name: Build and push Weather Service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/weather-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-weather-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-weather-service:latest
+
+      - name: Build and push Notification Service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/notification-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-notification-service:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-notification-service:latest
+
+  # ===========================================================================
+  # Integration Tests (Local)
+  # ===========================================================================
+  integration-test:
+    name: Integration Test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: docker compose up -d
+
+      - name: Wait for services
+        run: sleep 30
+
+      - name: Test Kong health
+        run: curl -f http://localhost:8000/health || exit 1
+
+      - name: Test IAM health
+        run: curl -f http://localhost:8086/health || exit 1
+
+      - name: Test Hardware health
+        run: curl -f http://localhost:8087/health || exit 1
+
+      - name: Test Analytics health
+        run: curl -f http://localhost:8088/health || exit 1
+
+      - name: Test Weather health
+        run: curl -f http://localhost:8089/health || exit 1
+
+      - name: Test Notification health
+        run: curl -f http://localhost:8091/health || exit 1
+
+      - name: Test API login
+        run: |
+          curl -X POST http://localhost:8000/api/v1/iam/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@test.com","password":"testpass123","role":"Admin"}'
+
+      - name: Cleanup
+        run: docker compose down
+
+  # ===========================================================================
+  # Deploy to Azure (Production)
+  # ===========================================================================
+  deploy-azure:
+    name: Deploy to Azure
+    needs: [build, integration-test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Azure CLI set subscription
+        run: az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Pull images from GHCR
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-iam-service:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-hardware-service:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-analytics-service:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-weather-service:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-notification-service:latest
+
+      - name: Tag for ACR
+        run: |
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-iam-service:latest ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-iam-service:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-hardware-service:latest ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-hardware-service:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-analytics-service:latest ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-analytics-service:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-weather-service:latest ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-weather-service:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-notification-service:latest ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-notification-service:latest
+
+      - name: Push to ACR
+        run: |
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-iam-service:latest
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-hardware-service:latest
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-analytics-service:latest
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-weather-service:latest
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-notification-service:latest
+
+      - name: Deploy to Container Apps
+        run: |
+          # Update Container Apps with new images
+          az containerapp update \
+            --name agriwizard-prod-iam \
+            --resource-group agriwizard-prod-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-iam-service:latest
+
+          az containerapp update \
+            --name agriwizard-prod-hardware \
+            --resource-group agriwizard-prod-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-hardware-service:latest
+
+          az containerapp update \
+            --name agriwizard-prod-analytics \
+            --resource-group agriwizard-prod-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-analytics-service:latest
+
+          az containerapp update \
+            --name agriwizard-prod-weather \
+            --resource-group agriwizard-prod-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-weather-service:latest
+
+          az containerapp update \
+            --name agriwizard-prod-notification \
+            --resource-group agriwizard-prod-rg \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/agriwizard-notification-service:latest
+
+      - name: Run database migrations
+        run: |
+          # Run Flyway or custom migration script
+          az containerapp exec job run \
+            --name agriwizard-prod-iam \
+            --resource-group agriwizard-prod-rg \
+            --command "/app/migrate"
+
+      - name: Health check
+        run: |
+          sleep 30
+          curl -f https://${{ secrets.APIM_SUBDOMAIN }}.azure.com/health || exit 1
+
+  # ===========================================================================
+  # Rollback (Manual)
+  # ===========================================================================
+  rollback:
+    name: Rollback
+    needs: deploy-azure
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Rollback to previous revision
+        run: |
+          # Activate previous revision for each container app
+          az containerapp revision activate \
+            --name agriwizard-prod-iam \
+            --resource-group agriwizard-prod-rg \
+            --revision-name $(az containerapp revision list \
+              --name agriwizard-prod-iam \
+              --resource-group agriwizard-prod-rg \
+              --query '[1].name' -o tsv)

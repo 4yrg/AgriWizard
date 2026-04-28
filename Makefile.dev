@@ -1,0 +1,41 @@
+# AgriWizard - Development Environment Makefile
+# Usage: make dev-start
+
+.PHONY: help dev-start dev-stop dev-logs dev-restart 
+
+help:
+	@echo "AgriWizard - Development Commands"
+	@echo "=============================="
+	@echo "make dev-start   - Start services with development overrides"
+	@echo "make dev-stop   - Stop all services"
+	@echo "make dev-logs   - View logs with follow"
+	@echo "make dev-rebuild - Rebuild with no cache"
+
+dev-start:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+	@echo ""
+	@echo "Development services started!"
+	@echo "  Kong:       http://localhost:8000"
+	@echo "  IAM:       http://localhost:8081"
+	@echo "  Hardware:   http://localhost:8082"
+	@echo "  Analytics:  http://localhost:8083"
+	@echo "  Weather:   http://localhost:8085"
+	@echo "  RabbitMQ:  http://localhost:8093"
+	@echo "  PostgreSQL: localhost:8091"
+
+dev-stop:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml down
+
+dev-logs:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml logs -f
+
+dev-restart:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml restart
+
+dev-rebuild:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml build --no-cache
+	docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+
+dev-full-restart:
+	docker compose -f docker-compose.yml -f docker-compose.override.yml down -v
+	docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
