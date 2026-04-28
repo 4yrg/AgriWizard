@@ -58,29 +58,66 @@ output "container_apps_environment_name" {
   value       = azurerm_container_app_environment.aca.name
 }
 
+# =============================================================================
+# Kong API Gateway
+# =============================================================================
+
+output "kong_api_url" {
+  description = "Kong API Gateway URL"
+  value       = "https://${azurerm_container_app.kong.latest_revision_fqdn}"
+}
+
+output "kong_admin_url" {
+  description = "Kong Admin API URL"
+  value       = "http://${azurerm_container_app.kong.latest_revision_fqdn}:8001"
+}
+
+# =============================================================================
+# HiveMQ MQTT Broker
+# =============================================================================
+
+output "hivemq_mqtt_url" {
+  description = "HiveMQ MQTT Broker URL"
+  value       = "mqtt://${azurerm_container_app.hivemq.latest_revision_fqdn}:1883"
+}
+
+output "hivemq_websocket_url" {
+  description = "HiveMQ WebSocket URL"
+  value       = "ws://${azurerm_container_app.hivemq.latest_revision_fqdn}:8083"
+}
+
+# =============================================================================
+# Backend Services
+# =============================================================================
+
 output "iam_app_fqdn" {
   description = "IAM Container App FQDN"
-  value       = azurerm_container_app.iam.fqdn
+  value       = "${var.resource_group_name}-${var.environment}-iam.${azurerm_container_app_environment.aca.default_domain}"
 }
 
 output "hardware_app_fqdn" {
   description = "Hardware Container App FQDN"
-  value       = azurerm_container_app.hardware.fqdn
+  value       = "${var.resource_group_name}-${var.environment}-hardware.${azurerm_container_app_environment.aca.default_domain}"
 }
 
 output "analytics_app_fqdn" {
   description = "Analytics Container App FQDN"
-  value       = azurerm_container_app.analytics.fqdn
+  value       = "${var.resource_group_name}-${var.environment}-analytics.${azurerm_container_app_environment.aca.default_domain}"
 }
 
 output "weather_app_fqdn" {
   description = "Weather Container App FQDN"
-  value       = azurerm_container_app.weather.fqdn
+  value       = "${var.resource_group_name}-${var.environment}-weather.${azurerm_container_app_environment.aca.default_domain}"
 }
 
 output "notification_app_fqdn" {
   description = "Notification Container App FQDN"
-  value       = azurerm_container_app.notification.fqdn
+  value       = "${var.resource_group_name}-${var.environment}-notification.${azurerm_container_app_environment.aca.default_domain}"
+}
+
+output "frontend_app_fqdn" {
+  description = "Frontend Container App FQDN"
+  value       = azurerm_container_app.frontend.latest_revision_fqdn
 }
 
 # =============================================================================
@@ -89,42 +126,13 @@ output "notification_app_fqdn" {
 
 output "service_bus_namespace" {
   description = "Service Bus namespace"
-  value       = azurerm_service_bus_namespace.main.name
+  value       = azurerm_servicebus_namespace.main.name
 }
 
 output "service_bus_connection_string" {
   description = "Service Bus connection string"
-  value       = azurerm_service_bus_namespace.main.default_primary_connection_string
+  value       = azurerm_servicebus_namespace.main.default_primary_connection_string
   sensitive  = true
-}
-
-# =============================================================================
-# IoT Hub
-# =============================================================================
-
-output "iothub_name" {
-  description = "IoT Hub name"
-  value       = azurerm_iothub.main.name
-}
-
-output "iothub_connection_string" {
-  description = "IoT Hub connection string"
-  value       = azurerm_iothub.main.primary_connection_string
-  sensitive  = true
-}
-
-# =============================================================================
-# API Management
-# =============================================================================
-
-output "apim_name" {
-  description = "API Management name"
-  value       = azurerm_api_management.main.name
-}
-
-output "apim_gateway_url" {
-  description = "API Management gateway URL"
-  value       = azurerm_api_management.main.gateway_url
 }
 
 # =============================================================================
