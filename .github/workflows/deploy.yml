@@ -156,7 +156,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-iam:${{ steps.vars.outputs.tag }} \
             --image agriwizard-iam:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-iam:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-iam:latest' || '' }} \
             --file services/iam-service/Dockerfile .
 
       - name: Build Hardware
@@ -165,7 +165,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-hardware:${{ steps.vars.outputs.tag }} \
             --image agriwizard-hardware:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-hardware:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-hardware:latest' || '' }} \
             --file services/hardware-service/Dockerfile .
 
       - name: Build Analytics
@@ -174,7 +174,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-analytics:${{ steps.vars.outputs.tag }} \
             --image agriwizard-analytics:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-analytics:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-analytics:latest' || '' }} \
             --file services/analytics-service/Dockerfile .
 
       - name: Build Weather
@@ -183,7 +183,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-weather:${{ steps.vars.outputs.tag }} \
             --image agriwizard-weather:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-weather:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-weather:latest' || '' }} \
             --file services/weather-service/Dockerfile .
 
       - name: Build Notification
@@ -192,7 +192,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-notification:${{ steps.vars.outputs.tag }} \
             --image agriwizard-notification:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-notification:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-notification:latest' || '' }} \
             --file services/notification-service/Dockerfile .
 
       - name: Build Web
@@ -201,7 +201,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-web:${{ steps.vars.outputs.tag }} \
             --image agriwizard-web:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-web:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-web:latest' || '' }} \
             --file client/Dockerfile .
 
       - name: Build Gateway
@@ -210,7 +210,7 @@ jobs:
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-gateway:${{ steps.vars.outputs.tag }} \
             --image agriwizard-gateway:${{ steps.vars.outputs.sha_tag }} \
-            --image agriwizard-gateway:latest \
+            ${{ github.ref == 'refs/heads/main' && '--image agriwizard-gateway:latest' || '' }} \
             --file infrastructure/kong/Dockerfile .
 
   # ============================================================================
@@ -221,7 +221,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-images]
     environment: production
-    if: always() && (needs.detect-changes.outputs.infra == 'true' || needs.build-images.result == 'success')
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.detect-changes.outputs.infra == 'true' || needs.build-images.result == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -274,7 +277,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-images, detect-changes, resolve-acr, provision-infra]
     environment: production
-    if: always() && needs.build-images.result == 'success'
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-images.result == 'success'
     steps:
       - name: Azure Login
         uses: azure/login@v2
