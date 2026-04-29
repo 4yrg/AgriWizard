@@ -4,17 +4,20 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
     paths:
       - "services/**"
       - "apps/**"
       - "client/**"
       - "infra/**"
       - "infrastructure/**"
+      - "scripts/**"
       - ".github/workflows/deploy.yml"
 
   pull_request:
     branches:
       - main
+      - 'feature/**'
     paths:
       - "services/**"
       - "apps/**"
