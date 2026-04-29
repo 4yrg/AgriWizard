@@ -36,13 +36,79 @@ env:
 
 jobs:
   # ============================================================================
-  # Job 1: Provision Infrastructure (Self-Bootstrapping)
+  # Job 1: Detect changes to optimize build
+  # ============================================================================
+  detect-changes:
+    name: "Detect Changes"
+    runs-on: ubuntu-latest
+    outputs:
+      iam: ${{ steps.filter.outputs.iam }}
+      hardware: ${{ steps.filter.outputs.hardware }}
+      analytics: ${{ steps.filter.outputs.analytics }}
+      weather: ${{ steps.filter.outputs.weather }}
+      notification: ${{ steps.filter.outputs.notification }}
+      web: ${{ steps.filter.outputs.web }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      infra: ${{ steps.filter.outputs.infra }}
+      any_changed: ${{ steps.filter.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            iam:
+              - 'services/iam-service/**'
+            hardware:
+              - 'services/hardware-service/**'
+            analytics:
+              - 'services/analytics-service/**'
+            weather:
+              - 'services/weather-service/**'
+            notification:
+              - 'services/notification-service/**'
+            web:
+              - 'client/**'
+            gateway:
+              - 'infrastructure/kong/**'
+            infra:
+              - 'infra/**'
+            any_changed:
+              - 'services/**'
+              - 'client/**'
+              - 'infrastructure/kong/**'
+              - 'infra/**'
+
+  # ============================================================================
+  # Job 2: Resolve ACR Name (Always runs, very fast)
+  # ============================================================================
+  resolve-acr:
+    name: "Resolve ACR"
+    runs-on: ubuntu-latest
+    outputs:
+      acr_name: ${{ steps.get-acr.outputs.name }}
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Get ACR Name
+        id: get-acr
+        run: |
+          ACR_NAME=$(az acr list --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
+          echo "name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+
+  # ============================================================================
+  # Job 3: Provision Infrastructure (Strictly Conditional)
   # ============================================================================
   provision-infra:
     name: "Provision Infra"
     runs-on: ubuntu-latest
-    outputs:
-      acr_name: ${{ steps.deploy.outputs.acr_name }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra == 'true' || github.event.inputs.deploy_all == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -92,45 +158,7 @@ jobs:
           echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
           echo "Infrastructure provisioned successfully. ACR: $ACR_NAME"
 
-  # ============================================================================
-  # Job 2: Detect changes to optimize build
-  # ============================================================================
-  detect-changes:
-    name: "Detect Changes"
-    runs-on: ubuntu-latest
-    needs: provision-infra
-    outputs:
-      iam: ${{ steps.filter.outputs.iam }}
-      hardware: ${{ steps.filter.outputs.hardware }}
-      analytics: ${{ steps.filter.outputs.analytics }}
-      weather: ${{ steps.filter.outputs.weather }}
-      notification: ${{ steps.filter.outputs.notification }}
-      web: ${{ steps.filter.outputs.web }}
-      any_changed: ${{ steps.filter.outputs.any_changed }}
-    steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            iam:
-              - 'services/iam-service/**'
-            hardware:
-              - 'services/hardware-service/**'
-            analytics:
-              - 'services/analytics-service/**'
-            weather:
-              - 'services/weather-service/**'
-            notification:
-              - 'services/notification-service/**'
-            web:
-              - 'client/**'
-            gateway:
-              - 'infrastructure/kong/**'
-            any_changed:
-              - 'services/**'
-              - 'client/**'
-              - 'infrastructure/kong/**'
+  # This job was moved to the top for optimization
 
   # ============================================================================
   # Job 3: Test Backend (Go)
@@ -184,12 +212,11 @@ jobs:
   # ============================================================================
   build-images:
     name: "Build & Push"
-    needs: [test-backend, test-frontend, detect-changes, provision-infra]
+    needs: [test-backend, test-frontend, detect-changes, resolve-acr]
     if: always() && (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') && (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.vars.outputs.tag }}
-    steps:
+    env:
+      ACR_NAME: ${{ needs.resolve-acr.outputs.acr_name }}
       - uses: actions/checkout@v4.2.2
       
       - name: Set image tags
