@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  ACR_NAME: agriwizardacr
+  ACR_NAME: agriwizardacr4yrg
   RESOURCE_GROUP: rg-agriwizard
 
 jobs:
