@@ -88,6 +88,8 @@ jobs:
               - 'client/**'
               - 'infra/**'
               - 'infrastructure/**'
+              - '.github/workflows/**'
+              - 'scripts/**'
 
   # ============================================================================
   # Job 2: Resolve ACR Name (Always runs, very fast)
