@@ -8,6 +8,13 @@ on:
       - "apps/**"
       - "client/**"
       - ".github/workflows/deploy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "apps/**"
+      - "client/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
       deploy_all:
@@ -25,14 +32,17 @@ env:
 
 jobs:
   # ============================================================================
-  # Job 1: Ensure Infrastructure (ACR exists)
+  # Job 1: Provision Infrastructure (Self-Bootstrapping)
   # ============================================================================
-  ensure-infra:
-    name: "Ensure Infrastructure"
+  provision-infra:
+    name: "Provision Infra"
     runs-on: ubuntu-latest
     outputs:
-      acr_name: ${{ steps.get-acr.outputs.acr_name }}
+      acr_name: ${{ steps.deploy.outputs.acr_name }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -40,28 +50,48 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Check ACR exists
-        id: get-acr
+      - name: Check if Bootstrap is needed
+        id: bootstrap-check
         run: |
           ACR_NAME=$(az acr list --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
           if [ -z "$ACR_NAME" ]; then
-            echo "ERROR: No Azure Container Registry found in resource group '${{ env.RESOURCE_GROUP }}'"
-            echo "Please run the 'infra' workflow first to create the infrastructure."
-            exit 1
+            echo "ACR not found. Enabling bootstrap mode (placeholder images)."
+            echo "BOOTSTRAP=true" >> "$GITHUB_ENV"
+          else
+            echo "ACR exists: $ACR_NAME"
+            echo "BOOTSTRAP=false" >> "$GITHUB_ENV"
           fi
-          echo "ACR found: $ACR_NAME"
+
+      - name: Deploy Infrastructure (Bicep)
+        id: deploy
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+        run: |
+          # Run Bicep deployment
+          # If bootstrap is true, we override usePlaceholderImages to true
+          DEPLOY_OUTPUT=$(az deployment group create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/production.bicepparam \
+            --parameters usePlaceholderImages=${{ env.BOOTSTRAP }} \
+            --query "properties.outputs" -o json)
+          
+          ACR_NAME=$(echo $DEPLOY_OUTPUT | jq -r '.acrName.value')
           echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+          echo "Infrastructure provisioned successfully. ACR: $ACR_NAME"
 
-      - name: Login to ACR
-        run: az acr login --name ${{ steps.get-acr.outputs.acr_name }}
-
-# ============================================================================
+  # ============================================================================
   # Job 2: Detect changes to optimize build
   # ============================================================================
   detect-changes:
     name: "Detect Changes"
     runs-on: ubuntu-latest
-    needs: ensure-infra
+    needs: provision-infra
     outputs:
       iam: ${{ steps.filter.outputs.iam }}
       hardware: ${{ steps.filter.outputs.hardware }}
@@ -97,7 +127,7 @@ jobs:
   # ============================================================================
   test-backend:
     name: "Test Backend"
-    needs: [detect-changes, ensure-infra]
+    needs: [detect-changes, provision-infra]
     if: needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -117,7 +147,7 @@ jobs:
   # ============================================================================
   test-frontend:
     name: "Test Frontend"
-    needs: [detect-changes, ensure-infra]
+    needs: [detect-changes, provision-infra]
     if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -144,7 +174,7 @@ jobs:
   # ============================================================================
   build-images:
     name: "Build & Push"
-    needs: [test-backend, test-frontend, detect-changes, ensure-infra]
+    needs: [test-backend, test-frontend, detect-changes, provision-infra]
     if: always() && (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') && (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
@@ -169,7 +199,7 @@ jobs:
 
       - name: Get ACR Name from setup
         run: |
-          ACR_NAME="${{ needs.ensure-infra.outputs.acr_name }}"
+          ACR_NAME="${{ needs.provision-infra.outputs.acr_name }}"
           echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
 
       - name: Login to ACR
@@ -236,7 +266,7 @@ jobs:
   # ============================================================================
   deploy-services:
     name: "Deploy Services"
-    needs: [build-images, detect-changes, ensure-infra]
+    needs: [build-images, detect-changes, provision-infra]
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -250,7 +280,7 @@ jobs:
 
       - name: Set ACR Name
         run: |
-          ACR_NAME="${{ needs.ensure-infra.outputs.acr_name }}"
+          ACR_NAME="${{ needs.provision-infra.outputs.acr_name }}"
           echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
 
       - name: Deploy Services

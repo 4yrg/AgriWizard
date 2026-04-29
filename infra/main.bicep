@@ -27,6 +27,9 @@ param environmentName string = 'agriwizard'
 @description('Container image tag to deploy')
 param imageTag string = 'latest'
 
+@description('Whether to use placeholder images (hello-world) if real images are missing from ACR')
+param usePlaceholderImages bool = false
+
 // ── Secrets ──────────────────────────────────────────────────────────────────
 
 @secure()
@@ -92,11 +95,11 @@ var tags = {
   managedBy: 'bicep'
 }
 
-var acrName = 'agriwizardacr'
+var acrName = 'agriwizardacr${uniqueString(resourceGroup().id)}'
 var logAnalyticsName = '${environmentName}-logs'
 var keyVaultName = '${environmentName}-kv'
 var postgresName = '${environmentName}-postgres'
-var serviceBusName = '${environmentName}-sb'
+var serviceBusName = '${environmentName}-bus-ns'
 var acaEnvName = '${environmentName}-aca-env'
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -187,13 +190,20 @@ module acaEnv 'modules/container-apps-env.bicep' = {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Helper: ACR credentials (for container app registry auth)
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Registry Credentials (Secure Retrieval) ──────────────────────────────────
+// We use 'existing' to reference the ACR created in the previous module
+// This allows us to call listCredentials() without triggering secret-in-output warnings
+
+resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: acrName
+}
 
 var acrLoginServer = acr.outputs.loginServer
-var acrUsername = acr.outputs.adminUsername
-var acrPassword = acr.outputs.adminPassword
+var acrUsername = acrResource.listCredentials().username
+var acrPassword = acrResource.listCredentials().passwords[0].value
+
+// ── Placeholder Image Logic ──────────────────────────────────────────────────
+var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Common env vars shared across all backend services
@@ -223,7 +233,7 @@ module iamApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-iam:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-iam:${imageTag}'
     targetPort: 8086
     externalIngress: true
     cpu: '0.25'
@@ -250,7 +260,7 @@ module hardwareApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-hardware:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-hardware:${imageTag}'
     targetPort: 8087
     externalIngress: true
     cpu: '0.25'
@@ -282,7 +292,7 @@ module analyticsApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-analytics:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-analytics:${imageTag}'
     targetPort: 8088
     externalIngress: true
     cpu: '0.25'
@@ -313,7 +323,7 @@ module weatherApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-weather:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-weather:${imageTag}'
     targetPort: 8089
     externalIngress: true
     cpu: '0.25'
@@ -344,7 +354,7 @@ module notificationApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-notification:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-notification:${imageTag}'
     targetPort: 8091
     externalIngress: true
     cpu: '0.25'
@@ -385,7 +395,7 @@ module webApp 'modules/container-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-web:${imageTag}'
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/${environmentName}-web:${imageTag}'
     targetPort: 3000
     externalIngress: true
     cpu: '0.25'
@@ -426,6 +436,9 @@ module apimGateway 'modules/apim.bicep' = {
 
 @description('ACR login server')
 output acrLoginServer string = acr.outputs.loginServer
+
+@description('ACR name')
+output acrName string = acrName
 
 @description('Azure API Management Gateway URL')
 output apimUrl string = apimGateway.outputs.gatewayUrl

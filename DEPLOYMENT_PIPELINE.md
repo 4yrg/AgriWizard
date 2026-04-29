@@ -10,7 +10,7 @@ This document outlines the production CI/CD pipeline for the AgriWizard Smart Gr
 - **Messaging**: Azure Service Bus (replaces RabbitMQ/NATS in production)
 - **MQTT**: HiveMQ Cloud (managed, retained as-is)
 - **Registry**: Azure Container Registry (ACR)
-- **Gateway**: Kong API Gateway (running as a Container App)
+- **Gateway**: Azure API Management (APIM) — managed gateway
 - **Secrets**: Azure Key Vault
 - **Logging**: Azure Log Analytics Workspace
 - **CI/CD**: GitHub Actions
@@ -24,7 +24,7 @@ This document outlines the production CI/CD pipeline for the AgriWizard Smart Gr
 | Messaging | RabbitMQ + NATS containers | Azure Service Bus |
 | Email | Mailhog container | SMTP provider (configurable) |
 | MQTT | HiveMQ Cloud | HiveMQ Cloud (same) |
-| API Gateway | Kong container | Kong (Container App) |
+| API Gateway | Kong container | Azure API Management (APIM) |
 | Secrets | `.env` file | Azure Key Vault |
 | Logging | Docker logs | Azure Log Analytics |
 
@@ -99,17 +99,18 @@ Add the following secrets to your GitHub repository:
 | `MQTT_PASSWORD` | HiveMQ password |
 | `OWM_API_KEY` | OpenWeatherMap API key |
 
-### 3. Initial Deployment
-**Simple deployment order:**
+### 3. Automated Deployment
+AgriWizard uses a self-bootstrapping pipeline. You do **not** need to manually create resources.
 
-| Step | Action | Command/Way |
-|------|--------|-------------|
-| 1 | **Bootstrap** | Run `./scripts/bootstrap.sh rg-agriwizard centralindia your-org/AgriWizard` |
-| 2 | **Build & Deploy** | Run `deploy` workflow with `deploy_all=true` |
+**Deployment Steps:**
+1. **Bootstrap Identity**: Run `./scripts/bootstrap.sh` once to set up the Azure OIDC identity and GitHub secrets.
+2. **Push to Main**: Simply push your code. The `deploy` workflow will:
+   - Create the Resource Group and ACR if missing.
+   - Provision all Azure services (PostgreSQL, Service Bus, APIM, etc.).
+   - Build and push container images.
+   - Deploy the application to Container Apps.
 
-The bootstrap script creates: Resource Group, ACR, and OIDC identity. The deploy workflow builds images and deploys to Azure Container Apps.
-
-> **Note:** The `infra` workflow is no longer required for initial setup. Use it only to update infrastructure (Bicep templates).
+> **Note:** The first deployment will use "placeholder" images to establish the infrastructure. The pipeline will automatically replace them with your real code in the subsequent build/deploy steps.
 
 ### 4. Managed MQTT Configuration
 Managed MQTT credentials are stored in **Azure Key Vault** and injected into Container Apps via environment variables.
@@ -121,10 +122,8 @@ Key Vault Secret Names:
 
 ## Troubleshooting
 
-### No ACR Found Error
-If you see `Could not connect to the registry login server`:
-- Run `./scripts/bootstrap.sh` to create the ACR
-- Or manually: `az acr create -n agriwizardacr -g rg-agriwizard --sku Basic`
+### Environment Not Found
+If the infrastructure hasn't been created yet, ensure your GitHub Secrets are set correctly and trigger the `deploy` workflow. It will automatically create the ACR and other resources.
 
 ### Missing GitHub Secrets
 Add the required secrets (see bootstrap output):
@@ -137,9 +136,9 @@ Add the required secrets (see bootstrap output):
 - `OWM_API_KEY`
 
 ### Connectivity Issues
-If you see `ERR_CONNECTION_REFUSED`, verify:
+If you see connection errors, verify:
 1. **Local**: Kong is running on port `8000` (check `KONG_PROXY_PORT` in `.env`).
-2. **Production**: Check the Kong FQDN in the Azure Portal or via `make health`.
+2. **Production**: Check the APIM Gateway URL in the Azure Portal or the workflow outputs.
 
 ### Deployment Failures
 Check the GitHub Actions logs. If a deployment fails during smoke tests, the `rollback-on-failure` job will trigger automatically.

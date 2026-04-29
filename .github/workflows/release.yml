@@ -10,7 +10,6 @@ permissions:
   contents: read
 
 env:
-  ACR_NAME: agriwizardacr4yrg
   RESOURCE_GROUP: rg-agriwizard
 
 jobs:
@@ -26,6 +25,11 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get ACR Name
+        run: |
+          ACR_NAME=$(az acr list --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
+          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
       
       - name: Tag and Push Release Images
         run: |
