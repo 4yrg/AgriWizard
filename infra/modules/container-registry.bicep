@@ -40,3 +40,6 @@ output id string = acr.id
 
 @description('The name of the container registry')
 output name string = acr.name
+
+@description('The resource ID of the container registry')
+output resourceId string = acr.id

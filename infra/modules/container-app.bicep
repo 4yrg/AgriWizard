@@ -45,12 +45,8 @@ param envVars array = []
 @description('ACR login server')
 param acrLoginServer string
 
-@description('ACR admin username')
-param acrUsername string
-
-@secure()
-@description('ACR admin password')
-param acrPassword string
+@description('Resource ID of the user-assigned identity for ACR pull')
+param userAssignedIdentityId string
 
 @description('Liveness probe path (empty to skip)')
 param healthProbePath string = '/health'
@@ -61,6 +57,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
   tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentityId}': {}
+    }
+  }
   properties: {
     managedEnvironmentId: containerAppsEnvironmentId
     configuration: {
@@ -73,16 +75,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: acrLoginServer
-          username: acrUsername
-          passwordSecretRef: 'acr-password'
+          identity: userAssignedIdentityId
         }
       ]
-      secrets: [
-        {
-          name: 'acr-password'
-          value: acrPassword
-        }
-      ]
+      secrets: []
       activeRevisionsMode: 'Single'
     }
     template: {

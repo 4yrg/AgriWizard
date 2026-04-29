@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "9825800549105659697"
+      "templateHash": "14850520412647971107"
     }
   },
   "parameters": {
@@ -143,9 +143,32 @@
     "postgresName": "[format('{0}-postgres', parameters('environmentName'))]",
     "serviceBusName": "[format('{0}-bus-ns', parameters('environmentName'))]",
     "acaEnvName": "[format('{0}-aca-env', parameters('environmentName'))]",
+    "acrPullRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-af7a-6922815d6c03')]",
     "placeholderImage": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
   },
   "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('{0}-app-id', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
+      "name": "[guid(subscription().id, variables('acrName'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName'))), 'AcrPull')]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName'))), '2023-01-31').principalId]",
+        "roleDefinitionId": "[variables('acrPullRoleDefinitionId')]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
+      ]
+    },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -173,7 +196,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "11183077745399015539"
+              "templateHash": "4022230968836419396"
             }
           },
           "parameters": {
@@ -247,6 +270,13 @@
                 "description": "The name of the container registry"
               },
               "value": "[parameters('name')]"
+            },
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "The resource ID of the container registry"
+              },
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
             }
           }
         }
@@ -1169,11 +1199,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8086'), createObject('name', 'JWT_ISSUER', 'value', 'agriwizard-iam'), createObject('name', 'JWT_TTL_HOURS', 'value', '24')))]"
@@ -1186,7 +1213,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -1276,16 +1303,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -1303,6 +1324,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -1315,16 +1342,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -1383,6 +1404,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-postgres')]"
       ]
     },
@@ -1430,11 +1452,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8087'), createObject('name', 'MQTT_BROKER', 'value', parameters('mqttBroker')), createObject('name', 'MQTT_USERNAME', 'value', parameters('mqttUsername')), createObject('name', 'MQTT_PASSWORD', 'value', parameters('mqttPassword')), createObject('name', 'ANALYTICS_SERVICE_URL', 'value', format('http://{0}-analytics.internal.{1}:8088', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'SERVICE_BUS_CONNECTION', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-servicebus'), '2025-04-01').outputs.connectionString.value), createObject('name', 'SERVICE_BUS_TOPIC', 'value', 'telemetry'), createObject('name', 'RABBITMQ_HOST', 'value', '')))]"
@@ -1447,7 +1466,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -1537,16 +1556,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -1564,6 +1577,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -1576,16 +1595,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -1644,6 +1657,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-postgres')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-servicebus')]"
       ]
@@ -1692,11 +1706,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8088'), createObject('name', 'HARDWARE_SERVICE_URL', 'value', format('http://{0}-hardware.internal.{1}:8087', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'WEATHER_SERVICE_URL', 'value', format('http://{0}-weather.internal.{1}:8089', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'SERVICE_BUS_CONNECTION', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-servicebus'), '2025-04-01').outputs.connectionString.value), createObject('name', 'SERVICE_BUS_TOPIC', 'value', 'telemetry'), createObject('name', 'SERVICE_BUS_SUBSCRIPTION', 'value', 'analytics-service'), createObject('name', 'RABBITMQ_HOST', 'value', '')))]"
@@ -1709,7 +1720,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -1799,16 +1810,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -1826,6 +1831,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -1838,16 +1849,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -1906,6 +1911,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-postgres')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-servicebus')]"
       ]
@@ -1954,11 +1960,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8089'), createObject('name', 'USE_MOCK', 'value', 'false'), createObject('name', 'OWM_API_KEY', 'value', parameters('owmApiKey')), createObject('name', 'OWM_BASE_URL', 'value', 'https://api.openweathermap.org/data/2.5'), createObject('name', 'LOCATION_LAT', 'value', parameters('locationLat')), createObject('name', 'LOCATION_LON', 'value', parameters('locationLon')), createObject('name', 'LOCATION_CITY', 'value', parameters('locationCity'))))]"
@@ -1971,7 +1974,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -2061,16 +2064,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -2088,6 +2085,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -2100,16 +2103,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -2168,6 +2165,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-postgres')]"
       ]
     },
@@ -2215,11 +2213,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "envVars": {
             "value": [
@@ -2301,7 +2296,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -2391,16 +2386,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -2418,6 +2407,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -2430,16 +2425,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -2498,6 +2487,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-postgres')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-servicebus')]"
       ]
@@ -2546,11 +2536,8 @@
           "acrLoginServer": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
-          "acrUsername": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
-          },
-          "acrPassword": {
-            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
           },
           "healthProbePath": {
             "value": ""
@@ -2575,7 +2562,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13561567548280516658"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
@@ -2665,16 +2652,10 @@
                 "description": "ACR login server"
               }
             },
-            "acrUsername": {
+            "userAssignedIdentityId": {
               "type": "string",
               "metadata": {
-                "description": "ACR admin username"
-              }
-            },
-            "acrPassword": {
-              "type": "securestring",
-              "metadata": {
-                "description": "ACR admin password"
+                "description": "Resource ID of the user-assigned identity for ACR pull"
               }
             },
             "healthProbePath": {
@@ -2692,6 +2673,12 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
+              },
               "properties": {
                 "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
                 "configuration": {
@@ -2704,16 +2691,10 @@
                   "registries": [
                     {
                       "server": "[parameters('acrLoginServer')]",
-                      "username": "[parameters('acrUsername')]",
-                      "passwordSecretRef": "acr-password"
+                      "identity": "[parameters('userAssignedIdentityId')]"
                     }
                   ],
-                  "secrets": [
-                    {
-                      "name": "acr-password",
-                      "value": "[parameters('acrPassword')]"
-                    }
-                  ],
+                  "secrets": [],
                   "activeRevisionsMode": "Single"
                 },
                 "template": {
@@ -2772,7 +2753,8 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-apim')]"
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-apim')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
       ]
     },
     {

@@ -190,12 +190,36 @@ module acaEnv 'modules/container-apps-env.bicep' = {
   }
 }
 
+// ── App Identity & Role Assignment (Secure ACR Access) ───────────────────────
+// We create a dedicated identity for the apps and grant it AcrPull on the registry.
+// This is more secure than using the ACR admin password.
+
+resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${environmentName}-app-id'
+  location: location
+  tags: tags
+}
+
+var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-af7a-6922815d6c03')
+
 resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
 }
 
+resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, acrName, appIdentity.id, 'AcrPull')
+  scope: acrResource
+  properties: {
+    principalId: appIdentity.properties.principalId
+    roleDefinitionId: acrPullRoleDefinitionId
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [
+    acr
+  ]
+}
+
 var acrLoginServer = acr.outputs.loginServer
-// Credentials will be retrieved directly from acrResource in the app modules to ensure proper sequencing.
 
 // ── Placeholder Image Logic ──────────────────────────────────────────────────
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -237,8 +261,7 @@ module iamApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8086' }
       { name: 'JWT_ISSUER', value: 'agriwizard-iam' }
@@ -265,8 +288,7 @@ module hardwareApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8087' }
       { name: 'MQTT_BROKER', value: mqttBroker }
@@ -298,8 +320,7 @@ module analyticsApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8088' }
       { name: 'HARDWARE_SERVICE_URL', value: 'http://${environmentName}-hardware.internal.${acaEnv.outputs.defaultDomain}:8087' }
@@ -330,8 +351,7 @@ module weatherApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 1
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8089' }
       { name: 'USE_MOCK', value: 'false' }
@@ -362,8 +382,7 @@ module notificationApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 1
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     envVars: [
       { name: 'PORT', value: '8091' }
       { name: 'DB_HOST', value: postgres.outputs.fqdn }
@@ -404,8 +423,7 @@ module webApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrResource.listCredentials().username
-    acrPassword: acrResource.listCredentials().passwords[0].value
+    userAssignedIdentityId: appIdentity.id
     healthProbePath: ''
     envVars: [
       { name: 'NODE_ENV', value: 'production' }
