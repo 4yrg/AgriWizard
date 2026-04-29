@@ -18,6 +18,9 @@ targetScope = 'resourceGroup'
 // Parameters
 // ═════════════════════════════════════════════════════════════════════════════
 
+@description('A unique string to ensure module deployment names are unique')
+param deploymentTimestamp string = utcNow()
+
 @description('Azure region for all resources')
 param location string = resourceGroup().location
 
@@ -107,7 +110,7 @@ var acaEnvName = '${environmentName}-aca-env'
 // ═════════════════════════════════════════════════════════════════════════════
 
 module acr 'modules/container-registry.bicep' = {
-  name: 'deploy-acr'
+  name: 'deploy-acr-${deploymentTimestamp}'
   params: {
     name: acrName
     location: location
@@ -120,7 +123,7 @@ module acr 'modules/container-registry.bicep' = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 module logAnalytics 'modules/log-analytics.bicep' = {
-  name: 'deploy-log-analytics'
+  name: 'deploy-log-analytics-${deploymentTimestamp}'
   params: {
     name: logAnalyticsName
     location: location
@@ -129,7 +132,7 @@ module logAnalytics 'modules/log-analytics.bicep' = {
 }
 
 module appInsights 'modules/application-insights.bicep' = {
-  name: 'deploy-app-insights'
+  name: 'deploy-app-insights-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-insights'
     location: location
@@ -143,7 +146,7 @@ module appInsights 'modules/application-insights.bicep' = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 module postgres 'modules/postgresql.bicep' = {
-  name: 'deploy-postgres'
+  name: 'deploy-postgres-${deploymentTimestamp}'
   params: {
     name: postgresName
     location: location
@@ -157,7 +160,7 @@ module postgres 'modules/postgresql.bicep' = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 module serviceBus 'modules/servicebus.bicep' = {
-  name: 'deploy-servicebus'
+  name: 'deploy-servicebus-${deploymentTimestamp}'
   params: {
     name: serviceBusName
     location: location
@@ -170,7 +173,7 @@ module serviceBus 'modules/servicebus.bicep' = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 module keyVault 'modules/keyvault.bicep' = {
-  name: 'deploy-keyvault'
+  name: 'deploy-keyvault-${deploymentTimestamp}'
   params: {
     name: keyVaultName
     location: location
@@ -190,7 +193,7 @@ module keyVault 'modules/keyvault.bicep' = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 module acaEnv 'modules/container-apps-env.bicep' = {
-  name: 'deploy-aca-env'
+  name: 'deploy-aca-env-${deploymentTimestamp}'
   params: {
     name: acaEnvName
     location: location
@@ -258,7 +261,7 @@ var commonBackendEnv = [
 
 #disable-next-line no-unnecessary-dependson
 module iamApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-iam'
+  name: 'deploy-app-iam-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-iam'
     location: location
@@ -285,7 +288,7 @@ module iamApp 'modules/container-app.bicep' = {
 
 #disable-next-line no-unnecessary-dependson
 module hardwareApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-hardware'
+  name: 'deploy-app-hardware-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-hardware'
     location: location
@@ -317,7 +320,7 @@ module hardwareApp 'modules/container-app.bicep' = {
 
 #disable-next-line no-unnecessary-dependson
 module analyticsApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-analytics'
+  name: 'deploy-app-analytics-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-analytics'
     location: location
@@ -348,7 +351,7 @@ module analyticsApp 'modules/container-app.bicep' = {
 
 #disable-next-line no-unnecessary-dependson
 module weatherApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-weather'
+  name: 'deploy-app-weather-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-weather'
     location: location
@@ -379,7 +382,7 @@ module weatherApp 'modules/container-app.bicep' = {
 
 #disable-next-line no-unnecessary-dependson
 module notificationApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-notification'
+  name: 'deploy-app-notification-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-notification'
     location: location
@@ -420,7 +423,7 @@ module notificationApp 'modules/container-app.bicep' = {
 
 #disable-next-line no-unnecessary-dependson
 module webApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-web'
+  name: 'deploy-app-web-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-web'
     location: location
@@ -446,7 +449,7 @@ module webApp 'modules/container-app.bicep' = {
 // ── Kong Gateway (Replacement for APIM) ──────────────────────────────────────
 
 module kongGateway 'modules/container-app.bicep' = {
-  name: 'deploy-app-kong'
+  name: 'deploy-app-kong-${deploymentTimestamp}'
   params: {
     name: '${environmentName}-gateway'
     location: location
