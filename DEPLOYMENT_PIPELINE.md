@@ -80,8 +80,9 @@ infra/
 Run the bootstrap script to create the identity and federated credentials:
 ```bash
 chmod +x scripts/bootstrap.sh
-./scripts/bootstrap.sh <resource-group> centralindia 4yrg/AgriWizard
+./scripts/bootstrap.sh rg-agriwizard centralindia your-org/AgriWizard
 ```
+This creates the resource group and OIDC identity. After bootstrapping, add the GitHub secrets.
 
 ### 2. GitHub Secrets
 Add the following secrets to your GitHub repository:
@@ -99,16 +100,22 @@ Add the following secrets to your GitHub repository:
 | `OWM_API_KEY` | OpenWeatherMap API key |
 
 ### 3. Initial Deployment
-Deploy infrastructure first (one-time), then app images:
-```bash
-# 1. Deploy infrastructure
-# Trigger infra.yml workflow manually with confirm_deploy=DEPLOY
+**Important:** You must deploy infrastructure BEFORE building app images. The deploy workflow will fail if no ACR exists.
 
-# 2. Build & push initial images
-# Trigger deploy.yml workflow manually with deploy_all=true
+| Step | Workflow | Description |
+|------|----------|-------------|
+| 1 | `infra.yml` | Run manually with `confirm_deploy=DEPLOY` to create ACR, PostgreSQL, Service Bus, Key Vault, Container Apps Environment, and all container apps |
+| 2 | `deploy.yml` | Run manually with `deploy_all=true` to build and push images, then deploy to container apps |
+
+```bash
+# 1. Trigger infra.yml workflow manually with confirm_deploy=DEPLOY
+#    (Creates: ACR, DB, Service Bus, Key Vault, Container Apps)
+
+# 2. Trigger deploy.yml workflow manually with deploy_all=true
+#    (Builds images and deploys to container apps)
 ```
 
-### 3. Managed MQTT Configuration
+### 4. Managed MQTT Configuration
 Managed MQTT credentials are stored in **Azure Key Vault** and injected into Container Apps via environment variables.
 
 Key Vault Secret Names:
@@ -117,6 +124,11 @@ Key Vault Secret Names:
 - `mqtt-password`
 
 ## Troubleshooting
+
+### No ACR Found Error
+If you see `Could not connect to the registry login server` or `The resource with name '...' could not be found`:
+1. **Run the `infra` workflow first** - This creates the Azure Container Registry
+2. Trigger it manually with `confirm_deploy=DEPLOY`
 
 ### Connectivity Issues
 If you see `ERR_CONNECTION_REFUSED`, verify:
