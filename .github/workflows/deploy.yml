@@ -7,7 +7,6 @@ on:
       - "services/**"
       - "apps/**"
       - "client/**"
-      - "infrastructure/kong/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
@@ -22,7 +21,7 @@ permissions:
 
 env:
   ACR_NAME: agriwizardacr
-  RESOURCE_GROUP: agriwizard-prod-rg
+  RESOURCE_GROUP: rg-agriwizard
   CONTAINER_APP_ENV: agriwizard-aca-env
 
 jobs:
@@ -39,7 +38,6 @@ jobs:
       weather: ${{ steps.filter.outputs.weather }}
       notification: ${{ steps.filter.outputs.notification }}
       web: ${{ steps.filter.outputs.web }}
-      kong: ${{ steps.filter.outputs.kong }}
       any_changed: ${{ steps.filter.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v4.2.2
@@ -59,12 +57,9 @@ jobs:
               - 'services/notification-service/**'
             web:
               - 'client/**'
-            kong:
-              - 'infrastructure/kong/**'
             any_changed:
               - 'services/**'
               - 'client/**'
-              - 'infrastructure/kong/**'
 
   # ============================================================================
   # Job 2: Test Backend (Go)
@@ -199,14 +194,6 @@ jobs:
                        -f client/Dockerfile .
           docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web --all-tags
 
-      - name: Build Kong
-        if: needs.detect-changes.outputs.kong == 'true' || github.event.inputs.deploy_all == 'true'
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:latest \
-                       -f infrastructure/kong/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong --all-tags
 
   # ============================================================================
   # Job 5: Deploy to Azure Container Apps
@@ -234,7 +221,6 @@ jobs:
           [[ "${{ needs.detect-changes.outputs.weather }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("weather")
           [[ "${{ needs.detect-changes.outputs.notification }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("notification")
           [[ "${{ needs.detect-changes.outputs.web }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("web")
-          [[ "${{ needs.detect-changes.outputs.kong }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("kong")
 
           for svc in "${SERVICES[@]}"; do
             echo "Deploying $svc..."
@@ -263,18 +249,19 @@ jobs:
       
       - name: Run Health Checks
         run: |
-          # Get Kong FQDN
-          KONG_URL=$(az containerapp show --name agriwizard-kong --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "Kong Gateway: https://$KONG_URL"
+          # Get APIM Gateway URL
+          APIM_URL=$(az apim show --name agriwizard-apim --resource-group ${{ env.RESOURCE_GROUP }} --query "gatewayUrl" -o tsv)
+          # APIM gatewayUrl already includes https://
+          echo "APIM Gateway: $APIM_URL"
           
           # Wait for propagation
           sleep 30
           
           # Check health endpoints
-          endpoints=("/health" "/api/v1/iam/health" "/api/v1/hardware/health")
+          endpoints=("/api/v1/iam/health" "/api/v1/hardware/health")
           for ep in "${endpoints[@]}"; do
             echo "Testing $ep..."
-            curl -f "https://$KONG_URL$ep" || exit 1
+            curl -f "$APIM_URL$ep" || exit 1
           done
 
   # ============================================================================
@@ -295,7 +282,7 @@ jobs:
       
       - name: Revert to previous revision
         run: |
-          APPS=("agriwizard-kong" "agriwizard-iam" "agriwizard-hardware" "agriwizard-analytics" "agriwizard-weather" "agriwizard-notification" "agriwizard-web")
+          APPS=("agriwizard-iam" "agriwizard-hardware" "agriwizard-analytics" "agriwizard-weather" "agriwizard-notification" "agriwizard-web")
           for app in "${APPS[@]}"; do
             echo "Checking $app for rollback..."
             PREV_REV=$(az containerapp revision list --name $app --resource-group ${{ env.RESOURCE_GROUP }} --query "sort_by([?properties.active==`false`], &properties.createdTime)[-1].name" -o tsv)
