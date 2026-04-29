@@ -92,7 +92,7 @@ var tags = {
   managedBy: 'bicep'
 }
 
-var acrName = '${environmentName}acr'
+var acrName = '${environmentName}acr4yrg'
 var logAnalyticsName = '${environmentName}-logs'
 var keyVaultName = '${environmentName}-kv'
 var postgresName = '${environmentName}-postgres'
