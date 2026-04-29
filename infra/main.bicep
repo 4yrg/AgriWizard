@@ -214,54 +214,6 @@ var commonBackendEnv = [
 // Module 7: Container Apps (one per service)
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ── Kong API Gateway ─────────────────────────────────────────────────────────
-
-module kongApp 'modules/container-app.bicep' = {
-  name: 'deploy-app-kong'
-  params: {
-    name: '${environmentName}-kong'
-    location: location
-    tags: tags
-    containerAppsEnvironmentId: acaEnv.outputs.id
-    image: '${acrLoginServer}/${environmentName}-kong:${imageTag}'
-    targetPort: 8000
-    externalIngress: true
-    cpu: '0.25'
-    memory: '0.5Gi'
-    minReplicas: 1
-    maxReplicas: 2
-    acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
-    healthProbePath: '/health'
-    envVars: [
-      { name: 'KONG_DATABASE', value: 'off' }
-      { name: 'KONG_ADMIN_LISTEN', value: '0.0.0.0:8001' }
-      { name: 'KONG_PROXY_LISTEN', value: '0.0.0.0:8000' }
-      { name: 'KONG_LOG_LEVEL', value: 'info' }
-      { name: 'KONG_DNS_ORDER', value: 'LAST,A,CNAME' }
-      { name: 'KONG_JWT_SHARED_SECRET', value: jwtSecret }
-      { name: 'KONG_JWT_ISSUER', value: 'agriwizard-iam' }
-      { name: 'CORS_ALLOW_ORIGIN', value: '*' }
-      { name: 'IAM_UPSTREAM_PROTOCOL', value: 'http' }
-      { name: 'IAM_UPSTREAM_HOST', value: '${environmentName}-iam.internal.${acaEnv.outputs.defaultDomain}' }
-      { name: 'IAM_UPSTREAM_PORT', value: '8086' }
-      { name: 'HARDWARE_UPSTREAM_PROTOCOL', value: 'http' }
-      { name: 'HARDWARE_UPSTREAM_HOST', value: '${environmentName}-hardware.internal.${acaEnv.outputs.defaultDomain}' }
-      { name: 'HARDWARE_UPSTREAM_PORT', value: '8087' }
-      { name: 'ANALYTICS_UPSTREAM_PROTOCOL', value: 'http' }
-      { name: 'ANALYTICS_UPSTREAM_HOST', value: '${environmentName}-analytics.internal.${acaEnv.outputs.defaultDomain}' }
-      { name: 'ANALYTICS_UPSTREAM_PORT', value: '8088' }
-      { name: 'WEATHER_UPSTREAM_PROTOCOL', value: 'http' }
-      { name: 'WEATHER_UPSTREAM_HOST', value: '${environmentName}-weather.internal.${acaEnv.outputs.defaultDomain}' }
-      { name: 'WEATHER_UPSTREAM_PORT', value: '8089' }
-      { name: 'NOTIFICATION_UPSTREAM_PROTOCOL', value: 'http' }
-      { name: 'NOTIFICATION_UPSTREAM_HOST', value: '${environmentName}-notification.internal.${acaEnv.outputs.defaultDomain}' }
-      { name: 'NOTIFICATION_UPSTREAM_PORT', value: '8091' }
-    ]
-  }
-}
-
 // ── IAM Service ──────────────────────────────────────────────────────────────
 
 module iamApp 'modules/container-app.bicep' = {
@@ -273,7 +225,7 @@ module iamApp 'modules/container-app.bicep' = {
     containerAppsEnvironmentId: acaEnv.outputs.id
     image: '${acrLoginServer}/${environmentName}-iam:${imageTag}'
     targetPort: 8086
-    externalIngress: false
+    externalIngress: true
     cpu: '0.25'
     memory: '0.5Gi'
     minReplicas: 1
@@ -300,7 +252,7 @@ module hardwareApp 'modules/container-app.bicep' = {
     containerAppsEnvironmentId: acaEnv.outputs.id
     image: '${acrLoginServer}/${environmentName}-hardware:${imageTag}'
     targetPort: 8087
-    externalIngress: false
+    externalIngress: true
     cpu: '0.25'
     memory: '0.5Gi'
     minReplicas: 1
@@ -332,7 +284,7 @@ module analyticsApp 'modules/container-app.bicep' = {
     containerAppsEnvironmentId: acaEnv.outputs.id
     image: '${acrLoginServer}/${environmentName}-analytics:${imageTag}'
     targetPort: 8088
-    externalIngress: false
+    externalIngress: true
     cpu: '0.25'
     memory: '0.5Gi'
     minReplicas: 1
@@ -363,7 +315,7 @@ module weatherApp 'modules/container-app.bicep' = {
     containerAppsEnvironmentId: acaEnv.outputs.id
     image: '${acrLoginServer}/${environmentName}-weather:${imageTag}'
     targetPort: 8089
-    externalIngress: false
+    externalIngress: true
     cpu: '0.25'
     memory: '0.5Gi'
     minReplicas: 1
@@ -394,7 +346,7 @@ module notificationApp 'modules/container-app.bicep' = {
     containerAppsEnvironmentId: acaEnv.outputs.id
     image: '${acrLoginServer}/${environmentName}-notification:${imageTag}'
     targetPort: 8091
-    externalIngress: false
+    externalIngress: true
     cpu: '0.25'
     memory: '0.5Gi'
     minReplicas: 1
@@ -446,8 +398,25 @@ module webApp 'modules/container-app.bicep' = {
     healthProbePath: ''
     envVars: [
       { name: 'NODE_ENV', value: 'production' }
-      { name: 'NEXT_PUBLIC_API_URL', value: 'https://${kongApp.outputs.fqdn}' }
+      { name: 'NEXT_PUBLIC_API_URL', value: apimGateway.outputs.gatewayUrl }
     ]
+  }
+}
+
+// ── Azure API Management (APIM) ──────────────────────────────────────────────
+
+module apimGateway 'modules/apim.bicep' = {
+  name: 'deploy-apim'
+  params: {
+    name: '${environmentName}-apim'
+    location: location
+    tags: tags
+    jwtSecret: jwtSecret
+    iamFqdn: iamApp.outputs.fqdn
+    hardwareFqdn: hardwareApp.outputs.fqdn
+    analyticsFqdn: analyticsApp.outputs.fqdn
+    weatherFqdn: weatherApp.outputs.fqdn
+    notificationFqdn: notificationApp.outputs.fqdn
   }
 }
 
@@ -458,8 +427,8 @@ module webApp 'modules/container-app.bicep' = {
 @description('ACR login server')
 output acrLoginServer string = acr.outputs.loginServer
 
-@description('Kong API Gateway URL')
-output kongUrl string = 'https://${kongApp.outputs.fqdn}'
+@description('Azure API Management Gateway URL')
+output apimUrl string = apimGateway.outputs.gatewayUrl
 
 @description('Web Client URL')
 output webUrl string = 'https://${webApp.outputs.fqdn}'
