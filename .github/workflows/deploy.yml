@@ -76,11 +76,14 @@ jobs:
           MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
         run: |
-          # Run Bicep deployment
-          # If bootstrap is true, we override usePlaceholderImages to true
+          # Run Bicep deployment with a unique name to avoid DeploymentActive conflicts
+          DEPLOY_NAME="agriwizard-infra-$(date +%Y%m%d-%H%M%S)"
+          echo "Starting deployment: $DEPLOY_NAME"
+          
           DEPLOY_OUTPUT=$(az deployment group create \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --template-file infra/main.bicep \
+            --name "$DEPLOY_NAME" \
             --parameters infra/parameters/production.bicepparam \
             --parameters usePlaceholderImages=${{ env.BOOTSTRAP }} \
             --query "properties.outputs" -o json)
