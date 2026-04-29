@@ -21,14 +21,13 @@ param smtpPort = '587'
 param smtpFrom = 'noreply@agriwizard.local'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The following parameters MUST be provided via CI/CD --parameters overrides:
-//   postgresAdminPassword
-//   jwtSecret
-//   mqttBroker
-//   mqttUsername
-//   mqttPassword
-//   owmApiKey
-//   smtpHost        (if using production email)
-//   smtpUsername     (if using production email)
-//   smtpPassword     (if using production email)
+// The following parameters are read from Environment Variables injected by
+// GitHub Actions during the deployment workflow.
 // ─────────────────────────────────────────────────────────────────────────────
+
+param postgresAdminPassword = readEnvironmentVariable('POSTGRES_ADMIN_PASSWORD', '')
+param jwtSecret = readEnvironmentVariable('JWT_SECRET', '')
+param mqttBroker = readEnvironmentVariable('MQTT_BROKER', '')
+param mqttUsername = readEnvironmentVariable('MQTT_USERNAME', '')
+param mqttPassword = readEnvironmentVariable('MQTT_PASSWORD', '')
+param owmApiKey = readEnvironmentVariable('OWM_API_KEY', '')
