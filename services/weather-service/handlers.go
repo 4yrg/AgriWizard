@@ -15,13 +15,13 @@ import (
 
 // Handler holds shared dependencies.
 type Handler struct {
-	jwtSecret   string
-	owmAPIKey   string
-	owmBaseURL  string
-	latitude    float64
-	longitude   float64
-	cityName    string
-	useMock     bool
+	jwtSecret  string
+	owmAPIKey  string
+	owmBaseURL string
+	latitude   float64
+	longitude  float64
+	cityName   string
+	useMock    bool
 }
 
 // NewHandler creates a new Handler.
@@ -133,12 +133,13 @@ func (h *Handler) GetRecommendations(c *gin.Context) {
 
 // calculateRecommendation computes the irrigation scale factor.
 // Rules:
-//   temp > 38°C            → scale 1.4 (extreme heat, irrigate much more)
-//   temp 35-38°C           → scale 1.2 (hot, irrigate more)
-//   temp 20-35°C           → scale 1.0 (normal)
-//   temp < 20°C            → scale 0.8 (cool, irrigate less)
-//   rain chance >= 90%     → scale 0.0 (skip irrigation entirely)
-//   rain chance >= 60%     → scale 0.5 (halve irrigation)
+//
+//	temp > 38°C            → scale 1.4 (extreme heat, irrigate much more)
+//	temp 35-38°C           → scale 1.2 (hot, irrigate more)
+//	temp 20-35°C           → scale 1.0 (normal)
+//	temp < 20°C            → scale 0.8 (cool, irrigate less)
+//	rain chance >= 90%     → scale 0.0 (skip irrigation entirely)
+//	rain chance >= 60%     → scale 0.5 (halve irrigation)
 func (h *Handler) calculateRecommendation(condition WeatherCondition, forecast WeatherForecast) IrrigationRecommendation {
 	temp := condition.Temperature
 	// Find max rain probability in next 12 hours

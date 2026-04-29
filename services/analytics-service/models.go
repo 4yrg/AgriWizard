@@ -51,10 +51,10 @@ type DailySummary struct {
 
 // IngestPayload is the payload received from the Hardware Service.
 type IngestPayload struct {
-	SensorID   string             `json:"sensor_id" binding:"required"`
-	Readings   []ParameterReading `json:"readings" binding:"required"`
-	Timestamp  time.Time          `json:"timestamp"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	SensorID  string                 `json:"sensor_id" binding:"required"`
+	Readings  []ParameterReading     `json:"readings" binding:"required"`
+	Timestamp time.Time              `json:"timestamp"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ParameterReading is a single measured value for a specific parameter.

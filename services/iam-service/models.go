@@ -6,8 +6,8 @@ import "time"
 type Role string
 
 const (
-	RoleAdmin     Role = "Admin"
-	RoleAgromist  Role = "Agromist"
+	RoleAdmin    Role = "Admin"
+	RoleAgromist Role = "Agromist"
 )
 
 // User represents a registered user in the IAM service.

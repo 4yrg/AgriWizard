@@ -12,7 +12,7 @@ func main() {
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	owmAPIKey := getEnv("OWM_API_KEY", "") // Empty = use mock
 	owmBaseURL := getEnv("OWM_BASE_URL", "https://api.openweathermap.org/data/2.5")
-	latStr := getEnv("LOCATION_LAT", "6.9271")  // Default: Colombo, Sri Lanka
+	latStr := getEnv("LOCATION_LAT", "6.9271") // Default: Colombo, Sri Lanka
 	lonStr := getEnv("LOCATION_LON", "79.8612")
 	cityName := getEnv("LOCATION_CITY", "Colombo")
 	useMockStr := getEnv("USE_MOCK", "true")
