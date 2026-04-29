@@ -118,9 +118,12 @@ jobs:
               - 'services/notification-service/**'
             web:
               - 'client/**'
+            gateway:
+              - 'infrastructure/kong/**'
             any_changed:
               - 'services/**'
               - 'client/**'
+              - 'infrastructure/kong/**'
 
   # ============================================================================
   # Job 3: Test Backend (Go)
@@ -260,6 +263,15 @@ jobs:
                        -f client/Dockerfile .
           docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web --all-tags
 
+      - name: Build Gateway (Kong)
+        if: needs.detect-changes.outputs.gateway == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:latest \
+                       -f infrastructure/kong/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway --all-tags
+
 
   # ============================================================================
   # Job 6: Deploy to Azure Container Apps
@@ -292,6 +304,7 @@ jobs:
           [[ "${{ needs.detect-changes.outputs.weather }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("weather")
           [[ "${{ needs.detect-changes.outputs.notification }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("notification")
           [[ "${{ needs.detect-changes.outputs.web }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("web")
+          [[ "${{ needs.detect-changes.outputs.gateway }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("gateway")
 
           for svc in "${SERVICES[@]}"; do
             echo "Deploying $svc..."
@@ -320,10 +333,9 @@ jobs:
       
       - name: Run Health Checks
         run: |
-          # Get APIM Gateway URL
-          APIM_URL=$(az apim show --name agriwizard-apim --resource-group ${{ env.RESOURCE_GROUP }} --query "gatewayUrl" -o tsv)
-          # APIM gatewayUrl already includes https://
-          echo "APIM Gateway: $APIM_URL"
+          # Get Gateway URL from deployment outputs or az cli
+          GATEWAY_URL=$(az deployment group show --resource-group ${{ env.RESOURCE_GROUP }} --name main --query "properties.outputs.gatewayUrl.value" -o tsv)
+          echo "Gateway: $GATEWAY_URL"
           
           # Wait for propagation
           sleep 30
@@ -332,7 +344,7 @@ jobs:
           endpoints=("/api/v1/iam/health" "/api/v1/hardware/health")
           for ep in "${endpoints[@]}"; do
             echo "Testing $ep..."
-            curl -f "$APIM_URL$ep" || exit 1
+            curl -f "$GATEWAY_URL$ep" || exit 1
           done
 
   # ============================================================================

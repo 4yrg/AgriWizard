@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "14850520412647971107"
+      "templateHash": "15676417357791507741"
     }
   },
   "parameters": {
@@ -2550,7 +2550,7 @@
               },
               {
                 "name": "NEXT_PUBLIC_API_URL",
-                "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-apim'), '2025-04-01').outputs.gatewayUrl.value]"
+                "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-kong'), '2025-04-01').outputs.fqdn.value)]"
               }
             ]
           }
@@ -2753,14 +2753,14 @@
       "dependsOn": [
         "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
         "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-apim')]",
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]",
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-kong')]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "deploy-apim",
+      "name": "deploy-app-kong",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -2768,7 +2768,7 @@
         "mode": "Incremental",
         "parameters": {
           "name": {
-            "value": "[format('{0}-apim', parameters('environmentName'))]"
+            "value": "[format('{0}-gateway', parameters('environmentName'))]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -2776,23 +2776,58 @@
           "tags": {
             "value": "[variables('tags')]"
           },
-          "jwtSecret": {
-            "value": "[parameters('jwtSecret')]"
+          "containerAppsEnvironmentId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "iamFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-iam'), '2025-04-01').outputs.fqdn.value]"
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/agriwizard-gateway:{1}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('imageTag'))))]",
+          "targetPort": {
+            "value": 8000
           },
-          "hardwareFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-hardware'), '2025-04-01').outputs.fqdn.value]"
+          "externalIngress": {
+            "value": true
           },
-          "analyticsFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-analytics'), '2025-04-01').outputs.fqdn.value]"
+          "cpu": {
+            "value": "0.25"
           },
-          "weatherFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-weather'), '2025-04-01').outputs.fqdn.value]"
+          "memory": {
+            "value": "0.5Gi"
           },
-          "notificationFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-notification'), '2025-04-01').outputs.fqdn.value]"
+          "userAssignedIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
+          },
+          "acrLoginServer": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
+          },
+          "healthProbePath": {
+            "value": ""
+          },
+          "envVars": {
+            "value": [
+              {
+                "name": "KONG_DATABASE",
+                "value": "off"
+              },
+              {
+                "name": "KONG_DECLARATIVE_CONFIG",
+                "value": "/etc/kong/kong.yml"
+              },
+              {
+                "name": "ACA_FQDN_SUFFIX",
+                "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value]"
+              },
+              {
+                "name": "KONG_JWT_ISSUER",
+                "value": "agriwizard-iam"
+              },
+              {
+                "name": "KONG_JWT_SHARED_SECRET",
+                "value": "[parameters('jwtSecret')]"
+              },
+              {
+                "name": "CORS_ALLOW_ORIGIN",
+                "value": "*"
+              }
+            ]
           }
         },
         "template": {
@@ -2802,21 +2837,21 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "10658117652501433439"
+              "templateHash": "9860937893856454457"
             }
           },
           "parameters": {
             "name": {
               "type": "string",
               "metadata": {
-                "description": "Name of the API Management instance"
+                "description": "Name of the Container App"
               }
             },
             "location": {
               "type": "string",
               "defaultValue": "[resourceGroup().location]",
               "metadata": {
-                "description": "Location for all resources."
+                "description": "Azure region"
               }
             },
             "tags": {
@@ -2826,279 +2861,174 @@
                 "description": "Tags to apply to the resource"
               }
             },
-            "publisherEmail": {
-              "type": "string",
-              "defaultValue": "admin@agriwizard.local",
-              "metadata": {
-                "description": "Email address of the publisher"
-              }
-            },
-            "publisherName": {
-              "type": "string",
-              "defaultValue": "AgriWizard",
-              "metadata": {
-                "description": "Name of the publisher"
-              }
-            },
-            "jwtSecret": {
-              "type": "securestring",
-              "metadata": {
-                "description": "JWT Secret used for validation"
-              }
-            },
-            "iamFqdn": {
+            "containerAppsEnvironmentId": {
               "type": "string",
               "metadata": {
-                "description": "FQDN of the IAM service"
+                "description": "Resource ID of the Container Apps environment"
               }
             },
-            "hardwareFqdn": {
+            "image": {
               "type": "string",
               "metadata": {
-                "description": "FQDN of the Hardware service"
+                "description": "Full image reference (e.g., myacr.azurecr.io/myapp:latest)"
               }
             },
-            "analyticsFqdn": {
-              "type": "string",
+            "targetPort": {
+              "type": "int",
               "metadata": {
-                "description": "FQDN of the Analytics service"
+                "description": "Container port to expose"
               }
             },
-            "weatherFqdn": {
-              "type": "string",
+            "externalIngress": {
+              "type": "bool",
+              "defaultValue": false,
               "metadata": {
-                "description": "FQDN of the Weather service"
+                "description": "Whether ingress is external (public) or internal only"
               }
             },
-            "notificationFqdn": {
+            "cpu": {
+              "type": "string",
+              "defaultValue": "0.25",
+              "metadata": {
+                "description": "CPU allocation (e.g., 0.25)"
+              }
+            },
+            "memory": {
+              "type": "string",
+              "defaultValue": "0.5Gi",
+              "metadata": {
+                "description": "Memory allocation (e.g., 0.5Gi)"
+              }
+            },
+            "minReplicas": {
+              "type": "int",
+              "defaultValue": 1,
+              "metadata": {
+                "description": "Minimum number of replicas"
+              }
+            },
+            "maxReplicas": {
+              "type": "int",
+              "defaultValue": 2,
+              "metadata": {
+                "description": "Maximum number of replicas"
+              }
+            },
+            "envVars": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Environment variables array"
+              }
+            },
+            "acrLoginServer": {
               "type": "string",
               "metadata": {
-                "description": "FQDN of the Notification service"
+                "description": "ACR login server"
+              }
+            },
+            "userAssignedIdentityId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the user-assigned identity for ACR pull"
+              }
+            },
+            "healthProbePath": {
+              "type": "string",
+              "defaultValue": "/health",
+              "metadata": {
+                "description": "Liveness probe path (empty to skip)"
               }
             }
-          },
-          "variables": {
-            "apis": [
-              {
-                "name": "iam-legacy",
-                "path": "api/v1/iam",
-                "fqdn": "[parameters('iamFqdn')]",
-                "backendPath": "/api/v1/iam",
-                "requireJwt": false
-              },
-              {
-                "name": "auth",
-                "path": "auth",
-                "fqdn": "[parameters('iamFqdn')]",
-                "backendPath": "/api/v1/iam",
-                "requireJwt": false
-              },
-              {
-                "name": "hardware-legacy",
-                "path": "api/v1/hardware",
-                "fqdn": "[parameters('hardwareFqdn')]",
-                "backendPath": "/api/v1/hardware",
-                "requireJwt": true
-              },
-              {
-                "name": "hardware",
-                "path": "hardware",
-                "fqdn": "[parameters('hardwareFqdn')]",
-                "backendPath": "/api/v1/hardware",
-                "requireJwt": true
-              },
-              {
-                "name": "analytics-legacy",
-                "path": "api/v1/analytics",
-                "fqdn": "[parameters('analyticsFqdn')]",
-                "backendPath": "/api/v1/analytics",
-                "requireJwt": true
-              },
-              {
-                "name": "analytics",
-                "path": "analytics",
-                "fqdn": "[parameters('analyticsFqdn')]",
-                "backendPath": "/api/v1/analytics",
-                "requireJwt": true
-              },
-              {
-                "name": "weather-legacy",
-                "path": "api/v1/weather",
-                "fqdn": "[parameters('weatherFqdn')]",
-                "backendPath": "/api/v1/weather",
-                "requireJwt": true
-              },
-              {
-                "name": "weather",
-                "path": "weather",
-                "fqdn": "[parameters('weatherFqdn')]",
-                "backendPath": "/api/v1/weather",
-                "requireJwt": true
-              },
-              {
-                "name": "notification-legacy",
-                "path": "api/v1/notifications",
-                "fqdn": "[parameters('notificationFqdn')]",
-                "backendPath": "/api/v1/notifications",
-                "requireJwt": true
-              },
-              {
-                "name": "notifications",
-                "path": "notifications",
-                "fqdn": "[parameters('notificationFqdn')]",
-                "backendPath": "/api/v1/notifications",
-                "requireJwt": true
-              },
-              {
-                "name": "templates-legacy",
-                "path": "api/v1/templates",
-                "fqdn": "[parameters('notificationFqdn')]",
-                "backendPath": "/api/v1/templates",
-                "requireJwt": true
-              },
-              {
-                "name": "templates",
-                "path": "templates",
-                "fqdn": "[parameters('notificationFqdn')]",
-                "backendPath": "/api/v1/templates",
-                "requireJwt": true
-              }
-            ]
           },
           "resources": [
             {
-              "type": "Microsoft.ApiManagement/service",
-              "apiVersion": "2022-08-01",
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
-              "sku": {
-                "name": "Developer",
-                "capacity": 1
-              },
               "identity": {
-                "type": "SystemAssigned"
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityId'))]": {}
+                }
               },
               "properties": {
-                "publisherEmail": "[parameters('publisherEmail')]",
-                "publisherName": "[parameters('publisherName')]"
+                "managedEnvironmentId": "[parameters('containerAppsEnvironmentId')]",
+                "configuration": {
+                  "ingress": {
+                    "external": "[parameters('externalIngress')]",
+                    "targetPort": "[parameters('targetPort')]",
+                    "transport": "http",
+                    "allowInsecure": false
+                  },
+                  "registries": [
+                    {
+                      "server": "[parameters('acrLoginServer')]",
+                      "identity": "[parameters('userAssignedIdentityId')]"
+                    }
+                  ],
+                  "secrets": [],
+                  "activeRevisionsMode": "Single"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "[parameters('name')]",
+                      "image": "[parameters('image')]",
+                      "resources": {
+                        "cpu": "[json(parameters('cpu'))]",
+                        "memory": "[parameters('memory')]"
+                      },
+                      "env": "[parameters('envVars')]",
+                      "probes": "[if(not(empty(parameters('healthProbePath'))), createArray(createObject('type', 'Liveness', 'httpGet', createObject('path', parameters('healthProbePath'), 'port', parameters('targetPort')), 'initialDelaySeconds', 30, 'periodSeconds', 15, 'failureThreshold', 5), createObject('type', 'Readiness', 'httpGet', createObject('path', parameters('healthProbePath'), 'port', parameters('targetPort')), 'initialDelaySeconds', 10, 'periodSeconds', 10, 'failureThreshold', 3)), createArray())]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": "[parameters('minReplicas')]",
+                    "maxReplicas": "[parameters('maxReplicas')]"
+                  }
+                }
               }
-            },
-            {
-              "type": "Microsoft.ApiManagement/service/namedValues",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}', parameters('name'), 'jwt-secret')]",
-              "properties": {
-                "displayName": "jwt-secret",
-                "secret": true,
-                "value": "[parameters('jwtSecret')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service', parameters('name'))]"
-              ]
-            },
-            {
-              "type": "Microsoft.ApiManagement/service/policies",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}', parameters('name'), 'policy')]",
-              "properties": {
-                "format": "xml",
-                "value": "<policies>\r\n  <inbound>\r\n    <cors allow-credentials=\"true\">\r\n      <allowed-origins>\r\n        <origin>*</origin>\r\n      </allowed-origins>\r\n      <allowed-methods>\r\n        <method>GET</method>\r\n        <method>POST</method>\r\n        <method>PUT</method>\r\n        <method>DELETE</method>\r\n        <method>PATCH</method>\r\n        <method>OPTIONS</method>\r\n      </allowed-methods>\r\n      <allowed-headers>\r\n        <header>Authorization</header>\r\n        <header>Content-Type</header>\r\n        <header>X-Request-ID</header>\r\n        <header>X-Internal-Service</header>\r\n      </allowed-headers>\r\n      <expose-headers>\r\n        <header>X-Kong-Upstream-Latency</header>\r\n        <header>X-Kong-Proxy-Latency</header>\r\n      </expose-headers>\r\n    </cors>\r\n  </inbound>\r\n  <backend>\r\n    <forward-request />\r\n  </backend>\r\n  <outbound />\r\n  <on-error />\r\n</policies>"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service', parameters('name'))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "apiDefs",
-                "count": "[length(variables('apis'))]"
-              },
-              "type": "Microsoft.ApiManagement/service/apis",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}', parameters('name'), variables('apis')[copyIndex()].name)]",
-              "properties": {
-                "displayName": "[variables('apis')[copyIndex()].name]",
-                "path": "[variables('apis')[copyIndex()].path]",
-                "protocols": [
-                  "https"
-                ],
-                "serviceUrl": "[format('https://{0}{1}', variables('apis')[copyIndex()].fqdn, variables('apis')[copyIndex()].backendPath)]",
-                "subscriptionRequired": false
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service', parameters('name'))]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "apiOperationsAll",
-                "count": "[length(variables('apis'))]"
-              },
-              "type": "Microsoft.ApiManagement/service/apis/operations",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'all-operations')]",
-              "properties": {
-                "displayName": "All Operations",
-                "method": "*",
-                "urlTemplate": "/*"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service/apis', parameters('name'), variables('apis')[copyIndex()].name)]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "apiOperationsRoot",
-                "count": "[length(variables('apis'))]"
-              },
-              "type": "Microsoft.ApiManagement/service/apis/operations",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'root-operation')]",
-              "properties": {
-                "displayName": "Root Operation",
-                "method": "*",
-                "urlTemplate": "/"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service/apis', parameters('name'), variables('apis')[copyIndex()].name)]"
-              ]
-            },
-            {
-              "copy": {
-                "name": "apiPolicies",
-                "count": "[length(variables('apis'))]"
-              },
-              "condition": "[variables('apis')[copyIndex()].requireJwt]",
-              "type": "Microsoft.ApiManagement/service/apis/policies",
-              "apiVersion": "2022-08-01",
-              "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'policy')]",
-              "properties": {
-                "format": "xml",
-                "value": "<policies>\r\n  <inbound>\r\n    <base />\r\n    <validate-jwt header-name=\"Authorization\" failed-validation-httpcode=\"401\" failed-validation-error-message=\"Unauthorized\" require-expiration-time=\"true\" require-scheme=\"Bearer\" require-signed-tokens=\"true\">\r\n      <issuer-signing-keys>\r\n        <key>{{jwt-secret}}</key>\r\n      </issuer-signing-keys>\r\n    </validate-jwt>\r\n  </inbound>\r\n  <backend>\r\n    <base />\r\n  </backend>\r\n  <outbound>\r\n    <base />\r\n  </outbound>\r\n  <on-error>\r\n    <base />\r\n  </on-error>\r\n</policies>"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ApiManagement/service/apis', parameters('name'), variables('apis')[copyIndex()].name)]"
-              ]
             }
           ],
           "outputs": {
-            "gatewayUrl": {
+            "fqdn": {
               "type": "string",
               "metadata": {
-                "description": "The APIM Gateway URL"
+                "description": "The FQDN of the Container App"
               },
-              "value": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('name')), '2022-08-01').gatewayUrl]"
+              "value": "[reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').configuration.ingress.fqdn]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "The name of the Container App"
+              },
+              "value": "[parameters('name')]"
+            },
+            "id": {
+              "type": "string",
+              "metadata": {
+                "description": "The resource ID"
+              },
+              "value": "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
+            },
+            "latestRevision": {
+              "type": "string",
+              "metadata": {
+                "description": "The latest revision name"
+              },
+              "value": "[reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').latestRevisionName]"
             }
           }
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-analytics')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-hardware')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-iam')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-notification')]",
-        "[resourceId('Microsoft.Resources/deployments', 'deploy-app-weather')]"
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-aca-env')]",
+        "[resourceId('Microsoft.Resources/deployments', 'deploy-acr')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-app-id', parameters('environmentName')))]"
       ]
     }
   ],
@@ -3117,12 +3047,12 @@
       },
       "value": "[variables('acrName')]"
     },
-    "apimUrl": {
+    "gatewayUrl": {
       "type": "string",
       "metadata": {
-        "description": "Azure API Management Gateway URL"
+        "description": "Gateway URL"
       },
-      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-apim'), '2025-04-01').outputs.gatewayUrl.value]"
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-app-kong'), '2025-04-01').outputs.fqdn.value)]"
     },
     "webUrl": {
       "type": "string",

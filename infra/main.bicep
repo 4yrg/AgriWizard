@@ -427,25 +427,36 @@ module webApp 'modules/container-app.bicep' = {
     healthProbePath: ''
     envVars: [
       { name: 'NODE_ENV', value: 'production' }
-      { name: 'NEXT_PUBLIC_API_URL', value: apimGateway.outputs.gatewayUrl }
+      { name: 'NEXT_PUBLIC_API_URL', value: 'https://${kongGateway.outputs.fqdn}' }
     ]
   }
 }
 
-// ── Azure API Management (APIM) ──────────────────────────────────────────────
+// ── Kong Gateway (Replacement for APIM) ──────────────────────────────────────
 
-module apimGateway 'modules/apim.bicep' = {
-  name: 'deploy-apim'
+module kongGateway 'modules/container-app.bicep' = {
+  name: 'deploy-app-kong'
   params: {
-    name: '${environmentName}-apim'
+    name: '${environmentName}-gateway'
     location: location
     tags: tags
-    jwtSecret: jwtSecret
-    iamFqdn: iamApp.outputs.fqdn
-    hardwareFqdn: hardwareApp.outputs.fqdn
-    analyticsFqdn: analyticsApp.outputs.fqdn
-    weatherFqdn: weatherApp.outputs.fqdn
-    notificationFqdn: notificationApp.outputs.fqdn
+    containerAppsEnvironmentId: acaEnv.outputs.id
+    image: usePlaceholderImages ? placeholderImage : '${acrLoginServer}/agriwizard-gateway:${imageTag}'
+    targetPort: 8000
+    externalIngress: true
+    cpu: '0.25'
+    memory: '0.5Gi'
+    userAssignedIdentityId: appIdentity.id
+    acrLoginServer: acrLoginServer
+    healthProbePath: ''
+    envVars: [
+      { name: 'KONG_DATABASE', value: 'off' }
+      { name: 'KONG_DECLARATIVE_CONFIG', value: '/etc/kong/kong.yml' }
+      { name: 'ACA_FQDN_SUFFIX', value: acaEnv.outputs.defaultDomain }
+      { name: 'KONG_JWT_ISSUER', value: 'agriwizard-iam' }
+      { name: 'KONG_JWT_SHARED_SECRET', value: jwtSecret }
+      { name: 'CORS_ALLOW_ORIGIN', value: '*' }
+    ]
   }
 }
 
@@ -459,8 +470,8 @@ output acrLoginServer string = acr.outputs.loginServer
 @description('ACR name')
 output acrName string = acrName
 
-@description('Azure API Management Gateway URL')
-output apimUrl string = apimGateway.outputs.gatewayUrl
+@description('Gateway URL')
+output gatewayUrl string = 'https://${kongGateway.outputs.fqdn}'
 
 @description('Web Client URL')
 output webUrl string = 'https://${webApp.outputs.fqdn}'
