@@ -14,14 +14,12 @@ client/.next
 client/out
 client/build
 
-# Ignore Go binaries and cache
-**/bin
-**/obj
-services/**/iam-service
-services/**/hardware-service
-services/**/analytics-service
-services/**/weather-service
-services/**/notification-service
+# Ignore Go binaries (inside service folders)
+services/iam-service/iam-service
+services/hardware-service/hardware-service
+services/analytics-service/analytics-service
+services/weather-service/weather-service
+services/notification-service/notification-service
 
 # Ignore Terraform / Bicep temp files
 .terraform
