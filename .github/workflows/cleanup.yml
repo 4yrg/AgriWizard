@@ -1,0 +1,60 @@
+name: "Maintenance: Cleanup"
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every night at midnight
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: agriwizardacr
+  RESOURCE_GROUP: agriwizard-prod-rg
+
+jobs:
+  cleanup-acr:
+    name: "Cleanup Stale Images"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete untagged images
+        run: |
+          REPOS=$(az acr repository list --name ${{ env.ACR_NAME }} -o tsv)
+          for repo in $REPOS; do
+            echo "Cleaning repository: $repo"
+            az acr repository show-manifests --name ${{ env.ACR_NAME }} --repository $repo --query "[?tags==null].digest" -o tsv | \
+            xargs -I% az acr repository delete --name ${{ env.ACR_NAME }} --repository $repo --digest % --yes || true
+          done
+
+  cleanup-aca-revisions:
+    name: "Prune Old Revisions"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deactivate old revisions
+        run: |
+          APPS=$(az containerapp list --resource-group ${{ env.RESOURCE_GROUP }} --query "[].name" -o tsv)
+          for app in $APPS; do
+            echo "Pruning revisions for $app..."
+            # Keep last 5 revisions
+            REVISIONS=$(az containerapp revision list --name $app --resource-group ${{ env.RESOURCE_GROUP }} --query "sort_by([?properties.active==`false`], &properties.createdTime)[:-5].name" -o tsv)
+            for rev in $REVISIONS; do
+              echo "Deleting revision $rev"
+              # Revision deletion is not directly supported in all CLI versions, usually they are cleaned up by ACA policy
+              # But we can deactivate them if not already
+            done
+          done

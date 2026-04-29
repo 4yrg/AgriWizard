@@ -1,0 +1,306 @@
+name: "App: Build & Deploy"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "apps/**"
+      - "client/**"
+      - "infrastructure/kong/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_all:
+        description: "Force deploy all services"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: agriwizardacr
+  RESOURCE_GROUP: agriwizard-prod-rg
+  CONTAINER_APP_ENV: agriwizard-aca-env
+
+jobs:
+  # ============================================================================
+  # Job 1: Detect changes to optimize build
+  # ============================================================================
+  detect-changes:
+    name: "Detect Changes"
+    runs-on: ubuntu-latest
+    outputs:
+      iam: ${{ steps.filter.outputs.iam }}
+      hardware: ${{ steps.filter.outputs.hardware }}
+      analytics: ${{ steps.filter.outputs.analytics }}
+      weather: ${{ steps.filter.outputs.weather }}
+      notification: ${{ steps.filter.outputs.notification }}
+      web: ${{ steps.filter.outputs.web }}
+      kong: ${{ steps.filter.outputs.kong }}
+      any_changed: ${{ steps.filter.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            iam:
+              - 'services/iam-service/**'
+            hardware:
+              - 'services/hardware-service/**'
+            analytics:
+              - 'services/analytics-service/**'
+            weather:
+              - 'services/weather-service/**'
+            notification:
+              - 'services/notification-service/**'
+            web:
+              - 'client/**'
+            kong:
+              - 'infrastructure/kong/**'
+            any_changed:
+              - 'services/**'
+              - 'client/**'
+              - 'infrastructure/kong/**'
+
+  # ============================================================================
+  # Job 2: Test Backend (Go)
+  # ============================================================================
+  test-backend:
+    name: "Test Backend"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      
+      - name: Run Go tests
+        run: |
+          go test ./services/... -v
+
+  # ============================================================================
+  # Job 3: Test Frontend (Next.js)
+  # ============================================================================
+  test-frontend:
+    name: "Test Frontend"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+      
+      - name: Lint & Build
+        working-directory: client
+        run: |
+          npm run lint
+          npm run build
+
+  # ============================================================================
+  # Job 4: Build & Push Images
+  # ============================================================================
+  build-images:
+    name: "Build & Push"
+    needs: [test-backend, test-frontend, detect-changes]
+    if: always() && (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') && (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.vars.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      
+      - name: Set image tags
+        id: vars
+        run: |
+          TAG=$(date +%Y%m%d-%H%M)
+          SHA_TAG="sha-${GITHUB_SHA::7}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      # Build individual services if changed
+      - name: Build IAM
+        if: needs.detect-changes.outputs.iam == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:latest \
+                       -f services/iam-service/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam --all-tags
+
+      - name: Build Hardware
+        if: needs.detect-changes.outputs.hardware == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:latest \
+                       -f services/hardware-service/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware --all-tags
+
+      - name: Build Analytics
+        if: needs.detect-changes.outputs.analytics == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:latest \
+                       -f services/analytics-service/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics --all-tags
+
+      - name: Build Weather
+        if: needs.detect-changes.outputs.weather == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:latest \
+                       -f services/weather-service/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather --all-tags
+
+      - name: Build Notification
+        if: needs.detect-changes.outputs.notification == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:latest \
+                       -f services/notification-service/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification --all-tags
+
+      - name: Build Web
+        if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:latest \
+                       -f client/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web --all-tags
+
+      - name: Build Kong
+        if: needs.detect-changes.outputs.kong == 'true' || github.event.inputs.deploy_all == 'true'
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:${{ steps.vars.outputs.tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:${{ steps.vars.outputs.sha_tag }} \
+                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong:latest \
+                       -f infrastructure/kong/Dockerfile .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-kong --all-tags
+
+  # ============================================================================
+  # Job 5: Deploy to Azure Container Apps
+  # ============================================================================
+  deploy-services:
+    name: "Deploy Services"
+    needs: [build-images, detect-changes]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Services
+        run: |
+          SERVICES=()
+          [[ "${{ needs.detect-changes.outputs.iam }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("iam")
+          [[ "${{ needs.detect-changes.outputs.hardware }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("hardware")
+          [[ "${{ needs.detect-changes.outputs.analytics }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("analytics")
+          [[ "${{ needs.detect-changes.outputs.weather }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("weather")
+          [[ "${{ needs.detect-changes.outputs.notification }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("notification")
+          [[ "${{ needs.detect-changes.outputs.web }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("web")
+          [[ "${{ needs.detect-changes.outputs.kong }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("kong")
+
+          for svc in "${SERVICES[@]}"; do
+            echo "Deploying $svc..."
+            az containerapp update \
+              --name "agriwizard-$svc" \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image "${{ env.ACR_NAME }}.azurecr.io/agriwizard-$svc:${{ needs.build-images.outputs.image_tag }}" \
+              --query "properties.provisioningState"
+          done
+
+  # ============================================================================
+  # Job 6: Smoke Tests
+  # ============================================================================
+  smoke-tests:
+    name: "Smoke Tests"
+    needs: deploy-services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Run Health Checks
+        run: |
+          # Get Kong FQDN
+          KONG_URL=$(az containerapp show --name agriwizard-kong --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "Kong Gateway: https://$KONG_URL"
+          
+          # Wait for propagation
+          sleep 30
+          
+          # Check health endpoints
+          endpoints=("/health" "/api/v1/iam/health" "/api/v1/hardware/health")
+          for ep in "${endpoints[@]}"; do
+            echo "Testing $ep..."
+            curl -f "https://$KONG_URL$ep" || exit 1
+          done
+
+  # ============================================================================
+  # Job 7: Rollback (on failure)
+  # ============================================================================
+  rollback-on-failure:
+    name: "Rollback"
+    needs: [deploy-services, smoke-tests]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Revert to previous revision
+        run: |
+          APPS=("agriwizard-kong" "agriwizard-iam" "agriwizard-hardware" "agriwizard-analytics" "agriwizard-weather" "agriwizard-notification" "agriwizard-web")
+          for app in "${APPS[@]}"; do
+            echo "Checking $app for rollback..."
+            PREV_REV=$(az containerapp revision list --name $app --resource-group ${{ env.RESOURCE_GROUP }} --query "sort_by([?properties.active==`false`], &properties.createdTime)[-1].name" -o tsv)
+            if [ -n "$PREV_REV" ]; then
+              echo "Rolling back $app to $PREV_REV"
+              az containerapp ingress traffic set --name $app --resource-group ${{ env.RESOURCE_GROUP }} --revision-weight $PREV_REV=100
+            fi
+          done

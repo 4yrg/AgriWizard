@@ -87,3 +87,29 @@ test:
 lint:
 	golangci-lint run ./...
 	@cd client && npm run lint
+
+# ── CI/CD & Production ─────────────────────────────────────────────
+
+ci: lint test
+	@echo "CI checks passed"
+
+infra:
+	@echo "Deploying infrastructure via Bicep..."
+	@az deployment group create --resource-group agriwizard-prod-rg --template-file infra/main.bicep
+
+deploy:
+	@echo "Deploying latest images to Azure..."
+	@./scripts/deploy.sh
+
+rollback:
+	@echo "Rolling back to previous revision..."
+	@./scripts/rollback.sh
+
+health:
+	@./scripts/healthcheck.sh http://localhost:8080
+
+mqtt-check:
+	@./scripts/test-mqtt-connectivity.sh $${MQTT_HOST} $${MQTT_PORT} $${MQTT_USERNAME} $${MQTT_PASSWORD}
+
+logs-prod:
+	@az containerapp logs show --name agriwizard-kong --resource-group agriwizard-prod-rg --follow
