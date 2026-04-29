@@ -100,20 +100,16 @@ Add the following secrets to your GitHub repository:
 | `OWM_API_KEY` | OpenWeatherMap API key |
 
 ### 3. Initial Deployment
-**Important:** You must deploy infrastructure BEFORE building app images. The deploy workflow will fail if no ACR exists.
+**Simple deployment order:**
 
-| Step | Workflow | Description |
-|------|----------|-------------|
-| 1 | `infra.yml` | Run manually with `confirm_deploy=DEPLOY` to create ACR, PostgreSQL, Service Bus, Key Vault, Container Apps Environment, and all container apps |
-| 2 | `deploy.yml` | Run manually with `deploy_all=true` to build and push images, then deploy to container apps |
+| Step | Action | Command/Way |
+|------|--------|-------------|
+| 1 | **Bootstrap** | Run `./scripts/bootstrap.sh rg-agriwizard centralindia your-org/AgriWizard` |
+| 2 | **Build & Deploy** | Run `deploy` workflow with `deploy_all=true` |
 
-```bash
-# 1. Trigger infra.yml workflow manually with confirm_deploy=DEPLOY
-#    (Creates: ACR, DB, Service Bus, Key Vault, Container Apps)
+The bootstrap script creates: Resource Group, ACR, and OIDC identity. The deploy workflow builds images and deploys to Azure Container Apps.
 
-# 2. Trigger deploy.yml workflow manually with deploy_all=true
-#    (Builds images and deploys to container apps)
-```
+> **Note:** The `infra` workflow is no longer required for initial setup. Use it only to update infrastructure (Bicep templates).
 
 ### 4. Managed MQTT Configuration
 Managed MQTT credentials are stored in **Azure Key Vault** and injected into Container Apps via environment variables.
@@ -126,9 +122,19 @@ Key Vault Secret Names:
 ## Troubleshooting
 
 ### No ACR Found Error
-If you see `Could not connect to the registry login server` or `The resource with name '...' could not be found`:
-1. **Run the `infra` workflow first** - This creates the Azure Container Registry
-2. Trigger it manually with `confirm_deploy=DEPLOY`
+If you see `Could not connect to the registry login server`:
+- Run `./scripts/bootstrap.sh` to create the ACR
+- Or manually: `az acr create -n agriwizardacr -g rg-agriwizard --sku Basic`
+
+### Missing GitHub Secrets
+Add the required secrets (see bootstrap output):
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `POSTGRES_ADMIN_PASSWORD`
+- `JWT_SECRET`
+- `MQTT_BROKER`, `MQTT_USERNAME`, `MQTT_PASSWORD`
+- `OWM_API_KEY`
 
 ### Connectivity Issues
 If you see `ERR_CONNECTION_REFUSED`, verify:
