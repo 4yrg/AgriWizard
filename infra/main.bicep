@@ -190,9 +190,12 @@ module acaEnv 'modules/container-apps-env.bicep' = {
   }
 }
 
+resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: acrName
+}
+
 var acrLoginServer = acr.outputs.loginServer
-var acrUsername = acr.outputs.adminUsername
-var acrPassword = acr.outputs.adminPassword
+// Credentials will be retrieved directly from acrResource in the app modules to ensure proper sequencing.
 
 // ── Placeholder Image Logic ──────────────────────────────────────────────────
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
@@ -218,6 +221,7 @@ var commonBackendEnv = [
 
 // ── IAM Service ──────────────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module iamApp 'modules/container-app.bicep' = {
   name: 'deploy-app-iam'
   params: {
@@ -233,8 +237,8 @@ module iamApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8086' }
       { name: 'JWT_ISSUER', value: 'agriwizard-iam' }
@@ -245,6 +249,7 @@ module iamApp 'modules/container-app.bicep' = {
 
 // ── Hardware Service ─────────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module hardwareApp 'modules/container-app.bicep' = {
   name: 'deploy-app-hardware'
   params: {
@@ -260,8 +265,8 @@ module hardwareApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8087' }
       { name: 'MQTT_BROKER', value: mqttBroker }
@@ -277,6 +282,7 @@ module hardwareApp 'modules/container-app.bicep' = {
 
 // ── Analytics Service ────────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module analyticsApp 'modules/container-app.bicep' = {
   name: 'deploy-app-analytics'
   params: {
@@ -292,8 +298,8 @@ module analyticsApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8088' }
       { name: 'HARDWARE_SERVICE_URL', value: 'http://${environmentName}-hardware.internal.${acaEnv.outputs.defaultDomain}:8087' }
@@ -308,6 +314,7 @@ module analyticsApp 'modules/container-app.bicep' = {
 
 // ── Weather Service ──────────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module weatherApp 'modules/container-app.bicep' = {
   name: 'deploy-app-weather'
   params: {
@@ -323,8 +330,8 @@ module weatherApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 1
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     envVars: concat(commonBackendEnv, [
       { name: 'PORT', value: '8089' }
       { name: 'USE_MOCK', value: 'false' }
@@ -339,6 +346,7 @@ module weatherApp 'modules/container-app.bicep' = {
 
 // ── Notification Service ─────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module notificationApp 'modules/container-app.bicep' = {
   name: 'deploy-app-notification'
   params: {
@@ -354,8 +362,8 @@ module notificationApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 1
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     envVars: [
       { name: 'PORT', value: '8091' }
       { name: 'DB_HOST', value: postgres.outputs.fqdn }
@@ -380,6 +388,7 @@ module notificationApp 'modules/container-app.bicep' = {
 
 // ── Web Client (Next.js) ─────────────────────────────────────────────────────
 
+#disable-next-line no-unnecessary-dependson
 module webApp 'modules/container-app.bicep' = {
   name: 'deploy-app-web'
   params: {
@@ -395,8 +404,8 @@ module webApp 'modules/container-app.bicep' = {
     minReplicas: 1
     maxReplicas: 2
     acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    acrUsername: acrResource.listCredentials().username
+    acrPassword: acrResource.listCredentials().passwords[0].value
     healthProbePath: ''
     envVars: [
       { name: 'NODE_ENV', value: 'production' }

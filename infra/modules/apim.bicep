@@ -38,13 +38,16 @@ param notificationFqdn string
 
 // ─── Resource ────────────────────────────────────────────────────────────────
 
-resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
+resource apim 'Microsoft.ApiManagement/service@2022-08-01' = {
   name: name
   location: location
   tags: tags
   sku: {
-    name: 'Consumption'
-    capacity: 0
+    name: 'Developer'
+    capacity: 1
+  }
+  identity: {
+    type: 'SystemAssigned'
   }
   properties: {
     publisherEmail: publisherEmail
@@ -53,7 +56,7 @@ resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
 }
 
 // Named Value for JWT Secret
-resource jwtSecretValue 'Microsoft.ApiManagement/service/namedValues@2023-05-01-preview' = {
+resource jwtSecretValue 'Microsoft.ApiManagement/service/namedValues@2022-08-01' = {
   parent: apim
   name: 'jwt-secret'
   properties: {
@@ -64,7 +67,7 @@ resource jwtSecretValue 'Microsoft.ApiManagement/service/namedValues@2023-05-01-
 }
 
 // Global Policy (CORS)
-resource globalPolicy 'Microsoft.ApiManagement/service/policies@2023-05-01-preview' = {
+resource globalPolicy 'Microsoft.ApiManagement/service/policies@2022-08-01' = {
   parent: apim
   name: 'policy'
   properties: {
@@ -88,7 +91,7 @@ var apis = [
   { name: 'templates', path: 'templates', fqdn: notificationFqdn, backendPath: '/api/v1/templates', requireJwt: true }
 ]
 
-resource apiDefs 'Microsoft.ApiManagement/service/apis@2023-05-01-preview' = [for api in apis: {
+resource apiDefs 'Microsoft.ApiManagement/service/apis@2022-08-01' = [for api in apis: {
   parent: apim
   name: api.name
   properties: {
@@ -100,7 +103,7 @@ resource apiDefs 'Microsoft.ApiManagement/service/apis@2023-05-01-preview' = [fo
   }
 }]
 
-resource apiOperationsAll 'Microsoft.ApiManagement/service/apis/operations@2023-05-01-preview' = [for (api, i) in apis: {
+resource apiOperationsAll 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = [for (api, i) in apis: {
   parent: apiDefs[i]
   name: 'all-operations'
   properties: {
@@ -110,7 +113,7 @@ resource apiOperationsAll 'Microsoft.ApiManagement/service/apis/operations@2023-
   }
 }]
 
-resource apiOperationsRoot 'Microsoft.ApiManagement/service/apis/operations@2023-05-01-preview' = [for (api, i) in apis: {
+resource apiOperationsRoot 'Microsoft.ApiManagement/service/apis/operations@2022-08-01' = [for (api, i) in apis: {
   parent: apiDefs[i]
   name: 'root-operation'
   properties: {
@@ -120,7 +123,7 @@ resource apiOperationsRoot 'Microsoft.ApiManagement/service/apis/operations@2023
   }
 }]
 
-resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2023-05-01-preview' = [for (api, i) in apis: if (api.requireJwt) {
+resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2022-08-01' = [for (api, i) in apis: if (api.requireJwt) {
   parent: apiDefs[i]
   name: 'policy'
   properties: {

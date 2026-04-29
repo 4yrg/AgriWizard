@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12230076366898901080"
+      "templateHash": "9825800549105659697"
     }
   },
   "parameters": {
@@ -2820,7 +2820,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "12487430480648522138"
+              "templateHash": "10658117652501433439"
             }
           },
           "parameters": {
@@ -2986,13 +2986,16 @@
           "resources": [
             {
               "type": "Microsoft.ApiManagement/service",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "sku": {
-                "name": "Consumption",
-                "capacity": 0
+                "name": "Developer",
+                "capacity": 1
+              },
+              "identity": {
+                "type": "SystemAssigned"
               },
               "properties": {
                 "publisherEmail": "[parameters('publisherEmail')]",
@@ -3001,7 +3004,7 @@
             },
             {
               "type": "Microsoft.ApiManagement/service/namedValues",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}', parameters('name'), 'jwt-secret')]",
               "properties": {
                 "displayName": "jwt-secret",
@@ -3014,7 +3017,7 @@
             },
             {
               "type": "Microsoft.ApiManagement/service/policies",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}', parameters('name'), 'policy')]",
               "properties": {
                 "format": "xml",
@@ -3030,7 +3033,7 @@
                 "count": "[length(variables('apis'))]"
               },
               "type": "Microsoft.ApiManagement/service/apis",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}', parameters('name'), variables('apis')[copyIndex()].name)]",
               "properties": {
                 "displayName": "[variables('apis')[copyIndex()].name]",
@@ -3051,7 +3054,7 @@
                 "count": "[length(variables('apis'))]"
               },
               "type": "Microsoft.ApiManagement/service/apis/operations",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'all-operations')]",
               "properties": {
                 "displayName": "All Operations",
@@ -3068,7 +3071,7 @@
                 "count": "[length(variables('apis'))]"
               },
               "type": "Microsoft.ApiManagement/service/apis/operations",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'root-operation')]",
               "properties": {
                 "displayName": "Root Operation",
@@ -3086,7 +3089,7 @@
               },
               "condition": "[variables('apis')[copyIndex()].requireJwt]",
               "type": "Microsoft.ApiManagement/service/apis/policies",
-              "apiVersion": "2023-05-01-preview",
+              "apiVersion": "2022-08-01",
               "name": "[format('{0}/{1}/{2}', parameters('name'), variables('apis')[copyIndex()].name, 'policy')]",
               "properties": {
                 "format": "xml",
@@ -3103,7 +3106,7 @@
               "metadata": {
                 "description": "The APIM Gateway URL"
               },
-              "value": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('name')), '2023-05-01-preview').gatewayUrl]"
+              "value": "[reference(resourceId('Microsoft.ApiManagement/service', parameters('name')), '2022-08-01').gatewayUrl]"
             }
           }
         }
@@ -3124,6 +3127,13 @@
         "description": "ACR login server"
       },
       "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
+    },
+    "acrName": {
+      "type": "string",
+      "metadata": {
+        "description": "ACR name"
+      },
+      "value": "[variables('acrName')]"
     },
     "apimUrl": {
       "type": "string",
