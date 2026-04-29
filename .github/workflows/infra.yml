@@ -27,7 +27,7 @@ permissions:
 
 env:
   AZURE_LOCATION: centralindia
-  RESOURCE_GROUP: agriwizard-prod-rg
+  RESOURCE_GROUP: rg-agriwizard
   DEPLOYMENT_NAME: agriwizard-infra-${{ github.run_number }}
 
 jobs:

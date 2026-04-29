@@ -11,7 +11,7 @@ permissions:
 
 env:
   ACR_NAME: agriwizardacr
-  RESOURCE_GROUP: agriwizard-prod-rg
+  RESOURCE_GROUP: rg-agriwizard
 
 jobs:
   cleanup-acr:

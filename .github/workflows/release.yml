@@ -11,7 +11,7 @@ permissions:
 
 env:
   ACR_NAME: agriwizardacr
-  RESOURCE_GROUP: agriwizard-prod-rg
+  RESOURCE_GROUP: rg-agriwizard
 
 jobs:
   release:
@@ -30,7 +30,7 @@ jobs:
       - name: Tag and Push Release Images
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          SERVICES=("iam" "hardware" "analytics" "weather" "notification" "web" "kong")
+          SERVICES=("iam" "hardware" "analytics" "weather" "notification" "web")
           
           az acr login --name ${{ env.ACR_NAME }}
           
@@ -39,7 +39,7 @@ jobs:
             # We assume the 'latest' image in ACR is the one we want to tag for release (or we could build from scratch)
             # To be safe and immutable, we should build from the tag
             docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-$svc:$VERSION \
-                         -f $([[ "$svc" == "web" ]] && echo "client/Dockerfile" || ([[ "$svc" == "kong" ]] && echo "infrastructure/kong/Dockerfile" || echo "services/$svc-service/Dockerfile")) .
+                         -f $([[ "$svc" == "web" ]] && echo "client/Dockerfile" || echo "services/$svc-service/Dockerfile") .
             docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-$svc:$VERSION
           done
 
