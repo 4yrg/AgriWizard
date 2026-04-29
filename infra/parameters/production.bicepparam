@@ -10,7 +10,7 @@ using '../main.bicep'
 param location = 'centralindia'
 param environmentName = 'agriwizard'
 param imageTag = 'latest'
-param usePlaceholderImages = false
+param usePlaceholderImages = true
 
 // Weather service location defaults (Colombo, Sri Lanka)
 param locationLat = '6.9271'

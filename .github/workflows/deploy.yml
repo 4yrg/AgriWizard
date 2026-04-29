@@ -4,32 +4,30 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
     paths:
       - "services/**"
       - "apps/**"
       - "client/**"
       - "infra/**"
       - "infrastructure/**"
+      - "scripts/**"
       - ".github/workflows/deploy.yml"
 
   pull_request:
     branches:
       - main
+      - 'feature/**'
     paths:
       - "services/**"
       - "apps/**"
       - "client/**"
       - "infra/**"
       - "infrastructure/**"
+      - "scripts/**"
       - ".github/workflows/deploy.yml"
 
   workflow_dispatch:
-    inputs:
-      deploy_all:
-        description: "Force deploy all services"
-        required: false
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,6 +95,7 @@ jobs:
   resolve-acr:
     name: Resolve ACR
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       acr_name: ${{ steps.acr.outputs.name }}
     steps:
@@ -117,65 +116,14 @@ jobs:
           echo "name=$ACR_NAME" >> "$GITHUB_OUTPUT"
 
   # ============================================================================
-  # Job 3: Provision Infrastructure (Strictly Conditional)
-  # ============================================================================
-  provision-infra:
-    name: Provision Infra
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.infra == 'true' || github.event.inputs.deploy_all == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Bootstrap check
-        id: bootstrap
-        run: |
-          ACR_NAME=$(az acr list \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --query "[0].name" \
-            -o tsv)
-          if [ -z "$ACR_NAME" ]; then
-            echo "BOOTSTRAP=true" >> "$GITHUB_ENV"
-          else
-            echo "BOOTSTRAP=false" >> "$GITHUB_ENV"
-          fi
-
-      - name: Deploy Bicep
-        id: deploy
-        env:
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
-          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
-          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
-          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
-        run: |
-          DEPLOY_NAME="agriwizard-infra-$(date +%Y%m%d-%H%M%S)"
-          az deployment group create \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --name "$DEPLOY_NAME" \
-            --template-file infra/main.bicep \
-            --parameters infra/parameters/production.bicepparam \
-            --parameters usePlaceholderImages=$BOOTSTRAP
-
-  # ============================================================================
-  # Job 5: Build & Push Images
+  # Job 3: Build & Push Images (MUST happen before Infra)
   # ============================================================================
   build-images:
     name: Build & Push
     runs-on: ubuntu-latest
     needs: [detect-changes, resolve-acr]
-    if: |
-      always() &&
-      (needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true')
+    environment: production
+    if: always() && needs.detect-changes.outputs.any_changed == 'true'
     outputs:
       image_tag: ${{ steps.vars.outputs.tag }}
     env:
@@ -203,7 +151,7 @@ jobs:
         run: az acr login --name "${{ env.ACR_NAME }}"
 
       - name: Build IAM
-        if: needs.detect-changes.outputs.iam == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.iam == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-iam:${{ steps.vars.outputs.tag }} \
@@ -212,7 +160,7 @@ jobs:
             --file services/iam-service/Dockerfile .
 
       - name: Build Hardware
-        if: needs.detect-changes.outputs.hardware == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.hardware == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-hardware:${{ steps.vars.outputs.tag }} \
@@ -221,7 +169,7 @@ jobs:
             --file services/hardware-service/Dockerfile .
 
       - name: Build Analytics
-        if: needs.detect-changes.outputs.analytics == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.analytics == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-analytics:${{ steps.vars.outputs.tag }} \
@@ -230,7 +178,7 @@ jobs:
             --file services/analytics-service/Dockerfile .
 
       - name: Build Weather
-        if: needs.detect-changes.outputs.weather == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.weather == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-weather:${{ steps.vars.outputs.tag }} \
@@ -239,7 +187,7 @@ jobs:
             --file services/weather-service/Dockerfile .
 
       - name: Build Notification
-        if: needs.detect-changes.outputs.notification == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.notification == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-notification:${{ steps.vars.outputs.tag }} \
@@ -248,7 +196,7 @@ jobs:
             --file services/notification-service/Dockerfile .
 
       - name: Build Web
-        if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.web == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-web:${{ steps.vars.outputs.tag }} \
@@ -257,7 +205,7 @@ jobs:
             --file client/Dockerfile .
 
       - name: Build Gateway
-        if: needs.detect-changes.outputs.gateway == 'true' || github.event.inputs.deploy_all == 'true'
+        if: needs.detect-changes.outputs.gateway == 'true'
         run: |
           az acr build --registry "${{ env.ACR_NAME }}" \
             --image agriwizard-gateway:${{ steps.vars.outputs.tag }} \
@@ -266,13 +214,67 @@ jobs:
             --file infrastructure/kong/Dockerfile .
 
   # ============================================================================
-  # Job 6: Deploy to Azure Container Apps
+  # Job 4: Provision Infrastructure (Strictly Conditional)
+  # ============================================================================
+  provision-infra:
+    name: Provision Infra
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-images]
+    environment: production
+    if: always() && (needs.detect-changes.outputs.infra == 'true' || needs.build-images.result == 'success')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bootstrap check
+        id: bootstrap
+        run: |
+          ACR_NAME=$(az acr list \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "[0].name" \
+            -o tsv)
+          
+          # If images were built in this run, or they already exist, use real images
+          if [ "${{ needs.build-images.result }}" == "success" ] || [ -n "$ACR_NAME" ]; then
+            echo "BOOTSTRAP=false" >> "$GITHUB_ENV"
+          else
+            echo "BOOTSTRAP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy Bicep
+        id: deploy
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+        run: |
+          DEPLOY_NAME="agriwizard-infra-$(date +%Y%m%d-%H%M%S)"
+          az deployment group create \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "$DEPLOY_NAME" \
+            --template-file infra/main.bicep \
+            --parameters infra/parameters/production.bicepparam \
+            --parameters usePlaceholderImages=$BOOTSTRAP
+
+  # ============================================================================
+  # Job 5: Deploy to Azure Container Apps
   # ============================================================================
   deploy-services:
     name: Deploy Services
     runs-on: ubuntu-latest
-    needs: [build-images, detect-changes, resolve-acr]
+    needs: [build-images, detect-changes, resolve-acr, provision-infra]
     environment: production
+    if: always() && needs.build-images.result == 'success'
     steps:
       - name: Azure Login
         uses: azure/login@v2
@@ -288,13 +290,13 @@ jobs:
       - name: Deploy changed services
         run: |
           SERVICES=()
-          [[ "${{ needs.detect-changes.outputs.iam }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("iam")
-          [[ "${{ needs.detect-changes.outputs.hardware }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("hardware")
-          [[ "${{ needs.detect-changes.outputs.analytics }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("analytics")
-          [[ "${{ needs.detect-changes.outputs.weather }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("weather")
-          [[ "${{ needs.detect-changes.outputs.notification }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("notification")
-          [[ "${{ needs.detect-changes.outputs.web }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("web")
-          [[ "${{ needs.detect-changes.outputs.gateway }}" == "true" || "${{ github.event.inputs.deploy_all }}" == "true" ]] && SERVICES+=("gateway")
+          [[ "${{ needs.detect-changes.outputs.iam }}" == "true" ]] && SERVICES+=("iam")
+          [[ "${{ needs.detect-changes.outputs.hardware }}" == "true" ]] && SERVICES+=("hardware")
+          [[ "${{ needs.detect-changes.outputs.analytics }}" == "true" ]] && SERVICES+=("analytics")
+          [[ "${{ needs.detect-changes.outputs.weather }}" == "true" ]] && SERVICES+=("weather")
+          [[ "${{ needs.detect-changes.outputs.notification }}" == "true" ]] && SERVICES+=("notification")
+          [[ "${{ needs.detect-changes.outputs.web }}" == "true" ]] && SERVICES+=("web")
+          [[ "${{ needs.detect-changes.outputs.gateway }}" == "true" ]] && SERVICES+=("gateway")
 
           for svc in "${SERVICES[@]}"; do
             echo "Deploying $svc..."
@@ -306,7 +308,7 @@ jobs:
           done
 
   # ============================================================================
-  # Job 7: Smoke Tests
+  # Job 6: Smoke Tests
   # ============================================================================
   smoke-tests:
     name: Smoke Tests
@@ -333,7 +335,7 @@ jobs:
           curl -f "$GATEWAY_URL/api/v1/hardware/health"
 
   # ============================================================================
-  # Job 8: Rollback (on failure)
+  # Job 7: Rollback (on failure)
   # ============================================================================
   rollback-on-failure:
     name: Rollback
