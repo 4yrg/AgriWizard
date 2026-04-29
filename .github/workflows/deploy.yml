@@ -216,65 +216,65 @@ jobs:
       - name: Build IAM
         if: needs.detect-changes.outputs.iam == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam:latest \
-                       -f services/iam-service/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-iam --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-iam:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-iam:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-iam:latest \
+                       --file services/iam-service/Dockerfile .
 
       - name: Build Hardware
         if: needs.detect-changes.outputs.hardware == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware:latest \
-                       -f services/hardware-service/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-hardware --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-hardware:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-hardware:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-hardware:latest \
+                       --file services/hardware-service/Dockerfile .
 
       - name: Build Analytics
         if: needs.detect-changes.outputs.analytics == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics:latest \
-                       -f services/analytics-service/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-analytics --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-analytics:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-analytics:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-analytics:latest \
+                       --file services/analytics-service/Dockerfile .
 
       - name: Build Weather
         if: needs.detect-changes.outputs.weather == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather:latest \
-                       -f services/weather-service/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-weather --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-weather:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-weather:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-weather:latest \
+                       --file services/weather-service/Dockerfile .
 
       - name: Build Notification
         if: needs.detect-changes.outputs.notification == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification:latest \
-                       -f services/notification-service/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-notification --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-notification:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-notification:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-notification:latest \
+                       --file services/notification-service/Dockerfile .
 
       - name: Build Web
         if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web:latest \
-                       -f client/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-web --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-web:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-web:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-web:latest \
+                       --file client/Dockerfile .
 
       - name: Build Gateway (Kong)
         if: needs.detect-changes.outputs.gateway == 'true' || github.event.inputs.deploy_all == 'true'
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:${{ steps.vars.outputs.tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:${{ steps.vars.outputs.sha_tag }} \
-                       -t ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway:latest \
-                       -f infrastructure/kong/Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/agriwizard-gateway --all-tags
+          az acr build --registry ${{ env.ACR_NAME }} \
+                       --image agriwizard-gateway:${{ steps.vars.outputs.tag }} \
+                       --image agriwizard-gateway:${{ steps.vars.outputs.sha_tag }} \
+                       --image agriwizard-gateway:latest \
+                       --file infrastructure/kong/Dockerfile .
 
 
   # ============================================================================

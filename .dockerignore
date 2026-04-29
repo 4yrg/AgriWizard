@@ -1,0 +1,44 @@
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore Git
+.git
+.gitignore
+
+# Ignore Node.js dependencies
+**/node_modules
+**/npm-debug.log
+**/yarn-error.log
+client/.next
+client/out
+client/build
+
+# Ignore Go binaries and cache
+**/bin
+**/obj
+services/**/iam-service
+services/**/hardware-service
+services/**/analytics-service
+services/**/weather-service
+services/**/notification-service
+
+# Ignore Terraform / Bicep temp files
+.terraform
+.azure
+**/bin
+**/obj
+infra/.bicep
+
+# Ignore documentation and examples
+Assignment1
+bruno
+docs
+*.md
+architecture.mmd
+
+# Ignore local dev files
+docker-compose.override.yml
+.env
+.env.*
+! .env.example
