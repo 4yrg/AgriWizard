@@ -190,17 +190,9 @@ module acaEnv 'modules/container-apps-env.bicep' = {
   }
 }
 
-// ── Registry Credentials (Secure Retrieval) ──────────────────────────────────
-// We use 'existing' to reference the ACR created in the previous module
-// This allows us to call listCredentials() without triggering secret-in-output warnings
-
-resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  name: acrName
-}
-
 var acrLoginServer = acr.outputs.loginServer
-var acrUsername = acrResource.listCredentials().username
-var acrPassword = acrResource.listCredentials().passwords[0].value
+var acrUsername = acr.outputs.adminUsername
+var acrPassword = acr.outputs.adminPassword
 
 // ── Placeholder Image Logic ──────────────────────────────────────────────────
 var placeholderImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
