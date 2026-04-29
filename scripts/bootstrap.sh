@@ -28,14 +28,23 @@ SUB_ID=$(az account show --query "id" -o tsv)
 echo "Assigning Contributor role to Identity"
 az role assignment create --assignee "$CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUB_ID/resourceGroups/$RG_NAME" --force-creation-task || true
 
-# Setup Federated Credential
-echo "Setting up Federated Identity for GitHub Actions..."
+# Setup Federated Credential for main branch
+echo "Setting up Federated Identity for GitHub Actions (main branch)..."
 az identity federated-credential create \
   --name "AgriWizardProdBranch" \
   --identity-name "$ID_NAME" \
   --resource-group "$RG_NAME" \
   --issuer "https://token.actions.githubusercontent.com" \
   --subject "repo:$GH_REPO:ref:refs/heads/main" || true
+
+# Setup Federated Credential for production environment
+echo "Setting up Federated Identity for GitHub Actions (production env)..."
+az identity federated-credential create \
+  --name "AgriWizardProdEnv" \
+  --identity-name "$ID_NAME" \
+  --resource-group "$RG_NAME" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:$GH_REPO:environment:production" || true
 
 # Assign ACR pull role to identity
 ACR_RESOURCE_ID=$(az acr show -n "$ACR_NAME" -g "$RG_NAME" --query "id" -o tsv)
