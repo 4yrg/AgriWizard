@@ -128,6 +128,16 @@ module logAnalytics 'modules/log-analytics.bicep' = {
   }
 }
 
+module appInsights 'modules/application-insights.bicep' = {
+  name: 'deploy-app-insights'
+  params: {
+    name: '${environmentName}-insights'
+    location: location
+    tags: tags
+    workspaceResourceId: logAnalytics.outputs.id
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Module 3: PostgreSQL
 // ═════════════════════════════════════════════════════════════════════════════
@@ -235,6 +245,7 @@ var commonBackendEnv = [
   { name: 'DB_PASSWORD', value: postgresAdminPassword }
   { name: 'DB_NAME', value: 'agriwizard' }
   { name: 'DB_SSLMODE', value: 'require' }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.outputs.connectionString }
   { name: 'JWT_SECRET', value: jwtSecret }
   { name: 'GIN_MODE', value: 'release' }
 ]
