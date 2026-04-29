@@ -200,7 +200,7 @@ resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-3
   tags: tags
 }
 
-var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-af7a-6922815d6c03')
+var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
 
 resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
