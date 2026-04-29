@@ -80,7 +80,7 @@ infra/
 Run the bootstrap script to create the identity and federated credentials:
 ```bash
 chmod +x scripts/bootstrap.sh
-./scripts/bootstrap.sh <resource-group> <location> <github-org/repo>
+./scripts/bootstrap.sh <resource-group> centralindia 4yrg/AgriWizard
 ```
 
 ### 2. GitHub Secrets
