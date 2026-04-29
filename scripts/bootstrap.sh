@@ -5,7 +5,7 @@ set -e
 # Sets up OIDC and initial infrastructure
 
 RG_NAME=${1:-"agriwizard-prod-rg"}
-LOCATION=${2:-"eastus"}
+LOCATION=${2:-"centralindia"}
 GH_REPO=${3:-"your-org/your-repo"}
 
 echo "Creating Resource Group: $RG_NAME in $LOCATION"

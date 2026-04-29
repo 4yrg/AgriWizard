@@ -26,11 +26,14 @@ permissions:
   contents: read
 
 env:
-  AZURE_LOCATION: eastus
+  AZURE_LOCATION: centralindia
   RESOURCE_GROUP: agriwizard-prod-rg
   DEPLOYMENT_NAME: agriwizard-infra-${{ github.run_number }}
 
 jobs:
+  # ============================================================================
+  # Job 1: Validate & What-If Preview
+  # ============================================================================
   validate:
     name: "Validate & What-If"
     runs-on: ubuntu-latest
@@ -52,6 +55,13 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --template-file infra/main.bicep \
             --parameters @infra/parameters/production.bicepparam \
+            --parameters \
+              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+              jwtSecret='${{ secrets.JWT_SECRET }}' \
+              mqttBroker='${{ secrets.MQTT_BROKER }}' \
+              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
+              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
+              owmApiKey='${{ secrets.OWM_API_KEY }}' \
             --name "${{ env.DEPLOYMENT_NAME }}-validate"
 
       - name: Run What-If
@@ -60,8 +70,18 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --template-file infra/main.bicep \
             --parameters @infra/parameters/production.bicepparam \
+            --parameters \
+              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+              jwtSecret='${{ secrets.JWT_SECRET }}' \
+              mqttBroker='${{ secrets.MQTT_BROKER }}' \
+              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
+              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
+              owmApiKey='${{ secrets.OWM_API_KEY }}' \
             --name "${{ env.DEPLOYMENT_NAME }}"
 
+  # ============================================================================
+  # Job 2: Deploy Infrastructure
+  # ============================================================================
   deploy:
     name: "Deploy Infrastructure"
     runs-on: ubuntu-latest
@@ -87,5 +107,20 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --template-file infra/main.bicep \
             --parameters @infra/parameters/production.bicepparam \
+            --parameters \
+              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
+              jwtSecret='${{ secrets.JWT_SECRET }}' \
+              mqttBroker='${{ secrets.MQTT_BROKER }}' \
+              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
+              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
+              owmApiKey='${{ secrets.OWM_API_KEY }}' \
             --name "${{ env.DEPLOYMENT_NAME }}" \
             --mode Incremental
+
+      - name: Show Deployment Outputs
+        run: |
+          az deployment group show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.DEPLOYMENT_NAME }}" \
+            --query "properties.outputs" \
+            --output table
