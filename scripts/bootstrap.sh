@@ -4,10 +4,10 @@ set -e
 # AgriWizard Azure Bootstrap Script
 # Sets up OIDC, ACR, and initial infrastructure
 
-RG_NAME=${1:-"agriwizard-prod-rg"}
+RG_NAME=${1:-"rg-agriwizard"}
 LOCATION=${2:-"centralindia"}
-GH_REPO=${3:-"your-org/your-repo"}
-ACR_NAME=${4:-"agriwizardacr"}
+GH_REPO=${3:-"4yrg/AgriWizard"}
+ACR_NAME=${4:-"agriwizardacrhxud3c3zqkkh4"}
 
 echo "Creating Resource Group: $RG_NAME in $LOCATION"
 az group create --name "$RG_NAME" --location "$LOCATION" || true
