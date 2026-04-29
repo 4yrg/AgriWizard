@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "14792452709477538359"
+      "templateHash": "12230076366898901080"
     }
   },
   "parameters": {
@@ -28,6 +28,13 @@
       "defaultValue": "latest",
       "metadata": {
         "description": "Container image tag to deploy"
+      }
+    },
+    "usePlaceholderImages": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Whether to use placeholder images (hello-world) if real images are missing from ACR"
       }
     },
     "postgresAdminPassword": {
@@ -130,12 +137,13 @@
       "environment": "production",
       "managedBy": "bicep"
     },
-    "acrName": "[format('{0}acr', parameters('environmentName'))]",
+    "acrName": "[format('agriwizardacr{0}', uniqueString(resourceGroup().id))]",
     "logAnalyticsName": "[format('{0}-logs', parameters('environmentName'))]",
     "keyVaultName": "[format('{0}-kv', parameters('environmentName'))]",
     "postgresName": "[format('{0}-postgres', parameters('environmentName'))]",
-    "serviceBusName": "[format('{0}-sb', parameters('environmentName'))]",
-    "acaEnvName": "[format('{0}-aca-env', parameters('environmentName'))]"
+    "serviceBusName": "[format('{0}-bus-ns', parameters('environmentName'))]",
+    "acaEnvName": "[format('{0}-aca-env', parameters('environmentName'))]",
+    "placeholderImage": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
   },
   "resources": [
     {
@@ -165,7 +173,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "15134017900473565909"
+              "templateHash": "11183077745399015539"
             }
           },
           "parameters": {
@@ -239,20 +247,6 @@
                 "description": "The name of the container registry"
               },
               "value": "[parameters('name')]"
-            },
-            "adminUsername": {
-              "type": "string",
-              "metadata": {
-                "description": "The admin username for the container registry"
-              },
-              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2023-07-01').username]"
-            },
-            "adminPassword": {
-              "type": "string",
-              "metadata": {
-                "description": "The admin password for the container registry"
-              },
-              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2023-07-01').passwords[0].value]"
             }
           }
         }
@@ -1153,9 +1147,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-iam:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-iam:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 8086
           },
@@ -1178,10 +1170,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8086'), createObject('name', 'JWT_ISSUER', 'value', 'agriwizard-iam'), createObject('name', 'JWT_TTL_HOURS', 'value', '24')))]"
@@ -1416,9 +1408,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-hardware:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-hardware:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 8087
           },
@@ -1441,10 +1431,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8087'), createObject('name', 'MQTT_BROKER', 'value', parameters('mqttBroker')), createObject('name', 'MQTT_USERNAME', 'value', parameters('mqttUsername')), createObject('name', 'MQTT_PASSWORD', 'value', parameters('mqttPassword')), createObject('name', 'ANALYTICS_SERVICE_URL', 'value', format('http://{0}-analytics.internal.{1}:8088', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'SERVICE_BUS_CONNECTION', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-servicebus'), '2025-04-01').outputs.connectionString.value), createObject('name', 'SERVICE_BUS_TOPIC', 'value', 'telemetry'), createObject('name', 'RABBITMQ_HOST', 'value', '')))]"
@@ -1680,9 +1670,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-analytics:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-analytics:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 8088
           },
@@ -1705,10 +1693,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8088'), createObject('name', 'HARDWARE_SERVICE_URL', 'value', format('http://{0}-hardware.internal.{1}:8087', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'WEATHER_SERVICE_URL', 'value', format('http://{0}-weather.internal.{1}:8089', parameters('environmentName'), reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.defaultDomain.value)), createObject('name', 'SERVICE_BUS_CONNECTION', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-servicebus'), '2025-04-01').outputs.connectionString.value), createObject('name', 'SERVICE_BUS_TOPIC', 'value', 'telemetry'), createObject('name', 'SERVICE_BUS_SUBSCRIPTION', 'value', 'analytics-service'), createObject('name', 'RABBITMQ_HOST', 'value', '')))]"
@@ -1944,9 +1932,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-weather:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-weather:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 8089
           },
@@ -1969,10 +1955,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "envVars": {
             "value": "[concat(createArray(createObject('name', 'DB_HOST', 'value', reference(resourceId('Microsoft.Resources/deployments', 'deploy-postgres'), '2025-04-01').outputs.fqdn.value), createObject('name', 'DB_PORT', 'value', '5432'), createObject('name', 'DB_USER', 'value', 'agriwizard'), createObject('name', 'DB_PASSWORD', 'value', parameters('postgresAdminPassword')), createObject('name', 'DB_NAME', 'value', 'agriwizard'), createObject('name', 'DB_SSLMODE', 'value', 'require'), createObject('name', 'JWT_SECRET', 'value', parameters('jwtSecret')), createObject('name', 'GIN_MODE', 'value', 'release')), createArray(createObject('name', 'PORT', 'value', '8089'), createObject('name', 'USE_MOCK', 'value', 'false'), createObject('name', 'OWM_API_KEY', 'value', parameters('owmApiKey')), createObject('name', 'OWM_BASE_URL', 'value', 'https://api.openweathermap.org/data/2.5'), createObject('name', 'LOCATION_LAT', 'value', parameters('locationLat')), createObject('name', 'LOCATION_LON', 'value', parameters('locationLon')), createObject('name', 'LOCATION_CITY', 'value', parameters('locationCity'))))]"
@@ -2207,9 +2193,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-notification:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-notification:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 8091
           },
@@ -2232,10 +2216,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "envVars": {
             "value": [
@@ -2540,9 +2524,7 @@
           "containerAppsEnvironmentId": {
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-aca-env'), '2025-04-01').outputs.id.value]"
           },
-          "image": {
-            "value": "[format('{0}/{1}-web:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))]"
-          },
+          "image": "[if(parameters('usePlaceholderImages'), createObject('value', variables('placeholderImage')), createObject('value', format('{0}/{1}-web:{2}', reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value, parameters('environmentName'), parameters('imageTag'))))]",
           "targetPort": {
             "value": 3000
           },
@@ -2565,10 +2547,10 @@
             "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.loginServer.value]"
           },
           "acrUsername": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminUsername.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').username]"
           },
           "acrPassword": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'deploy-acr'), '2025-04-01').outputs.adminPassword.value]"
+            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').passwords[0].value]"
           },
           "healthProbePath": {
             "value": ""

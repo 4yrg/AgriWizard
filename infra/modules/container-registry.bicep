@@ -40,12 +40,3 @@ output id string = acr.id
 
 @description('The name of the container registry')
 output name string = acr.name
-
-@description('The admin username for the container registry')
-#disable-next-line outputs-should-not-contain-secrets
-output adminUsername string = acr.listCredentials().username
-
-@description('The admin password for the container registry')
-#disable-next-line outputs-should-not-contain-secrets
-output adminPassword string = acr.listCredentials().passwords[0].value
-
