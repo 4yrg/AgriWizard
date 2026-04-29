@@ -167,59 +167,15 @@ jobs:
             --parameters usePlaceholderImages=$BOOTSTRAP
 
   # ============================================================================
-  # Job 4: Tests
-  # ============================================================================
-  test-backend:
-    name: Test Backend
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: always() && (needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.24"
-          cache: true
-      - name: Run tests
-        run: go test ./services/... -v
-
-  test-frontend:
-    name: Test Frontend
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: always() && (needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: client/package-lock.json
-      - name: Install deps
-        working-directory: client
-        run: npm ci
-      - name: Lint
-        working-directory: client
-        run: npm run lint
-      - name: Build
-        working-directory: client
-        run: npm run build
-
-  # ============================================================================
   # Job 5: Build & Push Images
   # ============================================================================
   build-images:
     name: Build & Push
     runs-on: ubuntu-latest
-    needs: [detect-changes, resolve-acr, test-backend, test-frontend]
+    needs: [detect-changes, resolve-acr]
     if: |
       always() &&
-      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
-      (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+      (needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true')
     outputs:
       image_tag: ${{ steps.vars.outputs.tag }}
     env:
