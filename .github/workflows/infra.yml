@@ -49,34 +49,32 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate Bicep
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
         run: |
           az bicep build --file infra/main.bicep
           az deployment group validate \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters @infra/parameters/production.bicepparam \
-            --parameters \
-              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
-              jwtSecret='${{ secrets.JWT_SECRET }}' \
-              mqttBroker='${{ secrets.MQTT_BROKER }}' \
-              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
-              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
-              owmApiKey='${{ secrets.OWM_API_KEY }}' \
+            --parameters infra/parameters/production.bicepparam \
             --name "${{ env.DEPLOYMENT_NAME }}-validate"
 
       - name: Run What-If
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
         run: |
           az deployment group what-if \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters @infra/parameters/production.bicepparam \
-            --parameters \
-              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
-              jwtSecret='${{ secrets.JWT_SECRET }}' \
-              mqttBroker='${{ secrets.MQTT_BROKER }}' \
-              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
-              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
-              owmApiKey='${{ secrets.OWM_API_KEY }}' \
+            --parameters infra/parameters/production.bicepparam \
             --name "${{ env.DEPLOYMENT_NAME }}"
 
   # ============================================================================
@@ -102,18 +100,17 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy Bicep
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
         run: |
           az deployment group create \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters @infra/parameters/production.bicepparam \
-            --parameters \
-              postgresAdminPassword='${{ secrets.POSTGRES_ADMIN_PASSWORD }}' \
-              jwtSecret='${{ secrets.JWT_SECRET }}' \
-              mqttBroker='${{ secrets.MQTT_BROKER }}' \
-              mqttUsername='${{ secrets.MQTT_USERNAME }}' \
-              mqttPassword='${{ secrets.MQTT_PASSWORD }}' \
-              owmApiKey='${{ secrets.OWM_API_KEY }}' \
+            --parameters infra/parameters/production.bicepparam \
             --name "${{ env.DEPLOYMENT_NAME }}" \
             --mode Incremental
 
