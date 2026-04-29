@@ -2,44 +2,66 @@
 set -e
 
 # AgriWizard Azure Bootstrap Script
-# Sets up OIDC and initial infrastructure
+# Sets up OIDC, ACR, and initial infrastructure
 
 RG_NAME=${1:-"agriwizard-prod-rg"}
 LOCATION=${2:-"centralindia"}
 GH_REPO=${3:-"your-org/your-repo"}
+ACR_NAME=${4:-"agriwizardacr"}
 
 echo "Creating Resource Group: $RG_NAME in $LOCATION"
-az group create --name "$RG_NAME" --location "$LOCATION"
+az group create --name "$RG_NAME" --location "$LOCATION" || true
+
+# Create Azure Container Registry
+echo "Creating Container Registry: $ACR_NAME"
+az acr create --resource-group "$RG_NAME" --name "$ACR_NAME" --sku Basic --location "$LOCATION" || true
 
 # Create Identity for GitHub Actions
 ID_NAME="agriwizard-github-actions-id"
 echo "Creating User Assigned Identity: $ID_NAME"
-az identity create --name "$ID_NAME" --resource-group "$RG_NAME"
+az identity create --name "$ID_NAME" --resource-group "$RG_NAME" --location "$LOCATION" || true
 
 CLIENT_ID=$(az identity show --name "$ID_NAME" --resource-group "$RG_NAME" --query "clientId" -o tsv)
 TENANT_ID=$(az account show --query "tenantId" -o tsv)
 SUB_ID=$(az account show --query "id" -o tsv)
 
 echo "Assigning Contributor role to Identity"
-az role assignment create --assignee "$CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUB_ID/resourceGroups/$RG_NAME"
+az role assignment create --assignee "$CLIENT_ID" --role "Contributor" --scope "/subscriptions/$SUB_ID/resourceGroups/$RG_NAME" --force-creation-task || true
 
-# Setup Federated Credential
-echo "Setting up Federated Identity for GitHub Actions..."
+# Setup Federated Credential for main branch
+echo "Setting up Federated Identity for GitHub Actions (main branch)..."
 az identity federated-credential create \
   --name "AgriWizardProdBranch" \
   --identity-name "$ID_NAME" \
   --resource-group "$RG_NAME" \
   --issuer "https://token.actions.githubusercontent.com" \
-  --subject "repo:$GH_REPO:ref:refs/heads/main"
+  --subject "repo:$GH_REPO:ref:refs/heads/main" || true
+
+# Setup Federated Credential for production environment
+echo "Setting up Federated Identity for GitHub Actions (production env)..."
+az identity federated-credential create \
+  --name "AgriWizardProdEnv" \
+  --identity-name "$ID_NAME" \
+  --resource-group "$RG_NAME" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:$GH_REPO:environment:production" || true
+
+# Assign ACR pull role to identity
+ACR_RESOURCE_ID=$(az acr show -n "$ACR_NAME" -g "$RG_NAME" --query "id" -o tsv)
+az role assignment create --assignee "$CLIENT_ID" --role "AcrPull" --scope "$ACR_RESOURCE_ID" || true
 
 echo ""
 echo "=============================================="
 echo "BOOTSTRAP COMPLETE"
 echo "=============================================="
 echo ""
+echo "Resources created:"
+echo "  - Resource Group: $RG_NAME"
+echo "  - Container Registry: $ACR_NAME"
+echo "  - User Identity: $ID_NAME"
+echo ""
 echo "NEXT STEPS:"
-echo "1. Run the 'infra' workflow to create ACR and other infrastructure"
-echo "2. Then run 'deploy' workflow to build and deploy images"
+echo "1. Run the 'deploy' workflow to build and deploy images"
 echo ""
 echo "GITHUB SECRETS TO ADD:"
 echo "AZURE_CLIENT_ID:     $CLIENT_ID"

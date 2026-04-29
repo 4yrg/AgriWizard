@@ -48,6 +48,20 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Ensure ACR exists
+        run: |
+          ACR_NAME=$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query "[0].name" -o tsv)
+          if [ -z "$ACR_NAME" ]; then
+            echo "Creating container registry..."
+            az acr create \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --name "agriwizardacr" \
+              --sku Basic \
+              --location "${{ env.AZURE_LOCATION }}"
+            ACR_NAME="agriwizardacr"
+          fi
+          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_ENV
+
       - name: Validate Bicep
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
