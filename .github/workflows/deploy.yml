@@ -100,6 +100,7 @@ jobs:
   resolve-acr:
     name: Resolve ACR
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       acr_name: ${{ steps.acr.outputs.name }}
     steps:
@@ -126,6 +127,7 @@ jobs:
     name: Provision Infra
     runs-on: ubuntu-latest
     needs: detect-changes
+    environment: production
     if: needs.detect-changes.outputs.infra == 'true' || github.event.inputs.deploy_all == 'true'
     steps:
       - name: Checkout
@@ -176,6 +178,7 @@ jobs:
     name: Build & Push
     runs-on: ubuntu-latest
     needs: [detect-changes, resolve-acr]
+    environment: production
     if: |
       always() &&
       (needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true')
