@@ -42,7 +42,7 @@ jobs:
       kong: ${{ steps.filter.outputs.kong }}
       any_changed: ${{ steps.filter.outputs.any_changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -75,7 +75,7 @@ jobs:
     if: needs.detect-changes.outputs.any_changed == 'true' || github.event.inputs.deploy_all == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -95,7 +95,7 @@ jobs:
     if: needs.detect-changes.outputs.web == 'true' || github.event.inputs.deploy_all == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -124,7 +124,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.vars.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       
       - name: Set image tags
         id: vars
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -253,7 +253,7 @@ jobs:
     needs: deploy-services
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - name: Azure Login
         uses: azure/login@v2
         with:
