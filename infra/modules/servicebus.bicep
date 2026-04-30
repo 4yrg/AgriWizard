@@ -4,7 +4,7 @@ targetScope = 'resourceGroup'
 param serviceBusName string
 
 @description('Deployment location.')
-param location string
+param location string = resourceGroup().location
 
 resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01' = {
   name: serviceBusName

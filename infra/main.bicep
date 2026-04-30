@@ -97,7 +97,6 @@ module postgresql './modules/postgresql.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     serverName: dbServerName
-    location: location
     adminUsername: dbUser
     adminPassword: dbPassword
   }
@@ -132,7 +131,6 @@ module servicebus './modules/servicebus.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     serviceBusName: serviceBusName
-    location: location
   }
 }
 
@@ -141,7 +139,6 @@ module keyvault './modules/keyvault.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     keyVaultName: keyVaultName
-    location: location
     tenantId: computedTenantId
     dbPassword: dbPassword
     jwtSecretParam: jwtSecret

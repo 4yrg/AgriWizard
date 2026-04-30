@@ -9,9 +9,12 @@ param sku string = 'Standard'
 @description('Principal ID of the managed identity that should pull images.')
 param pullPrincipalId string
 
+@description('Deployment location.')
+param location string = resourceGroup().location
+
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
-  location: resourceGroup().location
+  location: location
   sku: {
     name: sku
   }

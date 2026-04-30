@@ -4,7 +4,7 @@ targetScope = 'resourceGroup'
 param keyVaultName string
 
 @description('Deployment location.')
-param location string
+param location string = resourceGroup().location
 
 @description('Azure tenant ID.')
 param tenantId string

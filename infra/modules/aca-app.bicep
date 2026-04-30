@@ -1,5 +1,8 @@
 targetScope = 'resourceGroup'
 
+@description('Deployment location.')
+param location string = resourceGroup().location
+
 @description('Container App name.')
 param appName string
 
@@ -51,7 +54,7 @@ param externalIngress bool = true
 
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
-  location: resourceGroup().location
+  location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {

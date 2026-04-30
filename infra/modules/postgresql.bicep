@@ -2,7 +2,7 @@
 param serverName string
 
 @description('Location for the resource.')
-param location string
+param location string = resourceGroup().location
 
 @description('Administrator username.')
 param adminUsername string

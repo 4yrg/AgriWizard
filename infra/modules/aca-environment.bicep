@@ -6,9 +6,12 @@ param managedEnvironmentName string
 @description('Log Analytics workspace name.')
 param logAnalyticsWorkspaceName string
 
+@description('Deployment location.')
+param location string = resourceGroup().location
+
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
-  location: resourceGroup().location
+  location: location
   properties: {
     retentionInDays: 30
   }
@@ -16,7 +19,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 
 resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: managedEnvironmentName
-  location: resourceGroup().location
+  location: location
   properties: {
     appLogsConfiguration: {
       destination: 'log-analytics'

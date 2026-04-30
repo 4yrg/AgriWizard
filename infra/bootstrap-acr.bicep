@@ -29,9 +29,6 @@ module identity './modules/identity.bicep' = {
   params: {
     identityName: identityName
   }
-  dependsOn: [
-    rg
-  ]
 }
 
 module acr './modules/acr.bicep' = {
@@ -42,9 +39,6 @@ module acr './modules/acr.bicep' = {
     sku: 'Standard'
     pullPrincipalId: identity.outputs.principalId
   }
-  dependsOn: [
-    rg
-  ]
 }
 
 module servicebus './modules/servicebus.bicep' = {
@@ -52,7 +46,6 @@ module servicebus './modules/servicebus.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
     serviceBusName: '${namePrefix}-${environmentSuffix}-sb'
-    location: location
   }
   dependsOn: [
     rg

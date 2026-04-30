@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "7993700780113320869"
+      "templateHash": "5471355264311400977"
     }
   },
   "parameters": {
@@ -214,9 +214,6 @@
           "serverName": {
             "value": "[variables('dbServerName')]"
           },
-          "location": {
-            "value": "[parameters('location')]"
-          },
           "adminUsername": {
             "value": "[parameters('dbUser')]"
           },
@@ -231,7 +228,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "18219761336954204989"
+              "templateHash": "7638649117243495397"
             }
           },
           "parameters": {
@@ -243,6 +240,7 @@
             },
             "location": {
               "type": "string",
+              "defaultValue": "[resourceGroup().location]",
               "metadata": {
                 "description": "Location for the resource."
               }
@@ -358,7 +356,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "13899659291347601280"
+              "templateHash": "12085717329202091761"
             }
           },
           "parameters": {
@@ -367,6 +365,13 @@
               "metadata": {
                 "description": "Managed identity name."
               }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Deployment location."
+              }
             }
           },
           "resources": [
@@ -374,7 +379,7 @@
               "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
               "apiVersion": "2023-01-31",
               "name": "[parameters('identityName')]",
-              "location": "[resourceGroup().location]"
+              "location": "[parameters('location')]"
             }
           ],
           "outputs": {
@@ -425,7 +430,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "15647860868475109780"
+              "templateHash": "5788726563354707399"
             }
           },
           "parameters": {
@@ -447,6 +452,13 @@
               "metadata": {
                 "description": "Principal ID of the managed identity that should pull images."
               }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Deployment location."
+              }
             }
           },
           "resources": [
@@ -454,7 +466,7 @@
               "type": "Microsoft.ContainerRegistry/registries",
               "apiVersion": "2023-07-01",
               "name": "[parameters('acrName')]",
-              "location": "[resourceGroup().location]",
+              "location": "[parameters('location')]",
               "sku": {
                 "name": "[parameters('sku')]"
               },
@@ -510,9 +522,6 @@
         "parameters": {
           "serviceBusName": {
             "value": "[variables('serviceBusName')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
           }
         },
         "template": {
@@ -522,7 +531,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17328078924803386121"
+              "templateHash": "12357586195991755314"
             }
           },
           "parameters": {
@@ -534,6 +543,7 @@
             },
             "location": {
               "type": "string",
+              "defaultValue": "[resourceGroup().location]",
               "metadata": {
                 "description": "Deployment location."
               }
@@ -660,9 +670,6 @@
           "keyVaultName": {
             "value": "[variables('keyVaultName')]"
           },
-          "location": {
-            "value": "[parameters('location')]"
-          },
           "tenantId": {
             "value": "[variables('computedTenantId')]"
           },
@@ -689,7 +696,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "8202710249952449871"
+              "templateHash": "17241977810134111101"
             }
           },
           "parameters": {
@@ -701,6 +708,7 @@
             },
             "location": {
               "type": "string",
+              "defaultValue": "[resourceGroup().location]",
               "metadata": {
                 "description": "Deployment location."
               }
@@ -880,7 +888,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "16556042840710610221"
+              "templateHash": "8644278622603875986"
             }
           },
           "parameters": {
@@ -895,6 +903,13 @@
               "metadata": {
                 "description": "Log Analytics workspace name."
               }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Deployment location."
+              }
             }
           },
           "resources": [
@@ -902,7 +917,7 @@
               "type": "Microsoft.OperationalInsights/workspaces",
               "apiVersion": "2022-10-01",
               "name": "[parameters('logAnalyticsWorkspaceName')]",
-              "location": "[resourceGroup().location]",
+              "location": "[parameters('location')]",
               "properties": {
                 "retentionInDays": 30
               }
@@ -911,7 +926,7 @@
               "type": "Microsoft.App/managedEnvironments",
               "apiVersion": "2024-03-01",
               "name": "[parameters('managedEnvironmentName')]",
-              "location": "[resourceGroup().location]",
+              "location": "[parameters('location')]",
               "properties": {
                 "appLogsConfiguration": {
                   "destination": "log-analytics",
@@ -1020,10 +1035,17 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "112897610183555063"
+              "templateHash": "1413370026863944933"
             }
           },
           "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Deployment location."
+              }
+            },
             "appName": {
               "type": "string",
               "metadata": {
@@ -1130,7 +1152,7 @@
               "type": "Microsoft.App/containerApps",
               "apiVersion": "2024-03-01",
               "name": "[parameters('appName')]",
-              "location": "[resourceGroup().location]",
+              "location": "[parameters('location')]",
               "identity": {
                 "type": "UserAssigned",
                 "userAssignedIdentities": {
