@@ -1,7 +1,7 @@
 using './main.bicep'
 
 param namePrefix = 'agriwizard'
-param location = 'eastus'
+param location = 'eastasia'
 param environmentSuffix = 'prod'
 param acrSku = 'Standard'
 
