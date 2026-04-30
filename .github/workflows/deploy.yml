@@ -492,8 +492,8 @@ jobs:
     timeout-minutes: 45
     needs: [push, deploy-infra, deploy-bootstrap]
     if: github.event_name != 'pull_request'
-    environment:
-      name: production
+    # environment:
+    #   name: production
     strategy:
       fail-fast: false
       matrix:
