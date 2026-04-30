@@ -262,7 +262,7 @@ jobs:
             --name "agriwizard-bootstrap-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
             --template-file infra/bootstrap-acr.bicep \
-            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacr' }}" \
+            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacrazkfjbxr44uio' }}" \
             --only-show-errors \
             -o json)
 
@@ -433,8 +433,10 @@ jobs:
           set -euo pipefail
           REGION="${{ vars.AZURE_REGION || 'centralindia' }}"
           DEPLOY_NAME="agriwizard-prod-${GITHUB_RUN_ID}"
+          ACR_NAME="${{ needs.deploy-bootstrap.outputs.acr_name }}"
           
           echo "=== Deploying Infrastructure: ${DEPLOY_NAME} ==="
+          echo "Using ACR: ${ACR_NAME}"
           
           # Run deployment, but don't suppress useful error output.
           set +e
@@ -443,6 +445,7 @@ jobs:
             --location "$REGION" \
             --template-file infra/template.json \
             --parameters @infra/parameters.json \
+              acrName="${ACR_NAME}" \
               dbPassword="${{ secrets.DB_PASSWORD }}" \
               jwtSecret="${{ secrets.JWT_SECRET }}" \
               mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
