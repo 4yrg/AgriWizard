@@ -89,11 +89,50 @@ jobs:
           npm ci
           npm run build
 
+  detect-changes:
+    name: Detect Service Changes
+    runs-on: ubuntu-latest
+    outputs:
+      iam: ${{ steps.filter.outputs.iam }}
+      hardware: ${{ steps.filter.outputs.hardware }}
+      analytics: ${{ steps.filter.outputs.analytics }}
+      weather: ${{ steps.filter.outputs.weather }}
+      notification: ${{ steps.filter.outputs.notification }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            iam:
+              - 'services/iam-service/**'
+              - 'go.work'
+              - 'go.mod'
+            hardware:
+              - 'services/hardware-service/**'
+              - 'go.work'
+              - 'go.mod'
+            analytics:
+              - 'services/analytics-service/**'
+              - 'go.work'
+              - 'go.mod'
+            weather:
+              - 'services/weather-service/**'
+              - 'go.work'
+              - 'go.mod'
+            notification:
+              - 'services/notification-service/**'
+              - 'go.work'
+              - 'go.mod'
+            web:
+              - 'client/**'
+
   deploy-bootstrap:
     name: Provision ACR & Identity
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: lint-and-test
+    needs: [lint-and-test, detect-changes]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
@@ -123,7 +162,7 @@ jobs:
     name: Build and Push Images
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: deploy-bootstrap
+    needs: [deploy-bootstrap, detect-changes]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -155,9 +194,11 @@ jobs:
             context: ./client
     steps:
       - name: Checkout repository
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
         uses: actions/checkout@v4
 
       - name: Azure login with OIDC
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -165,12 +206,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to Azure Container Registry
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
         run: az acr login --name "${{ vars.ACR_NAME }}"
 
       - name: Set up Docker Buildx
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push image
+        if: needs.detect-changes.outputs[matrix.service] == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
@@ -276,7 +320,7 @@ jobs:
     name: Deploy to Container Apps
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: deploy-infra
+    needs: [deploy-infra, detect-changes]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -302,6 +346,7 @@ jobs:
             port: "3000"
     env:
       RG: ${{ needs.deploy-infra.outputs.resource_group }}
+      TAG: ${{ needs.detect-changes.outputs[matrix.service] == 'true' && github.sha || 'latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -319,7 +364,7 @@ jobs:
           acrName: ${{ vars.ACR_NAME }}
           containerAppName: ${{ matrix.service }}-prod
           resourceGroup: ${{ env.RG }}
-          imageToDeploy: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+          imageToDeploy: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ env.TAG }}
 
       - name: Apply secrets and env vars
         shell: bash
@@ -327,7 +372,7 @@ jobs:
           set -euo pipefail
           APP_NAME="${{ matrix.service }}-prod"
           RG="${{ env.RG }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ env.TAG }}"
 
           az containerapp secret set \
             --name "${APP_NAME}" \
@@ -375,7 +420,7 @@ jobs:
           set -euo pipefail
           APP_NAME="${{ matrix.service }}-prod"
           RG="${{ env.RG }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ env.TAG }}"
           END_TS="$(( $(date +%s) + 300 ))"
           while [ "$(date +%s)" -lt "${END_TS}" ]; do
             ACTIVE_COUNT="$(az containerapp revision list \
