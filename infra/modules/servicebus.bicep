@@ -6,18 +6,22 @@ param serviceBusName string
 @description('Deployment location.')
 param location string = resourceGroup().location
 
-resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01' = {
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2024-01-01' = {
   name: serviceBusName
   location: location
   sku: {
     name: 'Standard'
     tier: 'Standard'
   }
-  properties: {}
+  properties: {
+    minimumTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+    disableLocalAuth: false
+  }
 }
 
 // Topic: telemetry (hardware -> analytics)
-resource telemetryTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01' = {
+resource telemetryTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
   parent: serviceBusNamespace
   name: 'telemetry'
   properties: {
@@ -27,7 +31,7 @@ resource telemetryTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01' = {
   }
 }
 
-resource analyticsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01' = {
+resource analyticsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' = {
   parent: telemetryTopic
   name: 'analytics-service'
   properties: {
@@ -40,7 +44,7 @@ resource analyticsSubscription 'Microsoft.ServiceBus/namespaces/topics/subscript
 }
 
 // Topic: notifications (for notification service)
-resource notificationsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01' = {
+resource notificationsTopic 'Microsoft.ServiceBus/namespaces/topics@2024-01-01' = {
   parent: serviceBusNamespace
   name: 'notifications'
   properties: {
@@ -50,7 +54,7 @@ resource notificationsTopic 'Microsoft.ServiceBus/namespaces/topics@2022-10-01' 
   }
 }
 
-resource notificationSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2022-10-01' = {
+resource notificationSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01-01' = {
   parent: notificationsTopic
   name: 'notification-service'
   properties: {
@@ -63,7 +67,7 @@ resource notificationSubscription 'Microsoft.ServiceBus/namespaces/topics/subscr
 }
 
 // Get connection string with SAS policy
-resource sbPolicy 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01' = {
+resource sbPolicy 'Microsoft.ServiceBus/namespaces/authorizationRules@2024-01-01' = {
   parent: serviceBusNamespace
   name: 'RootManageSharedAccessKey'
   properties: {
@@ -75,7 +79,7 @@ resource sbPolicy 'Microsoft.ServiceBus/namespaces/authorizationRules@2022-10-01
   }
 }
 
-var connectionString = 'Endpoint=sb://${serviceBusNamespace.name}.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=${listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', serviceBusNamespace.name, 'RootManageSharedAccessKey'), '2022-10-01').primaryKey}'
+var connectionString = 'Endpoint=sb://${serviceBusNamespace.name}.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=${listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', serviceBusNamespace.name, 'RootManageSharedAccessKey'), '2024-01-01').primaryKey}'
 
 output serviceBusId string = serviceBusNamespace.id
 output serviceBusNameOut string = serviceBusNamespace.name

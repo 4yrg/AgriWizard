@@ -246,6 +246,7 @@ jobs:
     outputs:
       acr_name: ${{ steps.bootstrap.outputs.ACR_NAME }}
       acr_login_server: ${{ steps.bootstrap.outputs.ACR_LOGIN_SERVER }}
+      service_bus_connection: ${{ steps.bootstrap.outputs.service_bus_connection }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -276,9 +277,11 @@ jobs:
           echo "ACR_NAME=$ACR_NAME" >> $GITHUB_OUTPUT
           echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
           
-          # Attempt to set the secret for future runs
-          # This will only work if the GITHUB_TOKEN or a PAT has repo secret write access
-          echo "$SB_CONNECTION" | gh secret set SERVICE_BUS_CONNECTION --repo ${{ github.repository }} || echo "Warning: Could not set SERVICE_BUS_CONNECTION secret automatically."
+          # Securely mask and export the Service Bus connection string
+          echo "::add-mask::$SB_CONNECTION"
+          echo "service_bus_connection=$SB_CONNECTION" >> $GITHUB_OUTPUT
+          
+          echo "Bootstrap complete. Connection string masked and exported to outputs."
 
   bootstrap-providers:
     name: Register Resource Providers
@@ -306,37 +309,12 @@ jobs:
             "Microsoft.DBforPostgreSQL"
           )
           
-          echo "=== Initiating Parallel Registration ==="
+          echo "=== Initiating Proactive Provider Registration ==="
           for provider in "${PROVIDERS[@]}"; do
-            echo "Requesting registration for $provider..."
-            az provider register --namespace "$provider"
+            echo "Registering $provider..."
+            az provider register --namespace "$provider" --wait
           done
-
-          echo "=== Validating Registration State (Polling) ==="
-          MAX_RETRIES=60
-          COUNT=0
-          while [ $COUNT -lt $MAX_RETRIES ]; do
-            ALL_REGISTERED=true
-            for provider in "${PROVIDERS[@]}"; do
-              STATE=$(az provider show --namespace "$provider" --query registrationState -o tsv || echo "Unknown")
-              if [[ "$STATE" != "Registered" ]]; then
-                echo "Provider $provider is still $STATE..."
-                ALL_REGISTERED=false
-              fi
-            done
-            
-            if [ "$ALL_REGISTERED" = true ]; then
-              echo "All providers are fully registered."
-              exit 0
-            fi
-            
-            echo "Waiting for providers... (Attempt $((COUNT+1))/$MAX_RETRIES)"
-            sleep 15
-            ((COUNT++))
-          done
-
-          echo "Error: Some providers failed to register within the timeout period."
-          exit 1
+          echo "All providers registered and validated."
 
   deploy-infra:
     name: Deploy Infrastructure
@@ -379,8 +357,7 @@ jobs:
 
       - name: Install/Upgrade Bicep CLI
         run: |
-          echo "=== Installing Bicep CLI ==="
-          az bicep install
+          echo "=== Upgrading Bicep CLI ==="
           az bicep upgrade
           az bicep version
 
@@ -407,7 +384,7 @@ jobs:
               mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
               owmApiKey="${{ secrets.OWM_API_KEY }}" \
               smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
-              serviceBusConnection="${{ secrets.SERVICE_BUS_CONNECTION }}" \
+              serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}" \
             -o json > deployment.json
           echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
           jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
