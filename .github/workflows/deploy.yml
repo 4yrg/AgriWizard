@@ -659,16 +659,16 @@ jobs:
               JWT_SECRET=secretref:jwt-secret \
               MQTT_PASSWORD=secretref:mqtt-password \
               OWM_API_KEY=secretref:owm-api-key \
-              SMTP_PASSWORD=secretref:smtp-password
+              SMTP_PASSWORD=secretref:smtp-password \
+              SMTP_USERNAME=secretref:smtp-username \
+              SERVICE_BUS_CONNECTION=secretref:service-bus-connection
 
           az containerapp ingress enable \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --target-port "${{ matrix.port }}" \
             --type external \
-            --only-show-errors \
-              SMTP_USERNAME=secretref:smtp-username \
-              SERVICE_BUS_CONNECTION=secretref:service-bus-connection
+            --only-show-errors
 
       - name: Apply Kong scaling policy
         if: matrix.service == 'kong'
