@@ -4,7 +4,7 @@ targetScope = 'subscription'
 param namePrefix string
 
 @description('Deployment location.')
-param location string
+param location string = deployment().location
 
 @description('Short environment suffix.')
 param environmentSuffix string = 'prod'

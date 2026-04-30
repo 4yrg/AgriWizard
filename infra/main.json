@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "5471355264311400977"
+      "templateHash": "16358916601582243363"
     }
   },
   "parameters": {
@@ -17,6 +17,7 @@
     },
     "location": {
       "type": "string",
+      "defaultValue": "[deployment().location]",
       "metadata": {
         "description": "Deployment location."
       }
@@ -162,12 +163,13 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5531446978852911323"
+              "templateHash": "13467416138811425721"
             }
           },
           "parameters": {
             "location": {
               "type": "string",
+              "defaultValue": "[deployment().location]",
               "metadata": {
                 "description": "Azure region for the resource group."
               }

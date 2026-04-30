@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 @description('Azure region for the resource group.')
-param location string
+param location string = deployment().location
 
 @description('Resource group name.')
 param resourceGroupName string
