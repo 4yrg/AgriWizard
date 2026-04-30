@@ -239,11 +239,63 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
 
+  bootstrap-providers:
+    name: Register Resource Providers
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Register Azure Resource Providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROVIDERS=(
+            "Microsoft.ServiceBus"
+            "Microsoft.App"
+            "Microsoft.ContainerRegistry"
+            "Microsoft.OperationalInsights"
+            "Microsoft.KeyVault"
+            "Microsoft.ManagedIdentity"
+            "Microsoft.DBforPostgreSQL"
+          )
+          
+          echo "=== Initiating Registration ==="
+          for provider in "${PROVIDERS[@]}"; do
+            echo "Registering $provider..."
+            az provider register --namespace "$provider" --wait || echo "Registration initiated for $provider"
+          done
+
+          echo "=== Validating Registration State ==="
+          for provider in "${PROVIDERS[@]}"; do
+            STATE=""
+            COUNT=0
+            MAX_RETRIES=30
+            while [[ "$STATE" != "Registered" && $COUNT -lt $MAX_RETRIES ]]; do
+              STATE=$(az provider show --namespace "$provider" --query registrationState -o tsv)
+              echo "Provider $provider is $STATE..."
+              if [[ "$STATE" != "Registered" ]]; then
+                sleep 10
+                ((COUNT++))
+              fi
+            done
+            if [[ "$STATE" != "Registered" ]]; then
+              echo "Error: Provider $provider failed to register in time."
+              exit 1
+            fi
+          done
+          echo "All providers are fully registered."
+
   deploy-infra:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: push
+    needs: [push, bootstrap-providers]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
