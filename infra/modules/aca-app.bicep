@@ -82,12 +82,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: serviceName
-          image: '${acrLoginServer}/${imageName}:${imageTag}'
-          env: [for envVar in environmentVariables: {
+          image: imageName == 'kong' ? 'kong:${imageTag}' : '${acrLoginServer}/${imageName}:${imageTag}'
+          env: [for envVar in environmentVariables: union({
             name: envVar.name
-            value: envVar.?value
-            secretRef: envVar.?secretRef
-          }]
+          }, (contains(envVar, 'value') ? { value: envVar.value } : {}), (contains(envVar, 'secretRef') ? { secretRef: envVar.secretRef } : {}))]
           resources: {
             cpu: json(cpu)
             memory: memory

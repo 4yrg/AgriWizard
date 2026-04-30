@@ -65,6 +65,8 @@ var appSecrets = [
   { name: 'jwt-secret' }
   { name: 'mqtt-password' }
   { name: 'owm-api-key' }
+  { name: 'service-bus-connection' }
+  { name: 'smtp-password' }
 ]
 
 var secretValueMap = {

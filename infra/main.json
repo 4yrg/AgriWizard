@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "1618311319128808514"
+      "templateHash": "7263074577206436061"
     }
   },
   "parameters": {
@@ -121,6 +121,12 @@
       },
       {
         "name": "owm-api-key"
+      },
+      {
+        "name": "service-bus-connection"
+      },
+      {
+        "name": "smtp-password"
       }
     ],
     "secretValueMap": {
@@ -1015,7 +1021,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "12559674693548802718"
+              "templateHash": "112897610183555063"
             }
           },
           "parameters": {
@@ -1164,15 +1170,11 @@
                         {
                           "name": "env",
                           "count": "[length(parameters('environmentVariables'))]",
-                          "input": {
-                            "name": "[parameters('environmentVariables')[copyIndex('env')].name]",
-                            "value": "[tryGet(parameters('environmentVariables')[copyIndex('env')], 'value')]",
-                            "secretRef": "[tryGet(parameters('environmentVariables')[copyIndex('env')], 'secretRef')]"
-                          }
+                          "input": "[union(createObject('name', parameters('environmentVariables')[copyIndex('env')].name), if(contains(parameters('environmentVariables')[copyIndex('env')], 'value'), createObject('value', parameters('environmentVariables')[copyIndex('env')].value), createObject()), if(contains(parameters('environmentVariables')[copyIndex('env')], 'secretRef'), createObject('secretRef', parameters('environmentVariables')[copyIndex('env')].secretRef), createObject()))]"
                         }
                       ],
                       "name": "[parameters('serviceName')]",
-                      "image": "[format('{0}/{1}:{2}', parameters('acrLoginServer'), parameters('imageName'), parameters('imageTag'))]",
+                      "image": "[if(equals(parameters('imageName'), 'kong'), format('kong:{0}', parameters('imageTag')), format('{0}/{1}:{2}', parameters('acrLoginServer'), parameters('imageName'), parameters('imageTag')))]",
                       "resources": {
                         "cpu": "[json(parameters('cpu'))]",
                         "memory": "[parameters('memory')]"
