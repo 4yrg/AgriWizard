@@ -16,8 +16,7 @@ concurrency:
   group: deploy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+# Global env vars removed to favor dynamic outputs
 
 jobs:
   lint:
@@ -222,7 +221,9 @@ jobs:
       - name: Login to Azure Container Registry
         run: |
           set -euo pipefail
-          az acr login --name "${ACR_LOGIN_SERVER%%.azurecr.io}"
+          ACR_SERVER="${{ needs.deploy-bootstrap.outputs.acr_login_server }}"
+          echo "Logging into $ACR_SERVER"
+          az acr login --name "${ACR_SERVER%%.azurecr.io}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -234,8 +235,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:latest
+            ${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}
+            ${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
   deploy-bootstrap:
@@ -494,14 +495,14 @@ jobs:
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+          imageToDeploy: ${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}
 
       - name: Apply secrets, env vars, and scaling policy
         shell: bash
         run: |
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           # Secret values are written to ACA secret store, then referenced as env vars.
           az containerapp secret set \
@@ -644,14 +645,14 @@ jobs:
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', env.ACR_LOGIN_SERVER, matrix.image_name, github.sha) }}
+          imageToDeploy: ${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', needs.deploy-bootstrap.outputs.acr_login_server, matrix.image_name, github.sha) }}
 
       - name: Apply secrets, env vars, and scaling policy
         shell: bash
         run: |
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', env.ACR_LOGIN_SERVER, matrix.image_name, github.sha) }}"
+          IMAGE="${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', needs.deploy-bootstrap.outputs.acr_login_server, matrix.image_name, github.sha) }}"
 
           az containerapp secret set \
             --name "${APP_NAME}" \
