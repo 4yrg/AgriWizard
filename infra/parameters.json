@@ -106,6 +106,27 @@
             { "name": "SMTP_PORT", "value": "587" },
             { "name": "SMTP_FROM", "value": "noreply@agriwizard.local" }
           ]
+        },
+        {
+          "serviceName": "kong",
+          "imageName": "kong",
+          "imageTag": "3.4",
+          "containerPort": 8000,
+          "cpu": "0.5",
+          "memory": "1Gi",
+          "minReplicas": 1,
+          "maxReplicas": 3,
+          "externalIngress": true,
+          "environmentVariables": [
+            { "name": "KONG_DATABASE", "value": "off" },
+            { "name": "KONG_PLUGINS", "value": "jwt,cors,key-auth" },
+            { "name": "KONG_LOG_LEVEL", "value": "info" },
+            { "name": "KONG_PROXY_ACCESS_LOG", "value": "/dev/stdout" },
+            { "name": "KONG_ADMIN_ACCESS_LOG", "value": "/dev/stdout" },
+            { "name": "KONG_DECLARATIVE_CONFIG", "value": "/kong/kong.yml" },
+            { "name": "KONG_PROXY_LISTEN", "value": "0.0.0.0:8000" },
+            { "name": "KONG_ADMIN_LISTEN", "value": "0.0.0.0:8001" }
+          ]
         }
       ]
     }

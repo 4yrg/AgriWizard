@@ -45,7 +45,15 @@ param dbUser string = 'agriwizard_admin'
 @description('The name of the ACR.')
 param acrName string = ''
 
+@description('Azure tenant ID.')
+param tenantId string = ''
+
+var computedAcrName = empty(acrName) ? '${namePrefix}acr' : acrName
+var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
+
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
+var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'
+var keyVaultName = '${namePrefix}-${environmentSuffix}-kv'
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
@@ -88,9 +96,33 @@ module acr './modules/acr.bicep' = {
   name: 'acr'
   scope: resourceGroup(resourceGroupName)
   params: {
-    acrName: acrName
+    acrName: computedAcrName
     sku: acrSku
     pullPrincipalId: identity.outputs.principalId
+  }
+}
+
+module servicebus './modules/servicebus.bicep' = {
+  name: 'servicebus'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    serviceBusName: serviceBusName
+    location: location
+  }
+}
+
+module keyvault './modules/keyvault.bicep' = {
+  name: 'keyvault'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    keyVaultName: keyVaultName
+    location: location
+    tenantId: computedTenantId
+    dbPassword: dbPassword
+    jwtSecretParam: jwtSecret
+    mqttPassword: mqttPassword
+    smtpPassword: smtpPassword
+    serviceBusConnection: servicebus.outputs.connectionString
   }
 }
 
@@ -195,6 +227,9 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
 output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
 output acrLoginServer string = acr.outputs.acrLoginServer
+output serviceBusName string = servicebus.outputs.serviceBusNameOut
+output keyVaultName string = keyvault.outputs.keyVaultNameOut
+output keyVaultUri string = keyvault.outputs.keyVaultUri
 output identityClientId string = identity.outputs.clientId
 output containerAppFqdns array = [for (service, i) in backendServices: {
   serviceName: service.serviceName
