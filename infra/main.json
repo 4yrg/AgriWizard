@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "15506012893293061310"
+      "templateHash": "8952903604277315873"
     }
   },
   "parameters": {
@@ -1045,7 +1045,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17266391049039261211"
+              "templateHash": "8703672596548606145"
             }
           },
           "parameters": {
@@ -1155,6 +1155,13 @@
               "metadata": {
                 "description": "Set to true for public ingress."
               }
+            },
+            "healthPath": {
+              "type": "string",
+              "defaultValue": "/health",
+              "metadata": {
+                "description": "Path for health probes."
+              }
             }
           },
           "resources": [
@@ -1214,7 +1221,7 @@
                         {
                           "type": "Liveness",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 15,
@@ -1223,7 +1230,7 @@
                         {
                           "type": "Readiness",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 10,
@@ -1232,7 +1239,7 @@
                         {
                           "type": "Startup",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 5,
@@ -1348,7 +1355,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17266391049039261211"
+              "templateHash": "8703672596548606145"
             }
           },
           "parameters": {
@@ -1458,6 +1465,13 @@
               "metadata": {
                 "description": "Set to true for public ingress."
               }
+            },
+            "healthPath": {
+              "type": "string",
+              "defaultValue": "/health",
+              "metadata": {
+                "description": "Path for health probes."
+              }
             }
           },
           "resources": [
@@ -1517,7 +1531,7 @@
                         {
                           "type": "Liveness",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 15,
@@ -1526,7 +1540,7 @@
                         {
                           "type": "Readiness",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 10,
@@ -1535,7 +1549,7 @@
                         {
                           "type": "Startup",
                           "httpGet": {
-                            "path": "/",
+                            "path": "[parameters('healthPath')]",
                             "port": "[parameters('containerPort')]"
                           },
                           "initialDelaySeconds": 5,

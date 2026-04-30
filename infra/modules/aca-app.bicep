@@ -52,6 +52,9 @@ param environmentVariables array = []
 @description('Set to true for public ingress.')
 param externalIngress bool = true
 
+@description('Path for health probes.')
+param healthPath string = '/health'
+
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
   location: location
@@ -97,7 +100,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             {
               type: 'Liveness'
               httpGet: {
-                path: '/'
+                path: healthPath
                 port: containerPort
               }
               initialDelaySeconds: 15
@@ -106,7 +109,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             {
               type: 'Readiness'
               httpGet: {
-                path: '/'
+                path: healthPath
                 port: containerPort
               }
               initialDelaySeconds: 10
@@ -115,7 +118,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             {
               type: 'Startup'
               httpGet: {
-                path: '/'
+                path: healthPath
                 port: containerPort
               }
               initialDelaySeconds: 5
