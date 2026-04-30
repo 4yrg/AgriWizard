@@ -47,6 +47,19 @@ module acr './modules/acr.bicep' = {
   ]
 }
 
+module servicebus './modules/servicebus.bicep' = {
+  name: 'servicebus-bootstrap'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    serviceBusName: '${namePrefix}-${environmentSuffix}-sb'
+    location: location
+  }
+  dependsOn: [
+    rg
+  ]
+}
+
 output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
 output acrLoginServer string = acr.outputs.acrLoginServer
+output serviceBusConnectionString string = servicebus.outputs.connectionString

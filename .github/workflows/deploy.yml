@@ -170,7 +170,7 @@ jobs:
     name: Push Docker images to ACR
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    needs: build
+    needs: [build, deploy-bootstrap]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
@@ -238,6 +238,47 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+  deploy-bootstrap:
+    name: Bootstrap Resources
+    runs-on: ubuntu-latest
+    needs: bootstrap-providers
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      acr_name: ${{ steps.bootstrap.outputs.ACR_NAME }}
+      acr_login_server: ${{ steps.bootstrap.outputs.ACR_LOGIN_SERVER }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy bootstrap resources
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT=$(az deployment sub create \
+            --name "agriwizard-bootstrap-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
+            --template-file infra/bootstrap-acr.bicep \
+            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacr' }}" \
+            -o json)
+          
+          ACR_NAME=$(echo $OUTPUT | jq -r '.properties.outputs.acrName.value')
+          ACR_LOGIN_SERVER=$(echo $OUTPUT | jq -r '.properties.outputs.acrLoginServer.value')
+          SB_CONNECTION=$(echo $OUTPUT | jq -r '.properties.outputs.serviceBusConnectionString.value')
+          
+          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_OUTPUT
+          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+          
+          # Attempt to set the secret for future runs
+          # This will only work if the GITHUB_TOKEN or a PAT has repo secret write access
+          echo "$SB_CONNECTION" | gh secret set SERVICE_BUS_CONNECTION --repo ${{ github.repository }} || echo "Warning: Could not set SERVICE_BUS_CONNECTION secret automatically."
 
   bootstrap-providers:
     name: Register Resource Providers
@@ -301,7 +342,7 @@ jobs:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [push, bootstrap-providers]
+    needs: [push, deploy-bootstrap]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
