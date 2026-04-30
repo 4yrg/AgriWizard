@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "18312498224440745939"
+      "templateHash": "7680763032279192585"
     }
   },
   "parameters": {
@@ -974,7 +974,7 @@
       "condition": "[not(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('aca-app-{0}', parameters('backendServices')[copyIndex()].serviceName)]",
+      "name": "[format('deploy-core-{0}', parameters('backendServices')[copyIndex()].serviceName)]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1279,7 +1279,7 @@
       "condition": "[equals(parameters('backendServices')[copyIndex()].serviceName, 'kong')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "aca-app-kong",
+      "name": "[format('deploy-gateway-{0}', parameters('backendServices')[copyIndex()].serviceName)]",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1613,7 +1613,7 @@
         "input": {
           "serviceName": "[parameters('backendServices')[copyIndex()].serviceName]",
           "containerAppName": "[format('{0}-{1}', parameters('backendServices')[copyIndex()].serviceName, parameters('environmentSuffix'))]",
-          "fqdn": "[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aca-app-kong'), '2025-04-01').outputs.fqdn.value, reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('aca-app-{0}', parameters('backendServices')[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'iam'), 0, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'hardware'), 1, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'analytics'), 2, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'weather'), 3, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'notification'), 4, 0)))))].serviceName)), '2025-04-01').outputs.fqdn.value)]"
+          "fqdn": "[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('deploy-gateway-{0}', parameters('backendServices')[0].serviceName)), '2025-04-01').outputs.fqdn.value, reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('deploy-core-{0}', parameters('backendServices')[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'iam'), 0, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'hardware'), 1, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'analytics'), 2, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'weather'), 3, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'notification'), 4, 0)))))].serviceName)), '2025-04-01').outputs.fqdn.value)]"
         }
       }
     }

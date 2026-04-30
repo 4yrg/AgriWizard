@@ -161,8 +161,9 @@ module acaEnvironment './modules/aca-environment.bicep' = {
   ]
 }
 
+// Core backend services
 module coreApps './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName != 'kong') {
-  name: 'aca-app-${service.serviceName}'
+  name: 'deploy-core-${service.serviceName}'
   scope: resourceGroup(resourceGroupName)
   params: {
     appName: '${service.serviceName}-${environmentSuffix}'
@@ -202,8 +203,9 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
   ]
 }]
 
+// Gateway service (deployed after core services)
 module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName == 'kong') {
-  name: 'aca-app-kong'
+  name: 'deploy-gateway-${service.serviceName}'
   scope: resourceGroup(resourceGroupName)
   params: {
     appName: '${service.serviceName}-${environmentSuffix}'
