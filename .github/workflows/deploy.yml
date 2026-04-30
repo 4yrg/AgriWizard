@@ -635,8 +635,6 @@ jobs:
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --image "${IMAGE}" \
-            --target-port "${{ matrix.port }}" \
-            --ingress external \
             --cpu "${CPU}" \
             --memory "${MEMORY}" \
             --min-replicas "${MIN_REPLICAS}" \
@@ -661,7 +659,14 @@ jobs:
               JWT_SECRET=secretref:jwt-secret \
               MQTT_PASSWORD=secretref:mqtt-password \
               OWM_API_KEY=secretref:owm-api-key \
-              SMTP_PASSWORD=secretref:smtp-password \
+              SMTP_PASSWORD=secretref:smtp-password
+
+          az containerapp ingress enable \
+            --name "${APP_NAME}" \
+            --resource-group "${ACA_RESOURCE_GROUP}" \
+            --target-port "${{ matrix.port }}" \
+            --external \
+            --only-show-errors \
               SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection
 
@@ -673,10 +678,15 @@ jobs:
           az containerapp update \
             --name "${{ steps.app.outputs.name }}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
-            --target-port "${{ matrix.port }}" \
-            --ingress external \
             --cpu "${CPU}" \
             --memory "${MEMORY}" \
             --min-replicas "${MIN_REPLICAS}" \
             --max-replicas "${MAX_REPLICAS}" \
+            --only-show-errors
+
+          az containerapp ingress enable \
+            --name "${{ steps.app.outputs.name }}" \
+            --resource-group "${ACA_RESOURCE_GROUP}" \
+            --target-port "${{ matrix.port }}" \
+            --external \
             --only-show-errors
