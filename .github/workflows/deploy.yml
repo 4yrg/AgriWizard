@@ -382,6 +382,31 @@ jobs:
           echo "=== Upgrading Bicep CLI ==="
           az bicep upgrade
           az bicep version
+          
+      - name: Verify & Register Resource Providers
+        run: |
+          set -euo pipefail
+          PROVIDERS=(
+            "Microsoft.ServiceBus"
+            "Microsoft.App"
+            "Microsoft.ContainerRegistry"
+            "Microsoft.OperationalInsights"
+            "Microsoft.KeyVault"
+            "Microsoft.ManagedIdentity"
+            "Microsoft.DBforPostgreSQL"
+          )
+          
+          echo "=== Verifying Resource Provider Registration ==="
+          for provider in "${PROVIDERS[@]}"; do
+            STATE=$(az provider show -n "$provider" --query registrationState -o tsv)
+            if [ "$STATE" != "Registered" ]; then
+              echo "Registering $provider (current state: $STATE)..."
+              az provider register --namespace "$provider" --wait --only-show-errors
+            else
+              echo "$provider is already Registered."
+            fi
+          done
+          echo "All required providers are Registered."
 
       - name: Validate & compile Bicep
         run: |
