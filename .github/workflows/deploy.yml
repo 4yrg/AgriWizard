@@ -418,6 +418,7 @@ jobs:
               mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
               owmApiKey="${{ secrets.OWM_API_KEY }}" \
               smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
+              smtpUsername="${{ secrets.SMTP_USER }}" \
               serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}" \
               globalImageTag="${{ github.sha }}" \
             --only-show-errors \
