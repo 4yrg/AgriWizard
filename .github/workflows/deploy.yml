@@ -1,3 +1,310 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Verify Go formatting
+        run: |
+          set -euo pipefail
+          if [ -n "$(gofmt -l ./services)" ]; then
+            echo "Go files are not formatted:"
+            gofmt -l ./services
+            exit 1
+          fi
+
+      - name: Run Go vet
+        run: |
+          set -euo pipefail
+          for module in \
+            ./services/iam-service \
+            ./services/hardware-service \
+            ./services/analytics-service \
+            ./services/weather-service \
+            ./services/notification-service; do
+            go vet "${module}/..."
+          done
+
+      - name: Run frontend lint
+        run: |
+          set -euo pipefail
+          cd client
+          npm ci
+          npm run lint
+
+      - name: Run Go tests
+        run: |
+          set -euo pipefail
+          for module in \
+            ./services/iam-service \
+            ./services/hardware-service \
+            ./services/analytics-service \
+            ./services/weather-service \
+            ./services/notification-service; do
+            go test "${module}/..."
+          done
+
+      - name: Frontend build verification
+        run: |
+          set -euo pipefail
+          cd client
+          npm ci
+          npm run build
+
+      - name: Validate Bicep compiles
+        run: az bicep build --file infra/main.bicep
+
+  build-and-push:
+    name: Build and Push Backend Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: lint-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        # Frontend service intentionally excluded from build/push matrix (prod backend-only deployment).
+        include:
+          - service: iam
+            image_name: agriwizard-iam
+            dockerfile: services/iam-service/Dockerfile
+            context: .
+          - service: hardware
+            image_name: agriwizard-hardware
+            dockerfile: services/hardware-service/Dockerfile
+            context: .
+          - service: analytics
+            image_name: agriwizard-analytics
+            dockerfile: services/analytics-service/Dockerfile
+            context: .
+          - service: weather
+            image_name: agriwizard-weather
+            dockerfile: services/weather-service/Dockerfile
+            context: .
+          - service: notification
+            image_name: agriwizard-notification
+            dockerfile: services/notification-service/Dockerfile
+            context: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+            ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:latest
+          cache-from: type=registry,ref=${{ vars.ACR_LOGIN_SERVER }}/cache/${{ matrix.service }}
+          cache-to: type=registry,ref=${{ vars.ACR_LOGIN_SERVER }}/cache/${{ matrix.service }},mode=max
+
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build-and-push
+    outputs:
+      resource_group: ${{ steps.rg.outputs.value }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if infrastructure changes
+        id: whatif
+        run: |
+          set -euo pipefail
+          az deployment sub what-if \
+            --name "whatif-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            --result-format FullResourcePayloads \
+            -o json > whatif.json
+          CHANGES="$(jq '[.changes[] | select(.changeType != "NoChange")] | length' whatif.json)"
+          echo "changes=${CHANGES}" >> "${GITHUB_OUTPUT}"
+          if [ "${CHANGES}" -eq 0 ]; then
+            echo "No infrastructure changes" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Deploy infrastructure
+        if: steps.whatif.outputs.changes != '0'
+        run: |
+          set -euo pipefail
+          az deployment sub create \
+            --name "deploy-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            -o json > deployment.json
+          echo "Infrastructure deployment completed." >> "${GITHUB_STEP_SUMMARY}"
+          echo '```json' >> "${GITHUB_STEP_SUMMARY}"
+          jq '.properties.outputs' deployment.json >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Resolve resource group output
+        id: rg
+        run: |
+          set -euo pipefail
+          RG_VALUE="$(az deployment sub show \
+            --name "deploy-${GITHUB_RUN_ID}" \
+            --query "properties.outputs.resourceGroupName.value" -o tsv 2>/dev/null || true)"
+          if [ -z "${RG_VALUE}" ]; then
+            RG_VALUE="${{ vars.AZURE_RESOURCE_GROUP }}"
+          fi
+          echo "value=${RG_VALUE}" >> "${GITHUB_OUTPUT}"
+
+  deploy-app:
+    name: Deploy Backend Container Apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: deploy-infra
+    strategy:
+      fail-fast: false
+      matrix:
+        # Frontend service intentionally excluded from app deploy matrix (prod backend-only deployment).
+        include:
+          - service: iam
+            image_name: agriwizard-iam
+          - service: hardware
+            image_name: agriwizard-hardware
+          - service: analytics
+            image_name: agriwizard-analytics
+          - service: weather
+            image_name: agriwizard-weather
+          - service: notification
+            image_name: agriwizard-notification
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy backend image to ACA
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          acrName: ${{ vars.ACR_NAME }}
+          containerAppName: ${{ matrix.service }}-prod
+          resourceGroup: ${{ needs.deploy-infra.outputs.resource_group }}
+          imageToDeploy: ${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+
+      - name: Wait for active revision
+        run: |
+          set -euo pipefail
+          APP_NAME="${{ matrix.service }}-prod"
+          RG="${{ needs.deploy-infra.outputs.resource_group }}"
+          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          END_TS="$(( $(date +%s) + 300 ))"
+          while [ "$(date +%s)" -lt "${END_TS}" ]; do
+            ACTIVE_COUNT="$(az containerapp revision list \
+              --name "${APP_NAME}" \
+              --resource-group "${RG}" \
+              --query "[?properties.active==\`true\` && properties.template.containers[0].image=='${IMAGE}'] | length(@)" \
+              -o tsv)"
+            if [ "${ACTIVE_COUNT}" = "1" ]; then
+              echo "Revision with image ${IMAGE} is active."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for active revision of ${APP_NAME}." >&2
+          exit 1
+
+  smoke-test:
+    name: Smoke Test Backend Apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: deploy-app
+    strategy:
+      fail-fast: false
+      matrix:
+        # Frontend service intentionally excluded from smoke tests (backend-only ACA deployment).
+        service: [iam, hardware, analytics, weather, notification]
+    steps:
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Smoke test service endpoint
+        run: |
+          set -euo pipefail
+          APP_NAME="${{ matrix.service }}-prod"
+          RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+          FQDN="$(az containerapp show --name "${APP_NAME}" --resource-group "${RG}" --query "properties.configuration.ingress.fqdn" -o tsv)"
+          if [ -z "${FQDN}" ]; then
+            echo "::warning::${APP_NAME} has no public ingress; skipping smoke test by design."
+            exit 0
+          fi
+          URL="https://${FQDN}/health"
+          STATUS="$(curl -sS -o /dev/null -w "%{http_code}" "${URL}")"
+          if [ "${STATUS}" != "200" ]; then
+            URL="https://${FQDN}/"
+            STATUS="$(curl -sS -o /dev/null -w "%{http_code}" "${URL}")"
+          fi
+          if [ "${STATUS}" != "200" ]; then
+            echo "Smoke test failed for ${APP_NAME}. Last status: ${STATUS}" >&2
+            exit 1
+          fi
 name: CI/CD to Azure Container Apps
 
 on:
@@ -18,6 +325,7 @@ concurrency:
 
 env:
   ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+  ACR_NAME: ${{ vars.ACR_NAME }}
 
 jobs:
   lint:
@@ -212,17 +520,28 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Validate ACR login server value
+        id: acr
         run: |
           set -euo pipefail
-          if [ -z "${ACR_LOGIN_SERVER:-}" ]; then
-            echo "vars.ACR_LOGIN_SERVER must be set (example: myregistry.azurecr.io)."
+          ACR_SERVER="${ACR_LOGIN_SERVER:-}"
+
+          # Fallback: derive login server from ACR name when provided.
+          if [ -z "${ACR_SERVER}" ] && [ -n "${ACR_NAME:-}" ]; then
+            ACR_SERVER="$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)"
+          fi
+
+          if [ -z "${ACR_SERVER}" ]; then
+            echo "Either vars.ACR_LOGIN_SERVER (e.g., myregistry.azurecr.io) or vars.ACR_NAME must be set."
             exit 1
           fi
+
+          echo "acr_server=${ACR_SERVER}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved ACR login server: ${ACR_SERVER}"
 
       - name: Login to Azure Container Registry
         run: |
           set -euo pipefail
-          az acr login --name "${ACR_LOGIN_SERVER%%.azurecr.io}"
+          az acr login --name "${{ steps.acr.outputs.acr_server%%.azurecr.io }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -234,8 +553,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:latest
+            ${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:${{ github.sha }}
+            ${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
 
@@ -325,19 +644,34 @@ jobs:
           fi
           echo "name=${APP_NAME}" >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve ACR login server
+        id: acr
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACR_SERVER="${ACR_LOGIN_SERVER:-}"
+          if [ -z "${ACR_SERVER}" ] && [ -n "${ACR_NAME:-}" ]; then
+            ACR_SERVER="$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)"
+          fi
+          if [ -z "${ACR_SERVER}" ]; then
+            echo "Either vars.ACR_LOGIN_SERVER or vars.ACR_NAME must be set."
+            exit 1
+          fi
+          echo "acr_server=${ACR_SERVER}" >> "${GITHUB_OUTPUT}"
+
       - name: Deploy image to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+          imageToDeploy: ${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:${{ github.sha }}
 
       - name: Apply secrets, env vars, and scaling policy
         shell: bash
         run: |
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          IMAGE="${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           # Secret values are written to ACA secret store, then referenced as env vars.
           az containerapp secret set \
@@ -469,19 +803,34 @@ jobs:
           fi
           echo "name=${APP_NAME}" >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve ACR login server
+        id: acr
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACR_SERVER="${ACR_LOGIN_SERVER:-}"
+          if [ -z "${ACR_SERVER}" ] && [ -n "${ACR_NAME:-}" ]; then
+            ACR_SERVER="$(az acr show --name "${ACR_NAME}" --query loginServer -o tsv)"
+          fi
+          if [ -z "${ACR_SERVER}" ]; then
+            echo "Either vars.ACR_LOGIN_SERVER or vars.ACR_NAME must be set."
+            exit 1
+          fi
+          echo "acr_server=${ACR_SERVER}" >> "${GITHUB_OUTPUT}"
+
       - name: Deploy image to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}
+          imageToDeploy: ${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:${{ github.sha }}
 
       - name: Apply secrets, env vars, and scaling policy
         shell: bash
         run: |
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ env.ACR_LOGIN_SERVER }}/${{ matrix.image_name }}:${{ github.sha }}"
+          IMAGE="${{ steps.acr.outputs.acr_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           az containerapp secret set \
             --name "${APP_NAME}" \
