@@ -428,13 +428,18 @@ jobs:
 
       - name: Deploy infrastructure
         id: deploy
+        shell: bash
         run: |
           set -euo pipefail
           REGION="${{ vars.AZURE_REGION || 'centralindia' }}"
-
-          echo "=== Deploying Infrastructure ==="
+          DEPLOY_NAME="agriwizard-prod-${GITHUB_RUN_ID}"
+          
+          echo "=== Deploying Infrastructure: ${DEPLOY_NAME} ==="
+          
+          # Run deployment, but don't suppress useful error output.
+          set +e
           az deployment sub create \
-            --name "agriwizard-prod-${GITHUB_RUN_ID}" \
+            --name "${DEPLOY_NAME}" \
             --location "$REGION" \
             --template-file infra/template.json \
             --parameters @infra/parameters.json \
@@ -446,9 +451,25 @@ jobs:
               smtpUsername="${{ secrets.SMTP_USER }}" \
               serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}" \
               globalImageTag="${{ github.sha }}" \
-            --only-show-errors \
-            -o json > deployment.json
-
+            -o json > deployment.json 2> deployment.err
+          RC=$?
+          set -e
+          
+          if [ $RC -ne 0 ]; then
+            echo "Azure deployment failed. Showing error output:"
+            sed -n '1,200p' deployment.err || true
+            
+            echo "Listing failed deployment operations:"
+            az deployment operation sub list --name "${DEPLOY_NAME}" \
+              --query "[?properties.provisioningState=='Failed'].[properties.targetResource.resourceType,properties.targetResource.resourceName,properties.statusMessage]" \
+              -o table || true
+            
+            echo "Full operations (first 200 lines):"
+            az deployment operation sub list --name "${DEPLOY_NAME}" -o json | sed -n '1,200p' || true
+            
+            exit 1
+          fi
+          
           echo "## Infrastructure Deployment Outputs" >> "$GITHUB_STEP_SUMMARY"
           jq '.properties.outputs' deployment.json >> "$GITHUB_STEP_SUMMARY"
 
