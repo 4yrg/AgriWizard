@@ -113,7 +113,10 @@ jobs:
             --name "bootstrap-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
             --template-file infra/bootstrap-acr.bicep \
-            --parameters namePrefix=${{ vars.AZURE_NAME_PREFIX || 'agriwizard' }} location=${{ vars.AZURE_REGION }} \
+            --parameters \
+              namePrefix=${{ vars.AZURE_NAME_PREFIX || 'agriwizard' }} \
+              location=${{ vars.AZURE_REGION }} \
+              acrName=${{ vars.ACR_NAME }} \
             -o json
 
   build-and-push:
@@ -226,7 +229,9 @@ jobs:
             --name "deploy-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam \
+            --parameters \
+              infra/main.bicepparam \
+              acrName=${{ vars.ACR_NAME }} \
             -o json > deployment.json
           echo "Infrastructure deployment completed." >> "${GITHUB_STEP_SUMMARY}"
           echo '```json' >> "${GITHUB_STEP_SUMMARY}"

@@ -9,8 +9,10 @@ param location string
 @description('Short environment suffix.')
 param environmentSuffix string = 'prod'
 
+@description('The name of the ACR.')
+param acrName string
+
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
-var acrName = toLower(replace('${namePrefix}${environmentSuffix}acr', '-', ''))
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 
 module rg './modules/resource-group.bicep' = {

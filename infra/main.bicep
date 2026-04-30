@@ -42,8 +42,10 @@ param serviceBusConnection string
 @description('DB administrator username.')
 param dbUser string = 'agriwizard_admin'
 
+@description('The name of the ACR.')
+param acrName string
+
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
-var acrName = toLower(replace('${namePrefix}${environmentSuffix}acr', '-', ''))
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
