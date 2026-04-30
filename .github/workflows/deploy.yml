@@ -445,7 +445,6 @@ jobs:
             --location "$REGION" \
             --template-file infra/template.json \
             --parameters @infra/parameters.json \
-              acrName="${ACR_NAME}" \
               dbPassword="${{ secrets.DB_PASSWORD }}" \
               jwtSecret="${{ secrets.JWT_SECRET }}" \
               mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
