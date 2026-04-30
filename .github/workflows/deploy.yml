@@ -298,9 +298,7 @@ jobs:
             --max-replicas "3" \
             --set-env-vars \
               PORT="${{ matrix.port }}" \
-              DB_HOST="${{ vars.DB_HOST }}" \
               DB_PORT="${{ vars.DB_PORT }}" \
-              DB_USER="${{ vars.DB_USER }}" \
               DB_NAME="${{ vars.DB_NAME }}" \
               DB_SSLMODE="${{ vars.DB_SSLMODE }}" \
               JWT_ISSUER="${{ vars.JWT_ISSUER }}" \

@@ -39,11 +39,15 @@ param smtpPassword string
 @secure()
 param serviceBusConnection string
 
+@description('DB administrator username.')
+param dbUser string = 'agriwizard_admin'
+
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 var acrName = toLower(replace('${namePrefix}${environmentSuffix}acr', '-', ''))
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
+var dbServerName = '${namePrefix}-${environmentSuffix}-db'
 
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group'
@@ -51,6 +55,20 @@ module rg './modules/resource-group.bicep' = {
     location: location
     resourceGroupName: resourceGroupName
   }
+}
+
+module postgresql './modules/postgresql.bicep' = {
+  name: 'postgresql'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    serverName: dbServerName
+    location: location
+    adminUsername: dbUser
+    adminPassword: dbPassword
+  }
+  dependsOn: [
+    rg
+  ]
 }
 
 module identity './modules/identity.bicep' = {
@@ -131,6 +149,18 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
       'service-bus-connection': serviceBusConnection
     }
     environmentVariables: concat(service.environmentVariables, [
+      {
+        name: 'DB_HOST'
+        value: postgresql.outputs.fullyQualifiedDomainName
+      }
+      {
+        name: 'DB_USER'
+        value: dbUser
+      }
+      {
+        name: 'CORS_ALLOW_ORIGIN'
+        value: 'https://agri-wizard.vercel.app'
+      }
       {
         name: 'DB_PASSWORD'
         secretRef: 'db-password'
