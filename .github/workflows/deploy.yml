@@ -265,23 +265,38 @@ jobs:
           echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> $GITHUB_ENV
           echo "SERVICE_BUS_CONNECTION=${{ secrets.SERVICE_BUS_CONNECTION }}" >> $GITHUB_ENV
 
+      - name: Show current CLI versions
+        run: |
+          echo "=== Current CLI Versions ==="
+          az version
+          echo ""
+          az bicep version || echo "Bicep not installed"
+
+      - name: Upgrade Azure CLI
+        run: |
+          echo "=== Upgrading Azure CLI ==="
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          az version
+
+      - name: Install/Upgrade Bicep CLI
+        run: |
+          echo "=== Installing Bicep CLI ==="
+          az bicep install
+          az bicep upgrade
+          az bicep version
+
       - name: Validate Bicep compiles
         run: az bicep build --file infra/main.bicep
 
       - name: Deploy infrastructure
         run: |
           set -euo pipefail
+          echo "=== Deploying Infrastructure ==="
           az deployment sub create \
             --name "agriwizard-prod-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
             --template-file infra/main.bicep \
-            --parameters @infra/parameters.json \
-              dbPassword="${{ secrets.DB_PASSWORD }}" \
-              jwtSecret="${{ secrets.JWT_SECRET }}" \
-              mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
-              owmApiKey="${{ secrets.OWM_API_KEY }}" \
-              smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
-              serviceBusConnection="${{ secrets.SERVICE_BUS_CONNECTION }}" \
+            --parameters @infra/main.bicepparam \
             -o json > deployment.json
           echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
           jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
