@@ -262,7 +262,7 @@ jobs:
             --name "agriwizard-bootstrap-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
             --template-file infra/bootstrap-acr.bicep \
-            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacrazkfjbxr44uio' }}" \
+            --parameters namePrefix="agriwizard" \
             --only-show-errors \
             -o json)
 
