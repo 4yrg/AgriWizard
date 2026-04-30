@@ -288,6 +288,15 @@ jobs:
       - name: Validate Bicep compiles
         run: az bicep build --file infra/main.bicep
 
+      - name: Compile Bicep to JSON with parameters
+        run: |
+          echo "=== Compiling Bicep to JSON with parameters ==="
+          az bicep build \
+            --file infra/main.bicep \
+            --params infra/main.bicepparam \
+            --outfile infra/deploy.json
+          echo "Compiled template saved to infra/deploy.json"
+
       - name: Deploy infrastructure
         run: |
           set -euo pipefail
@@ -295,8 +304,7 @@ jobs:
           az deployment sub create \
             --name "agriwizard-prod-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
-            --template-file infra/main.bicep \
-            --parameters @infra/main.bicepparam \
+            --template-file infra/deploy.json \
             -o json > deployment.json
           echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
           jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
