@@ -88,11 +88,41 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           image: imageName == 'kong' ? 'kong:${imageTag}' : '${acrLoginServer}/${imageName}:${imageTag}'
           env: [for envVar in environmentVariables: union({
             name: envVar.name
-          }, (contains(envVar, 'value') ? { value: envVar.value } : {}), (contains(envVar, 'secretRef') ? { secretRef: envVar.secretRef } : {}))]
+          }, (contains(envVar, 'value') && !empty(envVar.value) ? { value: envVar.value } : {}), (contains(envVar, 'secretRef') && !empty(envVar.secretRef) ? { secretRef: envVar.secretRef } : {}))]
           resources: {
             cpu: json(cpu)
             memory: memory
           }
+          probes: [
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/'
+                port: containerPort
+              }
+              initialDelaySeconds: 15
+              periodSeconds: 30
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/'
+                port: containerPort
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 10
+            }
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/'
+                port: containerPort
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              failureThreshold: 20
+            }
+          ]
         }
       ]
       scale: {

@@ -161,7 +161,7 @@ module acaEnvironment './modules/aca-environment.bicep' = {
   ]
 }
 
-module apps './modules/aca-app.bicep' = [for service in backendServices: {
+module coreApps './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName != 'kong') {
   name: 'aca-app-${service.serviceName}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -195,6 +195,50 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
     ])
     externalIngress: service.externalIngress
   }
+  dependsOn: [
+    postgresql
+    servicebus
+    keyvault
+  ]
+}]
+
+module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName == 'kong') {
+  name: 'aca-app-kong'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    appName: '${service.serviceName}-${environmentSuffix}'
+    managedEnvironmentId: acaEnvironment.outputs.managedEnvironmentId
+    identityResourceId: identity.outputs.identityId
+    acrLoginServer: acr.outputs.acrLoginServer
+    serviceName: service.serviceName
+    imageName: service.imageName
+    imageTag: service.imageTag
+    containerPort: service.containerPort
+    cpu: service.cpu
+    memory: service.memory
+    minReplicas: service.minReplicas
+    maxReplicas: service.maxReplicas
+    secrets: appSecrets
+    secretValues: secretValueMap
+    environmentVariables: union(service.environmentVariables, [
+      {
+        name: 'DB_HOST'
+        value: postgresql.outputs.fullyQualifiedDomainName
+      }
+      {
+        name: 'DB_USER'
+        value: dbUser
+      }
+      {
+        name: 'CORS_ALLOW_ORIGIN'
+        value: 'https://agri-wizard.vercel.app'
+      }
+    ])
+    externalIngress: service.externalIngress
+  }
+  dependsOn: [
+    coreApps
+  ]
 }]
 
 output resourceGroupName string = resourceGroupName
@@ -207,5 +251,5 @@ output identityClientId string = identity.outputs.clientId
 output containerAppFqdns array = [for (service, i) in backendServices: {
   serviceName: service.serviceName
   containerAppName: '${service.serviceName}-${environmentSuffix}'
-  fqdn: apps[i].outputs.fqdn
+  fqdn: service.serviceName == 'kong' ? gatewayApp[0].outputs.fqdn : coreApps[service.serviceName == 'iam' ? 0 : (service.serviceName == 'hardware' ? 1 : (service.serviceName == 'analytics' ? 2 : (service.serviceName == 'weather' ? 3 : (service.serviceName == 'notification' ? 4 : 0))))].outputs.fqdn
 }]
