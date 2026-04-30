@@ -25,6 +25,6 @@ RUN apk add --no-cache ca-certificates wget
 
 COPY --from=builder /app/iam-service /iam-service
 
-EXPOSE 8081
+EXPOSE 8086
 
 ENTRYPOINT ["/iam-service"]

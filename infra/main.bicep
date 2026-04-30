@@ -182,6 +182,10 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
     secretValues: secretValueMap
     environmentVariables: union(service.environmentVariables, [
       {
+        name: 'PORT'
+        value: string(service.containerPort)
+      }
+      {
         name: 'DB_HOST'
         value: postgresql.outputs.fullyQualifiedDomainName
       }
@@ -223,6 +227,10 @@ module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: i
     secrets: appSecrets
     secretValues: secretValueMap
     environmentVariables: union(service.environmentVariables, [
+      {
+        name: 'PORT'
+        value: string(service.containerPort)
+      }
       {
         name: 'DB_HOST'
         value: postgresql.outputs.fullyQualifiedDomainName

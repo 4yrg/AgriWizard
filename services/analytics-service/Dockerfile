@@ -18,5 +18,5 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/anal
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /app/analytics-service /analytics-service
-EXPOSE 8083
+EXPOSE 8088
 ENTRYPOINT ["/analytics-service"]

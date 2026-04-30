@@ -18,5 +18,5 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/noti
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /app/notification-service /notification-service
-EXPOSE 8085
+EXPOSE 8091
 ENTRYPOINT ["/notification-service"]
