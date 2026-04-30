@@ -197,6 +197,31 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
         name: 'CORS_ALLOW_ORIGIN'
         value: 'https://agri-wizard.vercel.app'
       }
+      // Secret mappings
+      {
+        name: 'DB_PASSWORD'
+        secretRef: 'db-password'
+      }
+      {
+        name: 'JWT_SECRET'
+        secretRef: 'jwt-secret'
+      }
+      {
+        name: 'MQTT_PASSWORD'
+        secretRef: 'mqtt-password'
+      }
+      {
+        name: 'OWM_API_KEY'
+        secretRef: 'owm-api-key'
+      }
+      {
+        name: 'SERVICE_BUS_CONNECTION'
+        secretRef: 'service-bus-connection'
+      }
+      {
+        name: 'SMTP_PASSWORD'
+        secretRef: 'smtp-password'
+      }
     ])
     externalIngress: service.externalIngress
   }
@@ -242,6 +267,31 @@ module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: i
       {
         name: 'CORS_ALLOW_ORIGIN'
         value: 'https://agri-wizard.vercel.app'
+      }
+      // Secret mappings
+      {
+        name: 'DB_PASSWORD'
+        secretRef: 'db-password'
+      }
+      {
+        name: 'JWT_SECRET'
+        secretRef: 'jwt-secret'
+      }
+      {
+        name: 'MQTT_PASSWORD'
+        secretRef: 'mqtt-password'
+      }
+      {
+        name: 'OWM_API_KEY'
+        secretRef: 'owm-api-key'
+      }
+      {
+        name: 'SERVICE_BUS_CONNECTION'
+        secretRef: 'service-bus-connection'
+      }
+      {
+        name: 'SMTP_PASSWORD'
+        secretRef: 'smtp-password'
       }
     ])
     externalIngress: service.externalIngress

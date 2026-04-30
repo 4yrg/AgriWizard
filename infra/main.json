@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "5889616126787554202"
+      "templateHash": "17286602187524216399"
     }
   },
   "parameters": {
@@ -1027,7 +1027,7 @@
             }
           },
           "environmentVariables": {
-            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app')))]"
+            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password')))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"
@@ -1332,7 +1332,7 @@
             }
           },
           "environmentVariables": {
-            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app')))]"
+            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password')))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"
