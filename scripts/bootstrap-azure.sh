@@ -1,18 +1,19 @@
 #!/bin/bash
 # =============================================================================
-# AgriWizard Azure Bootstrap Script
+# AgriWizard Azure Bootstrap Script (Managed Identity Version)
 # =============================================================================
-# Creates OIDC identity for GitHub Actions and outputs required secrets.
+# Creates a User-Assigned Managed Identity for GitHub Actions OIDC.
 # Run this once to set up Azure credentials.
 # =============================================================================
 
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────
-APP_NAME="agriwizard-github-oidc"
+ID_NAME="agriwizard-github-oidc-id"
 GITHUB_ORG="${GITHUB_ORG:-}"
 GITHUB_REPO="${GITHUB_REPO:-}"
 AZURE_REGION="${AZURE_REGION:-centralindia}"
+RG_NAME="agriwizard-prod-rg"
 
 # ── Colors ────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -50,8 +51,7 @@ log_info "Tenant: ${TENANT_ID}"
 log_info "Region: ${AZURE_REGION}"
 
 # ── Create Resource Group ─────────────────────────────────────────────────
-RG_NAME="agriwizard-prod-rg"
-log_info "Creating resource group: ${RG_NAME}"
+log_info "Ensuring resource group exists: ${RG_NAME}"
 
 if az group show --name "${RG_NAME}" &> /dev/null; then
     log_warn "Resource group already exists"
@@ -60,64 +60,59 @@ else
     log_info "Resource group created"
 fi
 
-# ── Create App Registration ────────────────────────────────────────────────
-log_info "Creating Azure AD app registration: ${APP_NAME}"
+# ── Create Managed Identity ────────────────────────────────────────────────
+log_info "Creating Managed Identity: ${ID_NAME}"
 
-# Check if app already exists
-APP_ID=$(az ad app list --display-name "${APP_NAME}" --query '[0].appId' -o tsv 2>/dev/null || true)
+# Check if identity already exists
+CLIENT_ID=$(az identity show --name "${ID_NAME}" --resource-group "${RG_NAME}" --query clientId -o tsv 2>/dev/null || true)
 
-if [ -z "${APP_ID}" ]; then
-    APP_ID=$(az ad app create --display-name "${APP_NAME}" --query appId -o tsv)
-    log_info "App registration created: ${APP_ID}"
+if [ -z "${CLIENT_ID}" ]; then
+    CLIENT_ID=$(az identity create --name "${ID_NAME}" --resource-group "${RG_NAME}" --query clientId -o tsv)
+    log_info "Managed Identity created: ${CLIENT_ID}"
 else
-    log_warn "App registration already exists: ${APP_ID}"
+    log_warn "Managed Identity already exists: ${CLIENT_ID}"
 fi
 
-# Create service principal
-log_info "Creating service principal..."
-SP_ID=$(az ad sp create --id "${APP_ID}" --query id -o tsv)
-log_info "Service principal created: ${SP_ID}"
+PRINCIPAL_ID=$(az identity show --name "${ID_NAME}" --resource-group "${RG_NAME}" --query principalId -o tsv)
 
 # ── Create Federated Credential ────────────────────────────────────────────
 log_info "Creating federated credential for GitHub Actions..."
 
 CRED_NAME="github-main-${GITHUB_REPO}"
-CRED_EXISTS=$(az ad app federated-credential list --id "${APP_ID}" --query "[?name=='${CRED_NAME}'].name" -o tsv || true)
+CRED_EXISTS=$(az identity federated-credential list --identity-name "${ID_NAME}" --resource-group "${RG_NAME}" --query "[?name=='${CRED_NAME}'].name" -o tsv || true)
 
 if [ -n "${CRED_EXISTS}" ]; then
     log_warn "Federated credential already exists, skipping creation"
 else
-    cat > /tmp/federated-credential.json <<EOF
-{
-  "name": "${CRED_NAME}",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main",
-  "audiences": ["api://AzureADTokenExchange"]
-}
-EOF
-    az ad app federated-credential create --id "${APP_ID}" --parameters /tmp/federated-credential.json
-    rm /tmp/federated-credential.json
+    az identity federated-credential create \
+      --name "${CRED_NAME}" \
+      --identity-name "${ID_NAME}" \
+      --resource-group "${RG_NAME}" \
+      --issuer "https://token.actions.githubusercontent.com" \
+      --subject "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main" \
+      --audience "api://AzureADTokenExchange" \
+      --output none
     log_info "Federated credential created"
 fi
 
+# ── Role Assignment: Owner (On Resource Group) ───────────────────────────
+# We use Owner on the RG so it can manage Role Assignments for the apps
+log_info "Assigning Owner role on resource group..."
+az role assignment create \
+    --assignee "${PRINCIPAL_ID}" \
+    --role "Owner" \
+    --scope "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}" \
+    --output none
+log_info "Owner role assigned"
+
 # ── Role Assignment: Contributor (Subscription) ───────────────────────────
 log_info "Assigning Contributor role at subscription scope..."
-ROLE_EXISTS=$(az role assignment list --assignee "${SP_ID}" --role "Contributor" --scope "/subscriptions/${SUBSCRIPTION_ID}" --query '[0].id' -o tsv 2>/dev/null || true)
-
-if [ -z "${ROLE_EXISTS}" ]; then
-    az role assignment create \
-        --assignee-object-id "${SP_ID}" \
-        --assignee-principal-type ServicePrincipal \
-        --role "Contributor" \
-        --scope "/subscriptions/${SUBSCRIPTION_ID}" \
-        --output none
-    log_info "Contributor role assigned"
-else
-    log_warn "Contributor role already assigned"
-fi
-
-# ── Role Assignment: AcrPush (Will be assigned after ACR is created) ───────
-# This will be done during first infrastructure deployment
+az role assignment create \
+    --assignee "${PRINCIPAL_ID}" \
+    --role "Contributor" \
+    --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+    --output none
+log_info "Contributor role assigned"
 
 # ── Output Secrets ─────────────────────────────────────────────────────────
 echo ""
@@ -127,7 +122,7 @@ echo "════════════════════════�
 echo ""
 echo "Add these as Repository Secrets (Settings → Secrets → Actions):"
 echo ""
-echo -e "${GREEN}AZURE_CLIENT_ID${NC}   = ${APP_ID}"
+echo -e "${GREEN}AZURE_CLIENT_ID${NC}   = ${CLIENT_ID}"
 echo -e "${GREEN}AZURE_TENANT_ID${NC}   = ${TENANT_ID}"
 echo -e "${GREEN}AZURE_SUBSCRIPTION_ID${NC} = ${SUBSCRIPTION_ID}"
 echo ""
@@ -139,19 +134,10 @@ echo "Add these as Repository Variables (Settings → Variables → Actions):"
 echo ""
 echo -e "${GREEN}AZURE_REGION${NC} = ${AZURE_REGION}"
 echo ""
-echo "After running the bootstrap workflow, add these from the workflow output:"
-echo "  - ACR_NAME"
-echo "  - ACR_LOGIN_SERVER"
-echo "  - AZURE_RESOURCE_GROUP_PRODUCTION"
-echo ""
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "                    NEXT STEPS"
 echo "═══════════════════════════════════════════════════════════════════════"
 echo ""
 echo "1. Add the 3 secrets above to GitHub"
-echo "2. Run the 'Bootstrap Production Infrastructure' workflow manually"
-echo "3. From the workflow output, copy ACR_NAME, ACR_LOGIN_SERVER, AZURE_RESOURCE_GROUP"
-echo "4. Add those as GitHub variables"
-echo "5. Add additional secrets: DB_PASSWORD, JWT_SECRET, OWM_API_KEY, MQTT_PASSWORD, SMTP_PASSWORD, SERVICE_BUS_CONNECTION"
-echo "6. Push to main to trigger deployment"
+echo "2. Push to main to trigger deployment"
 echo ""
