@@ -611,6 +611,13 @@ jobs:
           APP_NAME="${{ steps.app.outputs.name }}"
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
+          SB_NAME=$(az servicebus namespace list --resource-group "${ACA_RESOURCE_GROUP}" --query '[0].name' -o tsv)
+          SB_CONN_STR=$(az servicebus namespace authorization-rule keys list \
+            --resource-group "${ACA_RESOURCE_GROUP}" \
+            --namespace-name "${SB_NAME}" \
+            --name "RootManageSharedAccessKey" \
+            --query primaryConnectionString -o tsv)
+
           az containerapp secret set \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
@@ -622,7 +629,7 @@ jobs:
               owm-api-key="${{ secrets.OWM_API_KEY }}" \
               smtp-password="${{ secrets.SMTP_PASSWORD }}" \
               smtp-username="${{ secrets.SMTP_USER }}" \
-              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
+              service-bus-connection="${SB_CONN_STR}"
 
           az containerapp update \
             --name "${APP_NAME}" \
