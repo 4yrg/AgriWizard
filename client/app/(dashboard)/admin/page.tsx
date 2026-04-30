@@ -11,7 +11,6 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
 } from "lucide-react";
 import type { Equipment, Sensor } from "@/types/api";
 

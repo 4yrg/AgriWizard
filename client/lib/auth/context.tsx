@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import type { UserDTO, LoginRequest, RegisterRequest, UserRole } from "@/types/api";
-import { iamApi, ApiError } from "@/lib/api/client";
+import { iamApi } from "@/lib/api/client";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Auth Context Types
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isLoading: false,
           isAuthenticated: true,
         });
-      } catch (error) {
+      } catch {
         // Token invalid or expired
         localStorage.removeItem("auth_token");
         setState({ user: null, isLoading: false, isAuthenticated: false });
