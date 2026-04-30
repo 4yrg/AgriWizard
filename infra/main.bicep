@@ -48,7 +48,8 @@ param acrName string = ''
 @description('Azure tenant ID.')
 param tenantId string = ''
 
-var computedAcrName = empty(acrName) ? '${namePrefix}acr' : acrName
+var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
+var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
 var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
@@ -77,8 +78,8 @@ var secretValueMap = {
   'service-bus-connection': hasServiceBus ? serviceBusConnection : servicebus.outputs.connectionString
   'smtp-password': hasSmtpPassword ? smtpPassword : 'temp'
 }
-var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'
-var keyVaultName = '${namePrefix}-${environmentSuffix}-kv'
+var serviceBusName = take('${namePrefix}-${environmentSuffix}-sb-${uniqueSuffix}', 50)
+var keyVaultName = take('${namePrefix}-${environmentSuffix}-kv-${uniqueSuffix}', 24)
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'

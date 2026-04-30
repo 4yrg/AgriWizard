@@ -14,6 +14,8 @@ param acrName string
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
+var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
+var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
 
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group-bootstrap'
@@ -35,7 +37,7 @@ module acr './modules/acr.bicep' = {
   name: 'acr-bootstrap'
   scope: resourceGroup(resourceGroupName)
   params: {
-    acrName: acrName
+    acrName: computedAcrName
     sku: 'Standard'
     pullPrincipalId: identity.outputs.principalId
   }
@@ -45,7 +47,7 @@ module servicebus './modules/servicebus.bicep' = {
   name: 'servicebus-bootstrap'
   scope: resourceGroup(resourceGroupName)
   params: {
-    serviceBusName: '${namePrefix}-${environmentSuffix}-sb'
+    serviceBusName: take('${namePrefix}-${environmentSuffix}-sb-${uniqueSuffix}', 50)
   }
   dependsOn: [
     rg
