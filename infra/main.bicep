@@ -175,7 +175,7 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
     acrLoginServer: acr.outputs.acrLoginServer
     serviceName: service.serviceName
     imageName: service.imageName
-    imageTag: empty(globalImageTag) ? service.imageTag : globalImageTag
+    imageTag: (service.serviceName == 'kong') ? service.imageTag : (empty(globalImageTag) ? service.imageTag : globalImageTag)
     containerPort: service.containerPort
     cpu: service.cpu
     memory: service.memory
@@ -246,7 +246,7 @@ module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: i
     acrLoginServer: acr.outputs.acrLoginServer
     serviceName: service.serviceName
     imageName: service.imageName
-    imageTag: service.imageTag
+    imageTag: (service.serviceName == 'kong') ? service.imageTag : (empty(globalImageTag) ? service.imageTag : globalImageTag)
     containerPort: service.containerPort
     cpu: service.cpu
     memory: service.memory

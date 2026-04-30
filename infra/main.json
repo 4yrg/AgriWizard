@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "2087491394079014964"
+      "templateHash": "15506012893293061310"
     }
   },
   "parameters": {
@@ -1002,7 +1002,7 @@
           "imageName": {
             "value": "[parameters('backendServices')[copyIndex()].imageName]"
           },
-          "imageTag": "[if(empty(parameters('globalImageTag')), createObject('value', parameters('backendServices')[copyIndex()].imageTag), createObject('value', parameters('globalImageTag')))]",
+          "imageTag": "[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'), createObject('value', parameters('backendServices')[copyIndex()].imageTag), if(empty(parameters('globalImageTag')), createObject('value', parameters('backendServices')[copyIndex()].imageTag), createObject('value', parameters('globalImageTag'))))]",
           "containerPort": {
             "value": "[parameters('backendServices')[copyIndex()].containerPort]"
           },
@@ -1305,9 +1305,7 @@
           "imageName": {
             "value": "[parameters('backendServices')[copyIndex()].imageName]"
           },
-          "imageTag": {
-            "value": "[parameters('backendServices')[copyIndex()].imageTag]"
-          },
+          "imageTag": "[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'), createObject('value', parameters('backendServices')[copyIndex()].imageTag), if(empty(parameters('globalImageTag')), createObject('value', parameters('backendServices')[copyIndex()].imageTag), createObject('value', parameters('globalImageTag'))))]",
           "containerPort": {
             "value": "[parameters('backendServices')[copyIndex()].containerPort]"
           },
