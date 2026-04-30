@@ -586,8 +586,9 @@ jobs:
       - name: Deploy image to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
-          resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
+          resourceGroup: ${{ env.ACA_RESOURCE_GROUP || 'agriwizard-prod-rg' }}
           containerAppName: ${{ steps.app.outputs.name }}
+          location: ${{ vars.AZURE_REGION || 'centralindia' }}
           imageToDeploy: >-
             ${{
               matrix.service == 'kong'
