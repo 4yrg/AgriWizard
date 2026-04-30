@@ -47,7 +47,7 @@ module servicebus './modules/servicebus.bicep' = {
   name: 'servicebus-bootstrap'
   scope: resourceGroup(resourceGroupName)
   params: {
-    serviceBusName: take('${namePrefix}-${environmentSuffix}-sb-${uniqueSuffix}', 50)
+    serviceBusName: take('${namePrefix}sb${uniqueSuffix}', 50)
   }
   dependsOn: [
     rg
@@ -57,4 +57,4 @@ module servicebus './modules/servicebus.bicep' = {
 output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
 output acrLoginServer string = acr.outputs.acrLoginServer
-output serviceBusConnection string = servicebus.outputs.connectionString
+output serviceBusConnectionString string = servicebus.outputs.connectionString

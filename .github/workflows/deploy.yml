@@ -2,23 +2,34 @@ name: CI/CD to Azure Container Apps
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  # Allow manual runs, e.g. to re-deploy without a code change
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
+# Cancel in-progress runs for the same ref so a rapid push to main doesn't
+# queue up stacked deploys.
 concurrency:
   group: deploy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Global env vars removed to favor dynamic outputs
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable OIDC login snippet (referenced by each job that needs it)
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTE: GitHub Actions doesn't support top-level anchors for steps, so the
+#       azure/login block is repeated per job. To DRY this up further, consider
+#       extracting jobs into reusable workflows (.github/workflows/reusable-*.yml).
 
 jobs:
+
+  # ───────────────────────────────────────────────
+  # 1. LINT
+  # ───────────────────────────────────────────────
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -43,9 +54,10 @@ jobs:
       - name: Verify Go formatting
         run: |
           set -euo pipefail
-          if [ -n "$(gofmt -l ./services)" ]; then
-            echo "Go files are not formatted:"
-            gofmt -l ./services
+          UNFORMATTED=$(gofmt -l ./services)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following Go files need formatting (run 'gofmt -w ./services'):"
+            echo "$UNFORMATTED"
             exit 1
           fi
 
@@ -58,16 +70,19 @@ jobs:
             ./services/analytics-service \
             ./services/weather-service \
             ./services/notification-service; do
+            echo ">>> go vet $module"
             go vet "${module}/..."
           done
 
-      - name: Run frontend lint
-        run: |
-          set -euo pipefail
-          cd client
-          npm ci
-          npm run lint
+      - name: Install frontend dependencies
+        run: cd client && npm ci
 
+      - name: Run frontend lint
+        run: cd client && npm run lint
+
+  # ───────────────────────────────────────────────
+  # 2. TEST
+  # ───────────────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -99,16 +114,23 @@ jobs:
             ./services/analytics-service \
             ./services/weather-service \
             ./services/notification-service; do
+            echo ">>> go test $module"
             go test "${module}/..."
           done
 
-      - name: Frontend build verification
+      - name: Install frontend dependencies & build verification
         run: |
           set -euo pipefail
           cd client
           npm ci
           npm run build
 
+  # ───────────────────────────────────────────────
+  # 3. BUILD — validates Dockerfiles & warms GHA cache.
+  #    Runs on PRs *and* pushes so broken Dockerfiles are
+  #    caught before merge. The 'push' job re-uses this
+  #    layer cache, so there is no full double-build on main.
+  # ───────────────────────────────────────────────
   build:
     name: Build Docker images
     runs-on: ubuntu-latest
@@ -122,32 +144,26 @@ jobs:
             image_name: agriwizard-iam
             dockerfile: services/iam-service/Dockerfile
             context: .
-            container_port: "8086"
           - service: hardware
             image_name: agriwizard-hardware
             dockerfile: services/hardware-service/Dockerfile
             context: .
-            container_port: "8087"
           - service: analytics
             image_name: agriwizard-analytics
             dockerfile: services/analytics-service/Dockerfile
             context: .
-            container_port: "8088"
           - service: weather
             image_name: agriwizard-weather
             dockerfile: services/weather-service/Dockerfile
             context: .
-            container_port: "8089"
           - service: notification
             image_name: agriwizard-notification
             dockerfile: services/notification-service/Dockerfile
             context: .
-            container_port: "8091"
           - service: web
             image_name: agriwizard-web
             dockerfile: client/Dockerfile
             context: ./client
-            container_port: "3000"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -155,7 +171,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (no push)
+      - name: Build image (no push — validation + cache warm-up)
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
@@ -166,12 +182,116 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
           provenance: false
 
+  # ───────────────────────────────────────────────
+  # 4. REGISTER RESOURCE PROVIDERS (main only)
+  #    Runs early in parallel with test/build to
+  #    avoid blocking the bootstrap step later.
+  # ───────────────────────────────────────────────
+  bootstrap-providers:
+    name: Register Resource Providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Register Azure Resource Providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROVIDERS=(
+            "Microsoft.ServiceBus"
+            "Microsoft.App"
+            "Microsoft.ContainerRegistry"
+            "Microsoft.OperationalInsights"
+            "Microsoft.KeyVault"
+            "Microsoft.ManagedIdentity"
+            "Microsoft.DBforPostgreSQL"
+          )
+
+          echo "=== Registering Resource Providers ==="
+          for provider in "${PROVIDERS[@]}"; do
+            echo "Registering $provider..."
+            az provider register --namespace "$provider" --wait --only-show-errors
+          done
+          echo "All providers registered."
+
+  # ───────────────────────────────────────────────
+  # 5. BOOTSTRAP — ACR & Service Bus (main only)
+  #
+  #    SECURITY NOTE: The Service Bus connection string is
+  #    masked via add-mask and surfaced as a job output so
+  #    downstream jobs can write it into the ACA secret
+  #    store without ever echoing it to logs. For a
+  #    higher-security posture, store it in the deployed
+  #    Key Vault and fetch it per-job with:
+  #      az keyvault secret show --vault-name <kv> --name sb-conn -o tsv
+  # ───────────────────────────────────────────────
+  deploy-bootstrap:
+    name: Bootstrap Resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: bootstrap-providers
+    if: github.event_name != 'pull_request'
+    outputs:
+      acr_name: ${{ steps.bootstrap.outputs.ACR_NAME }}
+      acr_login_server: ${{ steps.bootstrap.outputs.ACR_LOGIN_SERVER }}
+      service_bus_connection: ${{ steps.bootstrap.outputs.service_bus_connection }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy bootstrap resources
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT=$(az deployment sub create \
+            --name "agriwizard-bootstrap-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
+            --template-file infra/bootstrap-acr.bicep \
+            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacr' }}" \
+            --only-show-errors \
+            -o json)
+
+          ACR_NAME=$(echo "$OUTPUT"        | jq -r '.properties.outputs.acrName.value')
+          ACR_LOGIN_SERVER=$(echo "$OUTPUT" | jq -r '.properties.outputs.acrLoginServer.value')
+          SB_CONNECTION=$(echo "$OUTPUT"   | jq -r '.properties.outputs.serviceBusConnectionString.value')
+
+          echo "ACR_NAME=$ACR_NAME"               >> "$GITHUB_OUTPUT"
+          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+
+          # Mask BEFORE writing to GITHUB_OUTPUT so the value is redacted in
+          # every subsequent log line that references it.
+          echo "::add-mask::$SB_CONNECTION"
+          echo "service_bus_connection=$SB_CONNECTION" >> "$GITHUB_OUTPUT"
+
+          echo "Bootstrap complete — ACR: $ACR_LOGIN_SERVER"
+
+  # ───────────────────────────────────────────────
+  # 6. PUSH — build & push images to ACR (main only)
+  #    Reuses layer cache produced by the 'build' job.
+  #    Kong is intentionally excluded; it uses the
+  #    official kong:3.x image from Docker Hub.
+  # ───────────────────────────────────────────────
   push:
     name: Push Docker images to ACR
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: [build, deploy-bootstrap]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -215,8 +335,7 @@ jobs:
         run: |
           set -euo pipefail
           ACR_SERVER="${{ needs.deploy-bootstrap.outputs.acr_login_server }}"
-          echo "Logging into $ACR_SERVER"
-          az acr login --name "${ACR_SERVER%%.azurecr.io}"
+          az acr login --name "${ACR_SERVER%%.azurecr.io}" --only-show-errors
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -233,90 +352,16 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
           provenance: false
-  deploy-bootstrap:
-    name: Bootstrap Resources
-    runs-on: ubuntu-latest
-    needs: bootstrap-providers
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    outputs:
-      acr_name: ${{ steps.bootstrap.outputs.ACR_NAME }}
-      acr_login_server: ${{ steps.bootstrap.outputs.ACR_LOGIN_SERVER }}
-      service_bus_connection: ${{ steps.bootstrap.outputs.service_bus_connection }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Azure login with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy bootstrap resources
-        id: bootstrap
-        shell: bash
-        run: |
-          set -euo pipefail
-          OUTPUT=$(az deployment sub create \
-            --name "agriwizard-bootstrap-${GITHUB_RUN_ID}" \
-            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
-            --template-file infra/bootstrap-acr.bicep \
-            --parameters namePrefix="agriwizard" acrName="${{ vars.ACR_NAME || 'agriwizardacr' }}" \
-            -o json)
-          
-          ACR_NAME=$(echo $OUTPUT | jq -r '.properties.outputs.acrName.value')
-          ACR_LOGIN_SERVER=$(echo $OUTPUT | jq -r '.properties.outputs.acrLoginServer.value')
-          SB_CONNECTION=$(echo $OUTPUT | jq -r '.properties.outputs.serviceBusConnectionString.value')
-          
-          echo "ACR_NAME=$ACR_NAME" >> $GITHUB_OUTPUT
-          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
-          
-          # Securely mask and export the Service Bus connection string
-          echo "::add-mask::$SB_CONNECTION"
-          echo "service_bus_connection=$SB_CONNECTION" >> $GITHUB_OUTPUT
-          
-          echo "Bootstrap complete. Connection string masked and exported to outputs."
-
-  bootstrap-providers:
-    name: Register Resource Providers
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Azure login with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Register Azure Resource Providers
-        shell: bash
-        run: |
-          set -euo pipefail
-          PROVIDERS=(
-            "Microsoft.ServiceBus"
-            "Microsoft.App"
-            "Microsoft.ContainerRegistry"
-            "Microsoft.OperationalInsights"
-            "Microsoft.KeyVault"
-            "Microsoft.ManagedIdentity"
-            "Microsoft.DBforPostgreSQL"
-          )
-          
-          echo "=== Initiating Proactive Provider Registration ==="
-          for provider in "${PROVIDERS[@]}"; do
-            echo "Registering $provider..."
-            az provider register --namespace "$provider" --wait
-          done
-          echo "All providers registered and validated."
-
+  # ───────────────────────────────────────────────
+  # 7. INFRASTRUCTURE — Bicep deployment (main only)
+  # ───────────────────────────────────────────────
   deploy-infra:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [push, deploy-bootstrap]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -328,45 +373,39 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Show current CLI versions
+      - name: Upgrade Azure CLI & Bicep to latest
         run: |
-          echo "=== Current CLI Versions ==="
-          az version
-          echo ""
-          az bicep version || echo "Bicep not installed"
-
-      - name: Upgrade Azure CLI
-        run: |
+          set -euo pipefail
           echo "=== Upgrading Azure CLI ==="
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
-
-      - name: Install/Upgrade Bicep CLI
-        run: |
           echo "=== Upgrading Bicep CLI ==="
           az bicep upgrade
           az bicep version
 
-      - name: Validate Bicep compiles
-        run: az bicep build --file infra/main.bicep
-
-      - name: Compile Bicep to JSON with parameters
-        run: |
-          echo "=== Compiling Bicep to JSON with parameters ==="
-          az bicep build --file infra/main.bicep --outfile infra/template.json
-          echo "Template compiled to infra/template.json"
-
-      - name: Deploy infrastructure
+      - name: Validate & compile Bicep
         run: |
           set -euo pipefail
-          
-          # Self-healing: Ensure resource group exists before sub-level deployment
+          az bicep build --file infra/main.bicep --outfile infra/template.json
+          echo "Bicep compiled to infra/template.json"
+
+      - name: Ensure resource group exists
+        run: |
+          set -euo pipefail
           RG_NAME="${{ vars.ACA_RESOURCE_GROUP_STAGING || 'agriwizard-prod-rg' }}"
           REGION="${{ vars.AZURE_REGION || 'centralindia' }}"
-          if ! az group show --name "$RG_NAME" &>/dev/null; then
-            echo "Resource group $RG_NAME does not exist. Creating in $REGION..."
-            az group create --name "$RG_NAME" --location "$REGION"
+          if ! az group show --name "$RG_NAME" --only-show-errors &>/dev/null; then
+            echo "Creating resource group: $RG_NAME in $REGION"
+            az group create --name "$RG_NAME" --location "$REGION" --only-show-errors
+          else
+            echo "Resource group $RG_NAME already exists."
           fi
+
+      - name: Deploy infrastructure
+        id: deploy
+        run: |
+          set -euo pipefail
+          REGION="${{ vars.AZURE_REGION || 'centralindia' }}"
 
           echo "=== Deploying Infrastructure ==="
           az deployment sub create \
@@ -379,171 +418,32 @@ jobs:
               mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
               owmApiKey="${{ secrets.OWM_API_KEY }}" \
               smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
-              serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}" \
+              serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}" \
               globalImageTag="${{ github.sha }}" \
+            --only-show-errors \
             -o json > deployment.json
-          echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
-          jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
 
-  deploy_staging:
-    name: Deploy to ACA (staging)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: [push, deploy-infra, deploy-bootstrap]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # environment: staging
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: iam
-            image_name: agriwizard-iam
-            app_name_var: ACA_APP_IAM_STAGING
-            port: "8086"
-          - service: hardware
-            image_name: agriwizard-hardware
-            app_name_var: ACA_APP_HARDWARE_STAGING
-            port: "8087"
-          - service: analytics
-            image_name: agriwizard-analytics
-            app_name_var: ACA_APP_ANALYTICS_STAGING
-            port: "8088"
-          - service: weather
-            image_name: agriwizard-weather
-            app_name_var: ACA_APP_WEATHER_STAGING
-            port: "8089"
-          - service: notification
-            image_name: agriwizard-notification
-            app_name_var: ACA_APP_NOTIFICATION_STAGING
-            port: "8091"
-          - service: web
-            image_name: agriwizard-web
-            app_name_var: ACA_APP_WEB_STAGING
-            port: "3000"
-          - service: kong
-            image_name: kong
-            app_name_var: ACA_APP_KONG_STAGING
-            port: "8000"
-            is_official: true
-    env:
-      ACA_RESOURCE_GROUP: ${{ vars.ACA_RESOURCE_GROUP_STAGING }}
-      ACA_ENVIRONMENT: ${{ vars.ACA_ENVIRONMENT_STAGING }}
-      CPU: ${{ vars.ACA_CPU || '0.5' }}
-      MEMORY: ${{ vars.ACA_MEMORY || '1Gi' }}
-      MIN_REPLICAS: ${{ vars.ACA_MIN_REPLICAS || '1' }}
-      MAX_REPLICAS: ${{ vars.ACA_MAX_REPLICAS || '3' }}
-      DB_HOST: ${{ vars.DB_HOST }}
-      DB_PORT: ${{ vars.DB_PORT }}
-      DB_USER: ${{ vars.DB_USER }}
-      DB_NAME: ${{ vars.DB_NAME }}
-      DB_SSLMODE: ${{ vars.DB_SSLMODE }}
-      JWT_ISSUER: ${{ vars.JWT_ISSUER }}
-      OWM_BASE_URL: ${{ vars.OWM_BASE_URL }}
-      LOCATION_LAT: ${{ vars.LOCATION_LAT }}
-      LOCATION_LON: ${{ vars.LOCATION_LON }}
-      LOCATION_CITY: ${{ vars.LOCATION_CITY }}
-      USE_MOCK: ${{ vars.USE_MOCK }}
-      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-      NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          echo "## Infrastructure Deployment Outputs" >> "$GITHUB_STEP_SUMMARY"
+          jq '.properties.outputs' deployment.json >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Azure login with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Resolve container app name
-        id: app
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ matrix.app_name_var }}" in
-            ACA_APP_IAM_STAGING) APP_NAME="${{ vars.ACA_APP_IAM_STAGING }}" ;;
-            ACA_APP_HARDWARE_STAGING) APP_NAME="${{ vars.ACA_APP_HARDWARE_STAGING }}" ;;
-            ACA_APP_ANALYTICS_STAGING) APP_NAME="${{ vars.ACA_APP_ANALYTICS_STAGING }}" ;;
-            ACA_APP_WEATHER_STAGING) APP_NAME="${{ vars.ACA_APP_WEATHER_STAGING }}" ;;
-            ACA_APP_NOTIFICATION_STAGING) APP_NAME="${{ vars.ACA_APP_NOTIFICATION_STAGING }}" ;;
-            ACA_APP_WEB_STAGING) APP_NAME="${{ vars.ACA_APP_WEB_STAGING }}" ;;
-            ACA_APP_KONG_STAGING) APP_NAME="${{ vars.ACA_APP_KONG_STAGING }}" ;;
-            *) echo "Unsupported app name mapping: ${{ matrix.app_name_var }}" && exit 1 ;;
-          esac
-          if [ -z "${APP_NAME}" ]; then
-            echo "GitHub variable for ${{ matrix.app_name_var }} is missing."
-            exit 1
-          fi
-          echo "name=${APP_NAME}" >> "${GITHUB_OUTPUT}"
-
-      - name: Deploy image to Container App
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
-          containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}
-
-      - name: Apply secrets, env vars, and scaling policy
-        shell: bash
-        run: |
-          set -euo pipefail
-          APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
-
-          # Secret values are written to ACA secret store, then referenced as env vars.
-          az containerapp secret set \
-            --name "${APP_NAME}" \
-            --resource-group "${ACA_RESOURCE_GROUP}" \
-            --secrets \
-              db-password="${{ secrets.DB_PASSWORD }}" \
-              jwt-secret="${{ secrets.JWT_SECRET }}" \
-              mqtt-password="${{ secrets.MQTT_PASSWORD }}" \
-              owm-api-key="${{ secrets.OWM_API_KEY }}" \
-              smtp-password="${{ secrets.SMTP_PASSWORD }}" \
-              smtp-username="${{ secrets.SMTP_USER || 'jsamuditha@gmail.com' }}" \
-              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}"
-
-          az containerapp update \
-            --name "${APP_NAME}" \
-            --resource-group "${ACA_RESOURCE_GROUP}" \
-            --image "${IMAGE}" \
-            --target-port "${{ matrix.port }}" \
-            --ingress external \
-            --cpu "${CPU}" \
-            --memory "${MEMORY}" \
-            --min-replicas "${MIN_REPLICAS}" \
-            --max-replicas "${MAX_REPLICAS}" \
-            --set-env-vars \
-              PORT="${{ matrix.port }}" \
-              DB_HOST="${DB_HOST}" \
-              DB_PORT="${DB_PORT}" \
-              DB_USER="${DB_USER}" \
-              DB_NAME="${DB_NAME}" \
-              DB_SSLMODE="${DB_SSLMODE}" \
-              JWT_ISSUER="${JWT_ISSUER}" \
-              OWM_BASE_URL="${OWM_BASE_URL}" \
-              LOCATION_LAT="${LOCATION_LAT}" \
-              LOCATION_LON="${LOCATION_LON}" \
-              LOCATION_CITY="${LOCATION_CITY}" \
-              USE_MOCK="${USE_MOCK}" \
-              NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
-              NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
-              DB_PASSWORD=secretref:db-password \
-              JWT_SECRET=secretref:jwt-secret \
-              MQTT_PASSWORD=secretref:mqtt-password \
-              OWM_API_KEY=secretref:owm-api-key \
-              SMTP_PASSWORD=secretref:smtp-password \
-              SMTP_USERNAME=secretref:smtp-username \
-              SERVICE_BUS_CONNECTION=secretref:service-bus-connection
-
+  # ───────────────────────────────────────────────
+  # ───────────────────────────────────────────────
+  # 8. DEPLOY TO PRODUCTION
+  #
+  #     Runs after the build and infrastructure steps.
+  #     environment: production is enabled so GitHub
+  #     Environment protection rules fire here (required
+  #     reviewers, deployment branch policy, etc.).
+  #     Configure at: Settings → Environments → production.
+  # ───────────────────────────────────────────────
   deploy_production:
     name: Deploy to ACA (production)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [deploy_staging, deploy-bootstrap]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # environment: production
+    needs: [push, deploy-infra, deploy-bootstrap]
+    if: github.event_name != 'pull_request'
+    environment:
+      name: production
     strategy:
       fail-fast: false
       matrix:
@@ -579,11 +479,10 @@ jobs:
             is_official: true
     env:
       ACA_RESOURCE_GROUP: ${{ vars.ACA_RESOURCE_GROUP_PRODUCTION }}
-      ACA_ENVIRONMENT: ${{ vars.ACA_ENVIRONMENT_PRODUCTION }}
       CPU: ${{ vars.ACA_CPU || '0.5' }}
       MEMORY: ${{ vars.ACA_MEMORY || '1Gi' }}
-      MIN_REPLICAS: ${{ vars.ACA_MIN_REPLICAS || '2' }}
-      MAX_REPLICAS: ${{ vars.ACA_MAX_REPLICAS || '5' }}
+      MIN_REPLICAS: ${{ vars.ACA_MIN_REPLICAS_PRODUCTION || '2' }}
+      MAX_REPLICAS: ${{ vars.ACA_MAX_REPLICAS_PRODUCTION || '5' }}
       DB_HOST: ${{ vars.DB_HOST }}
       DB_PORT: ${{ vars.DB_PORT }}
       DB_USER: ${{ vars.DB_USER }}
@@ -614,17 +513,17 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ matrix.app_name_var }}" in
-            ACA_APP_IAM_PRODUCTION) APP_NAME="${{ vars.ACA_APP_IAM_PRODUCTION }}" ;;
-            ACA_APP_HARDWARE_PRODUCTION) APP_NAME="${{ vars.ACA_APP_HARDWARE_PRODUCTION }}" ;;
-            ACA_APP_ANALYTICS_PRODUCTION) APP_NAME="${{ vars.ACA_APP_ANALYTICS_PRODUCTION }}" ;;
-            ACA_APP_WEATHER_PRODUCTION) APP_NAME="${{ vars.ACA_APP_WEATHER_PRODUCTION }}" ;;
+            ACA_APP_IAM_PRODUCTION)          APP_NAME="${{ vars.ACA_APP_IAM_PRODUCTION }}" ;;
+            ACA_APP_HARDWARE_PRODUCTION)     APP_NAME="${{ vars.ACA_APP_HARDWARE_PRODUCTION }}" ;;
+            ACA_APP_ANALYTICS_PRODUCTION)    APP_NAME="${{ vars.ACA_APP_ANALYTICS_PRODUCTION }}" ;;
+            ACA_APP_WEATHER_PRODUCTION)      APP_NAME="${{ vars.ACA_APP_WEATHER_PRODUCTION }}" ;;
             ACA_APP_NOTIFICATION_PRODUCTION) APP_NAME="${{ vars.ACA_APP_NOTIFICATION_PRODUCTION }}" ;;
-            ACA_APP_WEB_PRODUCTION) APP_NAME="${{ vars.ACA_APP_WEB_PRODUCTION }}" ;;
-            ACA_APP_KONG_PRODUCTION) APP_NAME="${{ vars.ACA_APP_KONG_PRODUCTION }}" ;;
-            *) echo "Unsupported app name mapping: ${{ matrix.app_name_var }}" && exit 1 ;;
+            ACA_APP_WEB_PRODUCTION)          APP_NAME="${{ vars.ACA_APP_WEB_PRODUCTION }}" ;;
+            ACA_APP_KONG_PRODUCTION)         APP_NAME="${{ vars.ACA_APP_KONG_PRODUCTION }}" ;;
+            *) echo "Unknown app_name_var: ${{ matrix.app_name_var }}" && exit 1 ;;
           esac
           if [ -z "${APP_NAME}" ]; then
-            echo "GitHub variable for ${{ matrix.app_name_var }} is missing."
+            echo "ERROR: GitHub variable '${{ matrix.app_name_var }}' is empty or not set."
             exit 1
           fi
           echo "name=${APP_NAME}" >> "${GITHUB_OUTPUT}"
@@ -634,26 +533,33 @@ jobs:
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          imageToDeploy: ${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', needs.deploy-bootstrap.outputs.acr_login_server, matrix.image_name, github.sha) }}
+          imageToDeploy: >-
+            ${{
+              matrix.service == 'kong'
+                && 'kong:3.4'
+                || format('{0}/{1}:{2}', needs.deploy-bootstrap.outputs.acr_login_server, matrix.image_name, github.sha)
+            }}
 
       - name: Apply secrets, env vars, and scaling policy
+        if: matrix.service != 'kong'
         shell: bash
         run: |
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
-          IMAGE="${{ matrix.image_name == 'kong' && 'kong:3.4' || format('{0}/{1}:{2}', needs.deploy-bootstrap.outputs.acr_login_server, matrix.image_name, github.sha) }}"
+          IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           az containerapp secret set \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
+            --only-show-errors \
             --secrets \
               db-password="${{ secrets.DB_PASSWORD }}" \
               jwt-secret="${{ secrets.JWT_SECRET }}" \
               mqtt-password="${{ secrets.MQTT_PASSWORD }}" \
               owm-api-key="${{ secrets.OWM_API_KEY }}" \
               smtp-password="${{ secrets.SMTP_PASSWORD }}" \
-              smtp-username="${{ secrets.SMTP_USER || 'jsamuditha@gmail.com' }}" \
-              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}"
+              smtp-username="${{ secrets.SMTP_USER }}" \
+              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
 
           az containerapp update \
             --name "${APP_NAME}" \
@@ -665,6 +571,7 @@ jobs:
             --memory "${MEMORY}" \
             --min-replicas "${MIN_REPLICAS}" \
             --max-replicas "${MAX_REPLICAS}" \
+            --only-show-errors \
             --set-env-vars \
               PORT="${{ matrix.port }}" \
               DB_HOST="${DB_HOST}" \
@@ -687,3 +594,19 @@ jobs:
               SMTP_PASSWORD=secretref:smtp-password \
               SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection
+
+      - name: Apply Kong scaling policy
+        if: matrix.service == 'kong'
+        shell: bash
+        run: |
+          set -euo pipefail
+          az containerapp update \
+            --name "${{ steps.app.outputs.name }}" \
+            --resource-group "${ACA_RESOURCE_GROUP}" \
+            --target-port "${{ matrix.port }}" \
+            --ingress external \
+            --cpu "${CPU}" \
+            --memory "${MEMORY}" \
+            --min-replicas "${MIN_REPLICAS}" \
+            --max-replicas "${MAX_REPLICAS}" \
+            --only-show-errors
