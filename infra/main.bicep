@@ -79,7 +79,7 @@ var secretValueMap = {
   'smtp-password': hasSmtpPassword ? smtpPassword : 'temp'
 }
 var serviceBusName = take('${namePrefix}-${environmentSuffix}-sb-${uniqueSuffix}', 50)
-var keyVaultName = take('${namePrefix}-${environmentSuffix}-kv-${uniqueSuffix}', 24)
+var keyVaultName = take('kv${uniqueSuffix}', 24)
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'

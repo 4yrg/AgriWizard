@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "7680763032279192585"
+      "templateHash": "15482760862992896353"
     }
   },
   "parameters": {
@@ -132,7 +132,7 @@
       }
     ],
     "serviceBusName": "[take(format('{0}-{1}-sb-{2}', parameters('namePrefix'), parameters('environmentSuffix'), variables('uniqueSuffix')), 50)]",
-    "keyVaultName": "[take(format('{0}-{1}-kv-{2}', parameters('namePrefix'), parameters('environmentSuffix'), variables('uniqueSuffix')), 24)]",
+    "keyVaultName": "[take(format('kv{0}', variables('uniqueSuffix')), 24)]",
     "managedEnvironmentName": "[format('{0}-{1}-aca-env', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "logAnalyticsWorkspaceName": "[format('{0}-{1}-law', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "identityName": "[format('{0}-{1}-aca-mi', parameters('namePrefix'), parameters('environmentSuffix'))]",
@@ -705,7 +705,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17241977810134111101"
+              "templateHash": "13534090863251462320"
             }
           },
           "parameters": {
@@ -767,7 +767,7 @@
           "resources": [
             {
               "type": "Microsoft.KeyVault/vaults",
-              "apiVersion": "2023-02-01",
+              "apiVersion": "2023-07-01",
               "name": "[parameters('keyVaultName')]",
               "location": "[parameters('location')]",
               "properties": {
@@ -778,8 +778,8 @@
                 "tenantId": "[parameters('tenantId')]",
                 "enableRbacAuthorization": true,
                 "enableSoftDelete": true,
-                "softDeleteRetentionInDays": 90,
-                "enablePurgeProtection": false,
+                "softDeleteRetentionInDays": 7,
+                "publicNetworkAccess": "Enabled",
                 "networkAcls": {
                   "defaultAction": "Allow",
                   "bypass": "AzureServices"
@@ -789,11 +789,10 @@
             {
               "condition": "[not(empty(parameters('dbPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2023-02-01",
+              "apiVersion": "2023-07-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'db-password')]",
               "properties": {
-                "value": "[parameters('dbPassword')]",
-                "contentType": "string"
+                "value": "[parameters('dbPassword')]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
@@ -802,11 +801,10 @@
             {
               "condition": "[not(empty(parameters('jwtSecretParam')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2023-02-01",
+              "apiVersion": "2023-07-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'jwt-secret')]",
               "properties": {
-                "value": "[parameters('jwtSecretParam')]",
-                "contentType": "string"
+                "value": "[parameters('jwtSecretParam')]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
@@ -815,11 +813,10 @@
             {
               "condition": "[not(empty(parameters('mqttPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2023-02-01",
+              "apiVersion": "2023-07-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'mqtt-password')]",
               "properties": {
-                "value": "[parameters('mqttPassword')]",
-                "contentType": "string"
+                "value": "[parameters('mqttPassword')]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
@@ -828,11 +825,10 @@
             {
               "condition": "[not(empty(parameters('smtpPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2023-02-01",
+              "apiVersion": "2023-07-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'smtp-password')]",
               "properties": {
-                "value": "[parameters('smtpPassword')]",
-                "contentType": "string"
+                "value": "[parameters('smtpPassword')]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
@@ -841,11 +837,10 @@
             {
               "condition": "[not(empty(parameters('serviceBusConnection')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
-              "apiVersion": "2023-02-01",
-              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'servicebus-connection')]",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'sb-connection')]",
               "properties": {
-                "value": "[parameters('serviceBusConnection')]",
-                "contentType": "string"
+                "value": "[parameters('serviceBusConnection')]"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
@@ -863,7 +858,7 @@
             },
             "keyVaultUri": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-02-01').vaultUri]"
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri]"
             }
           }
         }

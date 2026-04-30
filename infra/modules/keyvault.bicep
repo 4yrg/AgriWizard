@@ -29,7 +29,7 @@ param smtpPassword string = ''
 @secure()
 param serviceBusConnection string = ''
 
-resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
   properties: {
@@ -40,8 +40,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
     tenantId: tenantId
     enableRbacAuthorization: true
     enableSoftDelete: true
-    softDeleteRetentionInDays: 90
-    enablePurgeProtection: false
+    softDeleteRetentionInDays: 7
+    publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Allow'
       bypass: 'AzureServices'
@@ -49,48 +49,43 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   }
 }
 
-resource dbPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(dbPassword)) {
+resource dbPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(dbPassword)) {
   parent: keyVault
   name: 'db-password'
   properties: {
     value: dbPassword
-    contentType: 'string'
   }
 }
 
-resource jwtSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(jwtSecretParam)) {
+resource jwtSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(jwtSecretParam)) {
   parent: keyVault
   name: 'jwt-secret'
   properties: {
     value: jwtSecretParam
-    contentType: 'string'
   }
 }
 
-resource mqttPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(mqttPassword)) {
+resource mqttPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(mqttPassword)) {
   parent: keyVault
   name: 'mqtt-password'
   properties: {
     value: mqttPassword
-    contentType: 'string'
   }
 }
 
-resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(smtpPassword)) {
+resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(smtpPassword)) {
   parent: keyVault
   name: 'smtp-password'
   properties: {
     value: smtpPassword
-    contentType: 'string'
   }
 }
 
-resource serviceBusConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(serviceBusConnection)) {
+resource serviceBusConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(serviceBusConnection)) {
   parent: keyVault
-  name: 'servicebus-connection'
+  name: 'sb-connection'
   properties: {
     value: serviceBusConnection
-    contentType: 'string'
   }
 }
 
