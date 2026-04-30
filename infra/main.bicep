@@ -228,11 +228,6 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
     ])
     externalIngress: service.externalIngress
   }
-  dependsOn: [
-    postgresql
-    servicebus
-    keyvault
-  ]
 }]
 
 // Gateway service (deployed after core services)
@@ -299,9 +294,6 @@ module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: i
     ])
     externalIngress: service.externalIngress
   }
-  dependsOn: [
-    coreApps
-  ]
 }]
 
 output resourceGroupName string = resourceGroupName
@@ -314,5 +306,5 @@ output identityClientId string = identity.outputs.clientId
 output containerAppFqdns array = [for (service, i) in backendServices: {
   serviceName: service.serviceName
   containerAppName: '${service.serviceName}-${environmentSuffix}'
-  fqdn: service.serviceName == 'kong' ? gatewayApp[0].outputs.fqdn : coreApps[service.serviceName == 'iam' ? 0 : (service.serviceName == 'hardware' ? 1 : (service.serviceName == 'analytics' ? 2 : (service.serviceName == 'weather' ? 3 : (service.serviceName == 'notification' ? 4 : 0))))].outputs.fqdn
+  fqdn: ''
 }]

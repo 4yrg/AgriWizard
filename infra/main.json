@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "8952903604277315873"
+      "templateHash": "2782232092832664029"
     }
   },
   "parameters": {
@@ -238,7 +238,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "7638649117243495397"
+              "templateHash": "39721687351502982"
             }
           },
           "parameters": {
@@ -292,7 +292,7 @@
           "resources": [
             {
               "type": "Microsoft.DBforPostgreSQL/flexibleServers",
-              "apiVersion": "2023-03-01-preview",
+              "apiVersion": "2024-04-01",
               "name": "[parameters('serverName')]",
               "location": "[parameters('location')]",
               "sku": {
@@ -317,7 +317,7 @@
             },
             {
               "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
-              "apiVersion": "2023-03-01-preview",
+              "apiVersion": "2024-04-01",
               "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllAzureInternal')]",
               "properties": {
                 "startIpAddress": "0.0.0.0",
@@ -335,7 +335,7 @@
             },
             "fullyQualifiedDomainName": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2023-03-01-preview').fullyQualifiedDomainName]"
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2024-04-01').fullyQualifiedDomainName]"
             }
           }
         }
@@ -440,7 +440,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5788726563354707399"
+              "templateHash": "17321296877100713151"
             }
           },
           "parameters": {
@@ -491,7 +491,7 @@
               "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), parameters('pullPrincipalId'), 'AcrPull')]",
               "properties": {
                 "principalId": "[parameters('pullPrincipalId')]",
-                "principalType": "ServicePrincipal",
+                "principalType": "ManagedIdentity",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]"
               },
               "dependsOn": [
@@ -1273,7 +1273,6 @@
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aca-environment')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'acr')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity')]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'keyvault')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus')]"
       ]
@@ -1582,7 +1581,6 @@
       "dependsOn": [
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aca-environment')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'acr')]",
-        "coreApps",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus')]"
@@ -1625,7 +1623,7 @@
         "input": {
           "serviceName": "[parameters('backendServices')[copyIndex()].serviceName]",
           "containerAppName": "[format('{0}-{1}', parameters('backendServices')[copyIndex()].serviceName, parameters('environmentSuffix'))]",
-          "fqdn": "[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'kong'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('deploy-gateway-{0}', parameters('backendServices')[0].serviceName)), '2025-04-01').outputs.fqdn.value, reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', format('deploy-core-{0}', parameters('backendServices')[if(equals(parameters('backendServices')[copyIndex()].serviceName, 'iam'), 0, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'hardware'), 1, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'analytics'), 2, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'weather'), 3, if(equals(parameters('backendServices')[copyIndex()].serviceName, 'notification'), 4, 0)))))].serviceName)), '2025-04-01').outputs.fqdn.value)]"
+          "fqdn": ""
         }
       }
     }

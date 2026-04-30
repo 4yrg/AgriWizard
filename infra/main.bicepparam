@@ -181,9 +181,9 @@ param backendServices = [
   }
 ]
 
-param dbPassword = readEnvironmentVariable('DB_PASSWORD', '')
-param jwtSecret = readEnvironmentVariable('JWT_SECRET', '')
-param mqttPassword = readEnvironmentVariable('MQTT_PASSWORD', '')
-param owmApiKey = readEnvironmentVariable('OWM_API_KEY', '')
-param smtpPassword = readEnvironmentVariable('SMTP_PASSWORD', '')
-param serviceBusConnection = readEnvironmentVariable('SERVICE_BUS_CONNECTION', '')
+param dbPassword string = ''
+param jwtSecret string = ''
+param mqttPassword string = ''
+param owmApiKey string = ''
+param smtpPassword string = ''
+param serviceBusConnection string = ''

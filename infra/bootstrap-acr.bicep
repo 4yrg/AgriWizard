@@ -57,4 +57,4 @@ module servicebus './modules/servicebus.bicep' = {
 output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
 output acrLoginServer string = acr.outputs.acrLoginServer
-output serviceBusConnectionString string = servicebus.outputs.connectionString
+output serviceBusConnection string = servicebus.outputs.connectionString

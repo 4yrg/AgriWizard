@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           az deployment sub what-if \
             --name "bootstrap-whatif-${GITHUB_RUN_ID}" \
-            --location "${{ vars.AZURE_REGION }}" \
+            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
             --template-file infra/main.bicep \
             --parameters infra/main.bicepparam \
             -o json > bootstrap-whatif.json
@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           az deployment sub create \
             --name "bootstrap-deploy-${GITHUB_RUN_ID}" \
-            --location "${{ vars.AZURE_REGION }}" \
+            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
             --template-file infra/main.bicep \
             --parameters infra/main.bicepparam \
             -o json > bootstrap-deploy.json
