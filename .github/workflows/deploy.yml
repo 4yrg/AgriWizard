@@ -562,6 +562,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Fallback to Bicep naming convention: agriwizard-<service>-prod
+          FALLBACK_NAME="agriwizard-${{ matrix.service }}-prod"
+          
           case "${{ matrix.app_name_var }}" in
             ACA_APP_IAM_PRODUCTION)          APP_NAME="${{ vars.ACA_APP_IAM_PRODUCTION }}" ;;
             ACA_APP_HARDWARE_PRODUCTION)     APP_NAME="${{ vars.ACA_APP_HARDWARE_PRODUCTION }}" ;;
@@ -572,10 +575,12 @@ jobs:
             ACA_APP_KONG_PRODUCTION)         APP_NAME="${{ vars.ACA_APP_KONG_PRODUCTION }}" ;;
             *) echo "Unknown app_name_var: ${{ matrix.app_name_var }}" && exit 1 ;;
           esac
+          
           if [ -z "${APP_NAME}" ]; then
-            echo "ERROR: GitHub variable '${{ matrix.app_name_var }}' is empty or not set."
-            exit 1
+            echo "GitHub variable '${{ matrix.app_name_var }}' is empty. Falling back to: ${FALLBACK_NAME}"
+            APP_NAME="${FALLBACK_NAME}"
           fi
+          
           echo "name=${APP_NAME}" >> "${GITHUB_OUTPUT}"
 
       - name: Deploy image to Container App
