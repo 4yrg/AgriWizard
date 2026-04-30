@@ -275,7 +275,13 @@ jobs:
             --name "agriwizard-prod-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
             --template-file infra/main.bicep \
-            --parameters @infra/main.bicepparam \
+            --parameters @infra/parameters.json \
+              dbPassword="${{ secrets.DB_PASSWORD }}" \
+              jwtSecret="${{ secrets.JWT_SECRET }}" \
+              mqttPassword="${{ secrets.MQTT_PASSWORD }}" \
+              owmApiKey="${{ secrets.OWM_API_KEY }}" \
+              smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
+              serviceBusConnection="${{ secrets.SERVICE_BUS_CONNECTION }}" \
             -o json > deployment.json
           echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
           jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
