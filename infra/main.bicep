@@ -74,7 +74,7 @@ var secretValueMap = {
   'jwt-secret': hasJwtSecret ? jwtSecret : 'temp'
   'mqtt-password': hasMqttPassword ? mqttPassword : 'temp'
   'owm-api-key': hasOwmApiKey ? owmApiKey : 'temp'
-  'service-bus-connection': hasServiceBus ? serviceBusConnection : 'temp'
+  'service-bus-connection': hasServiceBus ? serviceBusConnection : servicebus.outputs.connectionString
   'smtp-password': hasSmtpPassword ? smtpPassword : 'temp'
 }
 var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'

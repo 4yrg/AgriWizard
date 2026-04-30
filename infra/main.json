@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "7263074577206436061"
+      "templateHash": "7993700780113320869"
     }
   },
   "parameters": {
@@ -129,14 +129,6 @@
         "name": "smtp-password"
       }
     ],
-    "secretValueMap": {
-      "db-password": "[if(variables('hasDbPassword'), parameters('dbPassword'), 'temp')]",
-      "jwt-secret": "[if(variables('hasJwtSecret'), parameters('jwtSecret'), 'temp')]",
-      "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), 'temp')]",
-      "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), 'temp')]",
-      "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), 'temp')]",
-      "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]"
-    },
     "serviceBusName": "[format('{0}-{1}-sb', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "keyVaultName": "[format('{0}-{1}-kv', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "managedEnvironmentName": "[format('{0}-{1}-aca-env', parameters('namePrefix'), parameters('environmentSuffix'))]",
@@ -1005,7 +997,14 @@
             "value": "[variables('appSecrets')]"
           },
           "secretValues": {
-            "value": "[variables('secretValueMap')]"
+            "value": {
+              "db-password": "[if(variables('hasDbPassword'), parameters('dbPassword'), 'temp')]",
+              "jwt-secret": "[if(variables('hasJwtSecret'), parameters('jwtSecret'), 'temp')]",
+              "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), 'temp')]",
+              "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), 'temp')]",
+              "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus'), '2025-04-01').outputs.connectionString.value)]",
+              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]"
+            }
           },
           "environmentVariables": {
             "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app')))]"
@@ -1205,7 +1204,8 @@
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aca-environment')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'acr')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity')]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql')]"
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus')]"
       ]
     }
   ],
