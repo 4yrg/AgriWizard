@@ -590,6 +590,9 @@ jobs:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
           location: ${{ env.AZURE_REGION }}
+          acrName: ${{ needs.deploy-bootstrap.outputs.acr_name }}
+          acrUsername: ${{ secrets.ACR_USERNAME }}
+          acrPassword: ${{ secrets.ACR_PASSWORD }}
           imageToDeploy: >-
             ${{
               matrix.service == 'kong'
