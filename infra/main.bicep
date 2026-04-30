@@ -48,6 +48,9 @@ param acrName string = ''
 @description('Azure tenant ID.')
 param tenantId string = ''
 
+@description('Global image tag override (e.g. github.sha).')
+param globalImageTag string = ''
+
 var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
 var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
 var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
@@ -172,7 +175,7 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
     acrLoginServer: acr.outputs.acrLoginServer
     serviceName: service.serviceName
     imageName: service.imageName
-    imageTag: service.imageTag
+    imageTag: empty(globalImageTag) ? service.imageTag : globalImageTag
     containerPort: service.containerPort
     cpu: service.cpu
     memory: service.memory

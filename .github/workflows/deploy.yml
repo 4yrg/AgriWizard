@@ -389,6 +389,7 @@ jobs:
               owmApiKey="${{ secrets.OWM_API_KEY }}" \
               smtpPassword="${{ secrets.SMTP_PASSWORD }}" \
               serviceBusConnection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}" \
+              globalImageTag="${{ github.sha }}" \
             -o json > deployment.json
           echo "Infrastructure deployment completed" >> $GITHUB_STEP_SUMMARY
           jq '.properties.outputs' deployment.json >> $GITHUB_STEP_SUMMARY
