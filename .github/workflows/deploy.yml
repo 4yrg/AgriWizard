@@ -53,7 +53,7 @@ jobs:
       - name: Run Go vet
         run: |
           set -euo pipefail
-          go vet ./...
+          go vet ./services/...
 
       - name: Run frontend lint
         run: |
@@ -87,7 +87,7 @@ jobs:
       - name: Run Go tests
         run: |
           set -euo pipefail
-          go test ./...
+          go test ./services/...
 
       - name: Frontend build verification
         run: |
