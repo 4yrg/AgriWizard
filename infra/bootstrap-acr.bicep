@@ -1,0 +1,50 @@
+targetScope = 'subscription'
+
+@description('Name prefix for all resources.')
+param namePrefix string
+
+@description('Deployment location.')
+param location string
+
+@description('Short environment suffix.')
+param environmentSuffix string = 'prod'
+
+var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
+var acrName = toLower(replace('${namePrefix}${environmentSuffix}acr', '-', ''))
+var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
+
+module rg './modules/resource-group.bicep' = {
+  name: 'resource-group-bootstrap'
+  params: {
+    location: location
+    resourceGroupName: resourceGroupName
+  }
+}
+
+module identity './modules/identity.bicep' = {
+  name: 'identity-bootstrap'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    identityName: identityName
+  }
+  dependsOn: [
+    rg
+  ]
+}
+
+module acr './modules/acr.bicep' = {
+  name: 'acr-bootstrap'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    acrName: acrName
+    sku: 'Standard'
+    pullPrincipalId: identity.outputs.principalId
+  }
+  dependsOn: [
+    rg
+  ]
+}
+
+output resourceGroupName string = resourceGroupName
+output acrName string = acr.outputs.acrNameOut
+output acrLoginServer string = acr.outputs.acrLoginServer
