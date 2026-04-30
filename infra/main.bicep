@@ -43,7 +43,7 @@ param serviceBusConnection string
 param dbUser string = 'agriwizard_admin'
 
 @description('The name of the ACR.')
-param acrName string
+param acrName string = ''
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'

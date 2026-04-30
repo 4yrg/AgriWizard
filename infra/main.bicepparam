@@ -1,7 +1,7 @@
 using './main.bicep'
 
 param namePrefix = 'agriwizard'
-param location = 'southeastasia'
+param location = 'centralindia'
 param environmentSuffix = 'prod'
 param acrSku = 'Standard'
 
@@ -25,10 +25,6 @@ param backendServices = [
         name: 'JWT_TTL_HOURS'
         value: '24'
       }
-      {
-        name: 'JWT_ISSUER'
-        value: 'agriwizard-iam'
-      }
     ]
   }
   {
@@ -47,16 +43,8 @@ param backendServices = [
         value: '8087'
       }
       {
-        name: 'DB_HOST'
-        value: 'postgres'
-      }
-      {
         name: 'DB_PORT'
         value: '5432'
-      }
-      {
-        name: 'DB_USER'
-        value: 'agriwizard'
       }
       {
         name: 'DB_NAME'
@@ -88,16 +76,8 @@ param backendServices = [
         value: '8088'
       }
       {
-        name: 'DB_HOST'
-        value: 'postgres'
-      }
-      {
         name: 'DB_PORT'
         value: '5432'
-      }
-      {
-        name: 'DB_USER'
-        value: 'agriwizard'
       }
       {
         name: 'DB_NAME'
@@ -170,16 +150,8 @@ param backendServices = [
         value: '8091'
       }
       {
-        name: 'DB_HOST'
-        value: 'postgres'
-      }
-      {
         name: 'DB_PORT'
         value: '5432'
-      }
-      {
-        name: 'DB_USER'
-        value: 'agriwizard'
       }
       {
         name: 'DB_NAME'
