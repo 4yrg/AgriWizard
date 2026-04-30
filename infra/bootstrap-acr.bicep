@@ -10,7 +10,7 @@ param location string = deployment().location
 param environmentSuffix string = 'prod'
 
 @description('The name of the ACR.')
-param acrName string
+param acrName string = ''
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
