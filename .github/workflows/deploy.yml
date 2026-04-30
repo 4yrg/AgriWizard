@@ -528,7 +528,8 @@ jobs:
             port: "8000"
             is_official: true
     env:
-      ACA_RESOURCE_GROUP: ${{ vars.ACA_RESOURCE_GROUP_PRODUCTION }}
+      ACA_RESOURCE_GROUP: ${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg' }}
+      AZURE_REGION: ${{ vars.AZURE_REGION || 'centralindia' }}
       CPU: ${{ vars.ACA_CPU || '0.5' }}
       MEMORY: ${{ vars.ACA_MEMORY || '1Gi' }}
       MIN_REPLICAS: ${{ vars.ACA_MIN_REPLICAS_PRODUCTION || '2' }}
@@ -586,9 +587,9 @@ jobs:
       - name: Deploy image to Container App
         uses: azure/container-apps-deploy-action@v1
         with:
-          resourceGroup: ${{ env.ACA_RESOURCE_GROUP || 'agriwizard-prod-rg' }}
+          resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
           containerAppName: ${{ steps.app.outputs.name }}
-          location: ${{ vars.AZURE_REGION || 'centralindia' }}
+          location: ${{ env.AZURE_REGION }}
           imageToDeploy: >-
             ${{
               matrix.service == 'kong'
