@@ -265,31 +265,37 @@ jobs:
             "Microsoft.DBforPostgreSQL"
           )
           
-          echo "=== Initiating Registration ==="
+          echo "=== Initiating Parallel Registration ==="
           for provider in "${PROVIDERS[@]}"; do
-            echo "Registering $provider..."
-            az provider register --namespace "$provider" --wait || echo "Registration initiated for $provider"
+            echo "Requesting registration for $provider..."
+            az provider register --namespace "$provider"
           done
 
-          echo "=== Validating Registration State ==="
-          for provider in "${PROVIDERS[@]}"; do
-            STATE=""
-            COUNT=0
-            MAX_RETRIES=30
-            while [[ "$STATE" != "Registered" && $COUNT -lt $MAX_RETRIES ]]; do
-              STATE=$(az provider show --namespace "$provider" --query registrationState -o tsv)
-              echo "Provider $provider is $STATE..."
+          echo "=== Validating Registration State (Polling) ==="
+          MAX_RETRIES=60
+          COUNT=0
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            ALL_REGISTERED=true
+            for provider in "${PROVIDERS[@]}"; do
+              STATE=$(az provider show --namespace "$provider" --query registrationState -o tsv || echo "Unknown")
               if [[ "$STATE" != "Registered" ]]; then
-                sleep 10
-                ((COUNT++))
+                echo "Provider $provider is still $STATE..."
+                ALL_REGISTERED=false
               fi
             done
-            if [[ "$STATE" != "Registered" ]]; then
-              echo "Error: Provider $provider failed to register in time."
-              exit 1
+            
+            if [ "$ALL_REGISTERED" = true ]; then
+              echo "All providers are fully registered."
+              exit 0
             fi
+            
+            echo "Waiting for providers... (Attempt $((COUNT+1))/$MAX_RETRIES)"
+            sleep 15
+            ((COUNT++))
           done
-          echo "All providers are fully registered."
+
+          echo "Error: Some providers failed to register within the timeout period."
+          exit 1
 
   deploy-infra:
     name: Deploy Infrastructure
