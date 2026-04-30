@@ -108,6 +108,21 @@
           ]
         },
         {
+          "serviceName": "web",
+          "imageName": "agriwizard-web",
+          "imageTag": "latest",
+          "containerPort": 3000,
+          "cpu": "0.5",
+          "memory": "1Gi",
+          "minReplicas": 1,
+          "maxReplicas": 3,
+          "externalIngress": true,
+          "environmentVariables": [
+            { "name": "PORT", "value": "3000" },
+            { "name": "NEXT_PUBLIC_API_URL", "value": "https://agriwizard-kong-prod.centralindia.azurecontainerapps.io/api" }
+          ]
+        },
+        {
           "serviceName": "kong",
           "imageName": "kong",
           "imageTag": "3.4",

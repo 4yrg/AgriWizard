@@ -562,8 +562,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Fallback to Bicep naming convention: agriwizard-<service>-prod
-          FALLBACK_NAME="agriwizard-${{ matrix.service }}-prod"
+          # Fallback to Bicep naming convention: <service>-prod
+          FALLBACK_NAME="${{ matrix.service }}-prod"
           
           case "${{ matrix.app_name_var }}" in
             ACA_APP_IAM_PRODUCTION)          APP_NAME="${{ vars.ACA_APP_IAM_PRODUCTION }}" ;;
