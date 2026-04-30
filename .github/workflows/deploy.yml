@@ -665,7 +665,7 @@ jobs:
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --target-port "${{ matrix.port }}" \
-            --external \
+            --type external \
             --only-show-errors \
               SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection
@@ -688,5 +688,5 @@ jobs:
             --name "${{ steps.app.outputs.name }}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --target-port "${{ matrix.port }}" \
-            --external \
+            --type external \
             --only-show-errors
