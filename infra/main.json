@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10889136330586338676"
+      "templateHash": "4540865731720534278"
     }
   },
   "parameters": {
@@ -533,7 +533,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "2030962403353450594"
+              "templateHash": "15559427669832909814"
             }
           },
           "parameters": {
@@ -554,7 +554,7 @@
           "resources": [
             {
               "type": "Microsoft.ServiceBus/namespaces",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[parameters('serviceBusName')]",
               "location": "[parameters('location')]",
               "sku": {
@@ -562,17 +562,18 @@
                 "tier": "Standard"
               },
               "properties": {
-                "namespaceType": "Messaging"
+                "publicNetworkAccess": "Enabled",
+                "minimumTlsVersion": "1.2"
               }
             },
             {
               "type": "Microsoft.ServiceBus/namespaces/topics",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[format('{0}/{1}', parameters('serviceBusName'), 'telemetry')]",
               "properties": {
                 "maxSizeInMegabytes": 1024,
                 "defaultMessageTimeToLive": "P1D",
-                "maxMessageSizeInKilograms": 256
+                "maxMessageSizeInKilobytes": 256
               },
               "dependsOn": [
                 "[resourceId('Microsoft.ServiceBus/namespaces', parameters('serviceBusName'))]"
@@ -580,7 +581,7 @@
             },
             {
               "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[format('{0}/{1}/{2}', parameters('serviceBusName'), 'telemetry', 'analytics-service')]",
               "properties": {
                 "lockDuration": "PT30S",
@@ -595,12 +596,12 @@
             },
             {
               "type": "Microsoft.ServiceBus/namespaces/topics",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[format('{0}/{1}', parameters('serviceBusName'), 'notifications')]",
               "properties": {
                 "maxSizeInMegabytes": 1024,
                 "defaultMessageTimeToLive": "P1D",
-                "maxMessageSizeInKilograms": 256
+                "maxMessageSizeInKilobytes": 256
               },
               "dependsOn": [
                 "[resourceId('Microsoft.ServiceBus/namespaces', parameters('serviceBusName'))]"
@@ -608,7 +609,7 @@
             },
             {
               "type": "Microsoft.ServiceBus/namespaces/topics/subscriptions",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[format('{0}/{1}/{2}', parameters('serviceBusName'), 'notifications', 'notification-service')]",
               "properties": {
                 "lockDuration": "PT30S",
@@ -623,7 +624,7 @@
             },
             {
               "type": "Microsoft.ServiceBus/namespaces/AuthorizationRules",
-              "apiVersion": "2024-01-01",
+              "apiVersion": "2021-11-01",
               "name": "[format('{0}/{1}', parameters('serviceBusName'), 'RootManageSharedAccessKey')]",
               "properties": {
                 "rights": [
@@ -648,7 +649,7 @@
             },
             "connectionString": {
               "type": "string",
-              "value": "[format('Endpoint=sb://{0}.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={1}', parameters('serviceBusName'), listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', parameters('serviceBusName'), 'RootManageSharedAccessKey'), '2024-01-01').primaryKey)]"
+              "value": "[format('Endpoint=sb://{0}.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={1}', parameters('serviceBusName'), listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', parameters('serviceBusName'), 'RootManageSharedAccessKey'), '2021-11-01').primaryKey)]"
             },
             "telemetryTopicName": {
               "type": "string",
