@@ -164,6 +164,7 @@ jobs:
           tags: ${{ matrix.image_name }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          provenance: false
 
   push:
     name: Push Docker images to ACR
@@ -231,6 +232,7 @@ jobs:
             ${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          provenance: false
   deploy-bootstrap:
     name: Bootstrap Resources
     runs-on: ubuntu-latest
