@@ -52,6 +52,9 @@ var computedAcrName = empty(acrName) ? '${namePrefix}acr' : acrName
 var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
+
+var hasSmtpPassword = !empty(smtpPassword)
+var hasServiceBus = !empty(serviceBusConnection)
 var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'
 var keyVaultName = '${namePrefix}-${environmentSuffix}-kv'
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
@@ -155,32 +158,16 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
     minReplicas: service.minReplicas
     maxReplicas: service.maxReplicas
     secrets: [
-      {
-        name: 'db-password'
-      }
-      {
-        name: 'jwt-secret'
-      }
-      {
-        name: 'mqtt-password'
-      }
-      {
-        name: 'owm-api-key'
-      }
-      {
-        name: 'smtp-password'
-      }
-      {
-        name: 'service-bus-connection'
-      }
+      { name: 'db-password' }
+      { name: 'jwt-secret' }
+      { name: 'mqtt-password' }
+      { name: 'owm-api-key' }
     ]
     secretValues: {
       'db-password': dbPassword
       'jwt-secret': jwtSecret
       'mqtt-password': mqttPassword
       'owm-api-key': owmApiKey
-      'smtp-password': smtpPassword
-      'service-bus-connection': serviceBusConnection
     }
     environmentVariables: concat(service.environmentVariables, [
       {
@@ -211,14 +198,8 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
         name: 'OWM_API_KEY'
         secretRef: 'owm-api-key'
       }
-      {
-        name: 'SMTP_PASSWORD'
-        secretRef: 'smtp-password'
-      }
-      {
-        name: 'SERVICE_BUS_CONNECTION'
-        secretRef: 'service-bus-connection'
-      }
+      hasSmtpPassword ? { name: 'SMTP_PASSWORD', value: smtpPassword } : {}
+      hasServiceBus ? { name: 'SERVICE_BUS_CONNECTION', value: serviceBusConnection } : {}
     ])
     externalIngress: service.externalIngress
   }

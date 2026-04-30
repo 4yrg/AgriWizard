@@ -11,23 +11,23 @@ param tenantId string
 
 @description('Database password.')
 @secure()
-param dbPassword string
+param dbPassword string = ''
 
 @description('JWT secret.')
 @secure()
-param jwtSecretParam string
+param jwtSecretParam string = ''
 
 @description('MQTT password.')
 @secure()
-param mqttPassword string
+param mqttPassword string = ''
 
 @description('SMTP password.')
 @secure()
-param smtpPassword string
+param smtpPassword string = ''
 
 @description('Service Bus connection string.')
 @secure()
-param serviceBusConnection string
+param serviceBusConnection string = ''
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: keyVaultName
@@ -49,7 +49,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   }
 }
 
-resource dbPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource dbPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(dbPassword)) {
   parent: keyVault
   name: 'db-password'
   properties: {
@@ -58,7 +58,7 @@ resource dbPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
   }
 }
 
-resource jwtSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource jwtSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(jwtSecretParam)) {
   parent: keyVault
   name: 'jwt-secret'
   properties: {
@@ -67,7 +67,7 @@ resource jwtSecretResource 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
   }
 }
 
-resource mqttPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource mqttPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(mqttPassword)) {
   parent: keyVault
   name: 'mqtt-password'
   properties: {
@@ -76,7 +76,7 @@ resource mqttPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
   }
 }
 
-resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(smtpPassword)) {
   parent: keyVault
   name: 'smtp-password'
   properties: {
@@ -85,7 +85,7 @@ resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
   }
 }
 
-resource serviceBusConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+resource serviceBusConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(serviceBusConnection)) {
   parent: keyVault
   name: 'servicebus-connection'
   properties: {

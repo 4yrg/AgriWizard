@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "5177628600609538545"
+      "templateHash": "4187410153727342277"
     }
   },
   "parameters": {
@@ -103,6 +103,12 @@
     "computedAcrName": "[if(empty(parameters('acrName')), format('{0}acr', parameters('namePrefix')), parameters('acrName'))]",
     "computedTenantId": "[if(empty(parameters('tenantId')), subscription().tenantId, parameters('tenantId'))]",
     "resourceGroupName": "[format('{0}-{1}-rg', parameters('namePrefix'), parameters('environmentSuffix'))]",
+    "hasDbPassword": "[not(empty(parameters('dbPassword')))]",
+    "hasJwtSecret": "[not(empty(parameters('jwtSecret')))]",
+    "hasMqttPassword": "[not(empty(parameters('mqttPassword')))]",
+    "hasOwmApiKey": "[not(empty(parameters('owmApiKey')))]",
+    "hasSmtpPassword": "[not(empty(parameters('smtpPassword')))]",
+    "hasServiceBus": "[not(empty(parameters('serviceBusConnection')))]",
     "serviceBusName": "[format('{0}-{1}-sb', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "keyVaultName": "[format('{0}-{1}-kv', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "managedEnvironmentName": "[format('{0}-{1}-aca-env', parameters('namePrefix'), parameters('environmentSuffix'))]",
@@ -663,7 +669,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "10232262621859827000"
+              "templateHash": "8202710249952449871"
             }
           },
           "parameters": {
@@ -687,30 +693,35 @@
             },
             "dbPassword": {
               "type": "securestring",
+              "defaultValue": "",
               "metadata": {
                 "description": "Database password."
               }
             },
             "jwtSecretParam": {
               "type": "securestring",
+              "defaultValue": "",
               "metadata": {
                 "description": "JWT secret."
               }
             },
             "mqttPassword": {
               "type": "securestring",
+              "defaultValue": "",
               "metadata": {
                 "description": "MQTT password."
               }
             },
             "smtpPassword": {
               "type": "securestring",
+              "defaultValue": "",
               "metadata": {
                 "description": "SMTP password."
               }
             },
             "serviceBusConnection": {
               "type": "securestring",
+              "defaultValue": "",
               "metadata": {
                 "description": "Service Bus connection string."
               }
@@ -739,6 +750,7 @@
               }
             },
             {
+              "condition": "[not(empty(parameters('dbPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-02-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'db-password')]",
@@ -751,6 +763,7 @@
               ]
             },
             {
+              "condition": "[not(empty(parameters('jwtSecretParam')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-02-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'jwt-secret')]",
@@ -763,6 +776,7 @@
               ]
             },
             {
+              "condition": "[not(empty(parameters('mqttPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-02-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'mqtt-password')]",
@@ -775,6 +789,7 @@
               ]
             },
             {
+              "condition": "[not(empty(parameters('smtpPassword')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-02-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'smtp-password')]",
@@ -787,6 +802,7 @@
               ]
             },
             {
+              "condition": "[not(empty(parameters('serviceBusConnection')))]",
               "type": "Microsoft.KeyVault/vaults/secrets",
               "apiVersion": "2023-02-01",
               "name": "[format('{0}/{1}', parameters('keyVaultName'), 'servicebus-connection')]",
@@ -970,12 +986,6 @@
               },
               {
                 "name": "owm-api-key"
-              },
-              {
-                "name": "smtp-password"
-              },
-              {
-                "name": "service-bus-connection"
               }
             ]
           },
@@ -984,13 +994,11 @@
               "db-password": "[parameters('dbPassword')]",
               "jwt-secret": "[parameters('jwtSecret')]",
               "mqtt-password": "[parameters('mqttPassword')]",
-              "owm-api-key": "[parameters('owmApiKey')]",
-              "smtp-password": "[parameters('smtpPassword')]",
-              "service-bus-connection": "[parameters('serviceBusConnection')]"
+              "owm-api-key": "[parameters('owmApiKey')]"
             }
           },
           "environmentVariables": {
-            "value": "[concat(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection')))]"
+            "value": "[concat(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), if(variables('hasSmtpPassword'), createObject('name', 'SMTP_PASSWORD', 'value', parameters('smtpPassword')), createObject()), if(variables('hasServiceBus'), createObject('name', 'SERVICE_BUS_CONNECTION', 'value', parameters('serviceBusConnection')), createObject())))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"
