@@ -91,7 +91,7 @@ var keyVaultName = take('kv${uniqueSuffix}', 24)
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
-var dbServerName = '${namePrefix}-${environmentSuffix}-db'
+var dbServerName = take('${namePrefix}-${environmentSuffix}-db-${uniqueSuffix}', 50)
 
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group'
