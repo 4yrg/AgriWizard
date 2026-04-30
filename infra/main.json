@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "2782232092832664029"
+      "templateHash": "11335081505914726195"
     }
   },
   "parameters": {
@@ -72,6 +72,12 @@
         "description": "SMTP password."
       }
     },
+    "smtpUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "SMTP username."
+      }
+    },
     "serviceBusConnection": {
       "type": "securestring",
       "metadata": {
@@ -136,6 +142,9 @@
       },
       {
         "name": "smtp-password"
+      },
+      {
+        "name": "smtp-username"
       }
     ],
     "serviceBusName": "[take(format('{0}-{1}-sb-{2}', parameters('namePrefix'), parameters('environmentSuffix'), variables('uniqueSuffix')), 50)]",
@@ -440,7 +449,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17321296877100713151"
+              "templateHash": "5788726563354707399"
             }
           },
           "parameters": {
@@ -491,7 +500,7 @@
               "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), parameters('pullPrincipalId'), 'AcrPull')]",
               "properties": {
                 "principalId": "[parameters('pullPrincipalId')]",
-                "principalType": "ManagedIdentity",
+                "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]"
               },
               "dependsOn": [
@@ -1028,11 +1037,12 @@
               "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), 'temp')]",
               "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), 'temp')]",
               "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus'), '2025-04-01').outputs.connectionString.value)]",
-              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]"
+              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]",
+              "smtp-username": "[if(not(empty(parameters('smtpUsername'))), parameters('smtpUsername'), 'temp')]"
             }
           },
           "environmentVariables": {
-            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password')))]"
+            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password'), createObject('name', 'SMTP_USERNAME', 'secretRef', 'smtp-username')))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"
@@ -1337,11 +1347,12 @@
               "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), 'temp')]",
               "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), 'temp')]",
               "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus'), '2025-04-01').outputs.connectionString.value)]",
-              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]"
+              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]",
+              "smtp-username": "[if(not(empty(parameters('smtpUsername'))), parameters('smtpUsername'), 'temp')]"
             }
           },
           "environmentVariables": {
-            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password')))]"
+            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'PORT', 'value', string(parameters('backendServices')[copyIndex()].containerPort)), createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password'), createObject('name', 'SMTP_USERNAME', 'secretRef', 'smtp-username')))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"

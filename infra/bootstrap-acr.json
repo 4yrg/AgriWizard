@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "7773852809979362194"
+      "templateHash": "11108297155291059555"
     }
   },
   "parameters": {
@@ -200,7 +200,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "17321296877100713151"
+              "templateHash": "5788726563354707399"
             }
           },
           "parameters": {
@@ -251,7 +251,7 @@
               "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), parameters('pullPrincipalId'), 'AcrPull')]",
               "properties": {
                 "principalId": "[parameters('pullPrincipalId')]",
-                "principalType": "ManagedIdentity",
+                "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]"
               },
               "dependsOn": [
