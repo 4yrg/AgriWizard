@@ -56,15 +56,7 @@ services:
       - name: jwt
       - name: cors
 
-  - name: web-frontend
-    url: http://web-prod
-    routes:
-      - name: web-route
-        paths:
-          - /
-        strip_path: false
-
-plugins:
+  plugins:
   - name: cors
     config:
       origins:

@@ -160,10 +160,7 @@ jobs:
             image_name: agriwizard-notification
             dockerfile: services/notification-service/Dockerfile
             context: .
-          - service: web
-            image_name: agriwizard-web
-            dockerfile: client/Dockerfile
-            context: ./client
+          
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -316,10 +313,7 @@ jobs:
             image_name: agriwizard-notification
             dockerfile: services/notification-service/Dockerfile
             context: .
-          - service: web
-            image_name: agriwizard-web
-            dockerfile: client/Dockerfile
-            context: ./client
+          
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
