@@ -1,0 +1,86 @@
+name: Bootstrap Production Infrastructure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  what-if:
+    name: Bicep What-If
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Bicep compiles
+        run: az bicep build --file infra/main.bicep
+
+      - name: Preview subscription deployment
+        run: |
+          set -euo pipefail
+          az deployment sub what-if \
+            --name "bootstrap-whatif-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            -o json > bootstrap-whatif.json
+          echo "## Bootstrap what-if output" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```json' >> "${GITHUB_STEP_SUMMARY}"
+          jq '.' bootstrap-whatif.json >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload what-if artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-whatif
+          path: bootstrap-whatif.json
+
+  deploy-infra:
+    name: Deploy Production Infrastructure
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: what-if
+    environment: infra-approval
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy subscription-level Bicep
+        run: |
+          set -euo pipefail
+          az deployment sub create \
+            --name "bootstrap-deploy-${GITHUB_RUN_ID}" \
+            --location "${{ vars.AZURE_REGION }}" \
+            --template-file infra/main.bicep \
+            --parameters infra/main.bicepparam \
+            -o json > bootstrap-deploy.json
+
+      - name: Print deployment outputs checklist
+        run: |
+          set -euo pipefail
+          echo "## Bootstrap outputs" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```json' >> "${GITHUB_STEP_SUMMARY}"
+          jq '.properties.outputs' bootstrap-deploy.json >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"

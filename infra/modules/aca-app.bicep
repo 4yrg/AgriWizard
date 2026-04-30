@@ -1,0 +1,106 @@
+targetScope = 'resourceGroup'
+
+@description('Container App name.')
+param appName string
+
+@description('Container Apps managed environment resource ID.')
+param managedEnvironmentId string
+
+@description('User-assigned managed identity resource ID.')
+param identityResourceId string
+
+@description('ACR login server (for example myacr.azurecr.io).')
+param acrLoginServer string
+
+@description('Service name used for container naming.')
+param serviceName string
+
+@description('Image name without login server.')
+param imageName string
+
+@description('Image tag.')
+param imageTag string
+
+@description('Container port.')
+param containerPort int
+
+@description('CPU cores as string value (for example 0.5, 1.0).')
+param cpu string
+
+@description('Memory in Gi (for example 1Gi, 2Gi).')
+param memory string
+
+@description('Minimum replicas.')
+param minReplicas int
+
+@description('Maximum replicas.')
+param maxReplicas int
+
+@description('ACA secrets array: [{ name: string, value: string }].')
+param secrets array = []
+
+@description('Secure object containing secret values keyed by secret name.')
+@secure()
+param secretValues object = {}
+
+@description('Environment variables array: [{ name: string, value?: string, secretRef?: string }].')
+param environmentVariables array = []
+
+@description('Set to true for public ingress.')
+param externalIngress bool = true
+
+resource app 'Microsoft.App/containerApps@2024-03-01' = {
+  name: appName
+  location: resourceGroup().location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${identityResourceId}': {}
+    }
+  }
+  properties: {
+    managedEnvironmentId: managedEnvironmentId
+    configuration: {
+      ingress: {
+        external: externalIngress
+        targetPort: containerPort
+        transport: 'auto'
+      }
+      registries: [
+        {
+          server: acrLoginServer
+          identity: identityResourceId
+        }
+      ]
+      secrets: [for s in secrets: {
+        name: s.name
+        #disable-next-line use-secure-value-for-secure-inputs
+        value: secretValues[s.name]
+      }]
+    }
+    template: {
+      containers: [
+        {
+          name: serviceName
+          image: '${acrLoginServer}/${imageName}:${imageTag}'
+          env: [for envVar in environmentVariables: {
+            name: envVar.name
+            value: envVar.?value
+            secretRef: envVar.?secretRef
+          }]
+          resources: {
+            cpu: json(cpu)
+            memory: memory
+          }
+        }
+      ]
+      scale: {
+        minReplicas: minReplicas
+        maxReplicas: maxReplicas
+      }
+    }
+  }
+}
+
+output appNameOut string = app.name
+output fqdn string = externalIngress ? app.properties.configuration.ingress.fqdn : ''

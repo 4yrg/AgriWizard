@@ -16,6 +16,7 @@ plugins:
     config:
       origins:
         - "${CORS_ALLOW_ORIGIN}"
+        - "https://agri-wizard.vercel.app"
       methods:
         - GET
         - POST
