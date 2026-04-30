@@ -231,7 +231,7 @@ jobs:
     timeout-minutes: 45
     needs: push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: staging
+    # environment: staging
     strategy:
       fail-fast: false
       matrix:
@@ -375,7 +375,7 @@ jobs:
     timeout-minutes: 45
     needs: deploy_staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    # environment: production
     strategy:
       fail-fast: false
       matrix:
