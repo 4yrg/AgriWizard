@@ -35,6 +35,9 @@ param owmApiKey string
 @secure()
 param smtpPassword string
 
+@description('SMTP username.')
+param smtpUsername string
+
 @description('Service Bus connection string.')
 @secure()
 param serviceBusConnection string
@@ -71,6 +74,7 @@ var appSecrets = [
   { name: 'owm-api-key' }
   { name: 'service-bus-connection' }
   { name: 'smtp-password' }
+  { name: 'smtp-username' }
 ]
 
 var secretValueMap = {
@@ -80,6 +84,7 @@ var secretValueMap = {
   'owm-api-key': hasOwmApiKey ? owmApiKey : 'temp'
   'service-bus-connection': hasServiceBus ? serviceBusConnection : servicebus.outputs.connectionString
   'smtp-password': hasSmtpPassword ? smtpPassword : 'temp'
+  'smtp-username': !empty(smtpUsername) ? smtpUsername : 'temp'
 }
 var serviceBusName = take('${namePrefix}-${environmentSuffix}-sb-${uniqueSuffix}', 50)
 var keyVaultName = take('kv${uniqueSuffix}', 24)
@@ -225,6 +230,10 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
         name: 'SMTP_PASSWORD'
         secretRef: 'smtp-password'
       }
+      {
+        name: 'SMTP_USERNAME'
+        secretRef: 'smtp-username'
+      }
     ])
     externalIngress: service.externalIngress
   }
@@ -290,6 +299,10 @@ module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: i
       {
         name: 'SMTP_PASSWORD'
         secretRef: 'smtp-password'
+      }
+      {
+        name: 'SMTP_USERNAME'
+        secretRef: 'smtp-username'
       }
     ])
     externalIngress: service.externalIngress

@@ -102,9 +102,9 @@
             { "name": "DB_PORT", "value": "5432" },
             { "name": "DB_NAME", "value": "agriwizard" },
             { "name": "DB_SSLMODE", "value": "require" },
-            { "name": "SMTP_HOST", "value": "smtp.office365.com" },
+            { "name": "SMTP_HOST", "value": "smtp.gmail.com" },
             { "name": "SMTP_PORT", "value": "587" },
-            { "name": "SMTP_FROM", "value": "noreply@agriwizard.local" }
+            { "name": "SMTP_FROM", "value": "jsamuditha@gmail.com" }
           ]
         },
         {

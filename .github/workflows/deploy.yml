@@ -389,7 +389,7 @@ jobs:
     name: Deploy to ACA (staging)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [push, deploy-infra]
+    needs: [push, deploy-infra, deploy-bootstrap]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # environment: staging
     strategy:
@@ -501,7 +501,8 @@ jobs:
               mqtt-password="${{ secrets.MQTT_PASSWORD }}" \
               owm-api-key="${{ secrets.OWM_API_KEY }}" \
               smtp-password="${{ secrets.SMTP_PASSWORD }}" \
-              service-bus-connection="${{ secrets.SERVICE_BUS_CONNECTION }}"
+              smtp-username="${{ secrets.SMTP_USER || 'jsamuditha@gmail.com' }}" \
+              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}"
 
           az containerapp update \
             --name "${APP_NAME}" \
@@ -533,13 +534,14 @@ jobs:
               MQTT_PASSWORD=secretref:mqtt-password \
               OWM_API_KEY=secretref:owm-api-key \
               SMTP_PASSWORD=secretref:smtp-password \
+              SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection
 
   deploy_production:
     name: Deploy to ACA (production)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: deploy_staging
+    needs: [deploy_staging, deploy-bootstrap]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # environment: production
     strategy:
@@ -650,7 +652,8 @@ jobs:
               mqtt-password="${{ secrets.MQTT_PASSWORD }}" \
               owm-api-key="${{ secrets.OWM_API_KEY }}" \
               smtp-password="${{ secrets.SMTP_PASSWORD }}" \
-              service-bus-connection="${{ secrets.SERVICE_BUS_CONNECTION }}"
+              smtp-username="${{ secrets.SMTP_USER || 'jsamuditha@gmail.com' }}" \
+              service-bus-connection="${{ needs.deploy-bootstrap.outputs.service_bus_connection || secrets.SERVICE_BUS_CONNECTION }}"
 
           az containerapp update \
             --name "${APP_NAME}" \
@@ -682,4 +685,5 @@ jobs:
               MQTT_PASSWORD=secretref:mqtt-password \
               OWM_API_KEY=secretref:owm-api-key \
               SMTP_PASSWORD=secretref:smtp-password \
+              SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection

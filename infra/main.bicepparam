@@ -163,7 +163,7 @@ param backendServices = [
       }
       {
         name: 'SMTP_HOST'
-        value: 'smtp.office365.com'
+        value: 'smtp.gmail.com'
       }
       {
         name: 'SMTP_PORT'
@@ -171,7 +171,7 @@ param backendServices = [
       }
       {
         name: 'SMTP_FROM'
-        value: 'noreply@agriwizard.local'
+        value: 'jsamuditha@gmail.com'
       }
       {
         name: 'NATS_URL'
@@ -186,4 +186,5 @@ param jwtSecret string = ''
 param mqttPassword string = ''
 param owmApiKey string = ''
 param smtpPassword string = ''
+param smtpUsername string = 'jsamuditha@gmail.com'
 param serviceBusConnection string = ''
