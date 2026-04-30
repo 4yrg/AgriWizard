@@ -238,7 +238,7 @@ jobs:
             image_name: agriwizard-analytics
             port: "8088"
           - service: weather
-            image_name:agriwizard-weather
+            image_name: agriwizard-weather
             port: "8089"
           - service: notification
             image_name: agriwizard-notification
