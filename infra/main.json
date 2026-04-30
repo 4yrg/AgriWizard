@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "2388971399580122624"
+      "templateHash": "1618311319128808514"
     }
   },
   "parameters": {
@@ -100,13 +100,6 @@
     }
   },
   "variables": {
-    "copy": [
-      {
-        "name": "filteredSecrets",
-        "count": "[length(variables('appSecrets'))]",
-        "input": "[if(not(equals(variables('appSecrets')[copyIndex('filteredSecrets')], null())), variables('appSecrets')[copyIndex('filteredSecrets')], createObject())]"
-      }
-    ],
     "computedAcrName": "[if(empty(parameters('acrName')), format('{0}acr', parameters('namePrefix')), parameters('acrName'))]",
     "computedTenantId": "[if(empty(parameters('tenantId')), subscription().tenantId, parameters('tenantId'))]",
     "resourceGroupName": "[format('{0}-{1}-rg', parameters('namePrefix'), parameters('environmentSuffix'))]",
@@ -117,13 +110,27 @@
     "hasServiceBus": "[not(empty(parameters('serviceBusConnection')))]",
     "hasSmtpPassword": "[not(empty(parameters('smtpPassword')))]",
     "appSecrets": [
-      "[if(variables('hasDbPassword'), createObject('name', 'db-password'), null())]",
-      "[if(variables('hasJwtSecret'), createObject('name', 'jwt-secret'), null())]",
-      "[if(variables('hasMqttPassword'), createObject('name', 'mqtt-password'), null())]",
-      "[if(variables('hasOwmApiKey'), createObject('name', 'owm-api-key'), null())]",
-      "[if(variables('hasServiceBus'), createObject('name', 'service-bus-connection'), null())]",
-      "[if(variables('hasSmtpPassword'), createObject('name', 'smtp-password'), null())]"
+      {
+        "name": "db-password"
+      },
+      {
+        "name": "jwt-secret"
+      },
+      {
+        "name": "mqtt-password"
+      },
+      {
+        "name": "owm-api-key"
+      }
     ],
+    "secretValueMap": {
+      "db-password": "[if(variables('hasDbPassword'), parameters('dbPassword'), 'temp')]",
+      "jwt-secret": "[if(variables('hasJwtSecret'), parameters('jwtSecret'), 'temp')]",
+      "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), 'temp')]",
+      "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), 'temp')]",
+      "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), 'temp')]",
+      "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), 'temp')]"
+    },
     "serviceBusName": "[format('{0}-{1}-sb', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "keyVaultName": "[format('{0}-{1}-kv', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "managedEnvironmentName": "[format('{0}-{1}-aca-env', parameters('namePrefix'), parameters('environmentSuffix'))]",
@@ -989,20 +996,13 @@
             "value": "[parameters('backendServices')[copyIndex()].maxReplicas]"
           },
           "secrets": {
-            "value": "[variables('filteredSecrets')]"
+            "value": "[variables('appSecrets')]"
           },
           "secretValues": {
-            "value": {
-              "db-password": "[if(variables('hasDbPassword'), parameters('dbPassword'), '')]",
-              "jwt-secret": "[if(variables('hasJwtSecret'), parameters('jwtSecret'), '')]",
-              "mqtt-password": "[if(variables('hasMqttPassword'), parameters('mqttPassword'), '')]",
-              "owm-api-key": "[if(variables('hasOwmApiKey'), parameters('owmApiKey'), '')]",
-              "service-bus-connection": "[if(variables('hasServiceBus'), parameters('serviceBusConnection'), '')]",
-              "smtp-password": "[if(variables('hasSmtpPassword'), parameters('smtpPassword'), '')]"
-            }
+            "value": "[variables('secretValueMap')]"
           },
           "environmentVariables": {
-            "value": "[concat(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app'), if(variables('hasDbPassword'), createObject('name', 'DB_PASSWORD', 'secretRef', 'db-password'), createObject()), if(variables('hasJwtSecret'), createObject('name', 'JWT_SECRET', 'secretRef', 'jwt-secret'), createObject()), if(variables('hasMqttPassword'), createObject('name', 'MQTT_PASSWORD', 'secretRef', 'mqtt-password'), createObject()), if(variables('hasOwmApiKey'), createObject('name', 'OWM_API_KEY', 'secretRef', 'owm-api-key'), createObject()), if(variables('hasServiceBus'), createObject('name', 'SERVICE_BUS_CONNECTION', 'secretRef', 'service-bus-connection'), createObject()), if(variables('hasSmtpPassword'), createObject('name', 'SMTP_PASSWORD', 'secretRef', 'smtp-password'), createObject())))]"
+            "value": "[union(parameters('backendServices')[copyIndex()].environmentVariables, createArray(createObject('name', 'DB_HOST', 'value', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value), createObject('name', 'DB_USER', 'value', parameters('dbUser')), createObject('name', 'CORS_ALLOW_ORIGIN', 'value', 'https://agri-wizard.vercel.app')))]"
           },
           "externalIngress": {
             "value": "[parameters('backendServices')[copyIndex()].externalIngress]"

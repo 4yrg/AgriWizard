@@ -61,15 +61,20 @@ var hasServiceBus = !empty(serviceBusConnection)
 var hasSmtpPassword = !empty(smtpPassword)
 
 var appSecrets = [
-  hasDbPassword ? { name: 'db-password' } : null
-  hasJwtSecret ? { name: 'jwt-secret' } : null
-  hasMqttPassword ? { name: 'mqtt-password' } : null
-  hasOwmApiKey ? { name: 'owm-api-key' } : null
-  hasServiceBus ? { name: 'service-bus-connection' } : null
-  hasSmtpPassword ? { name: 'smtp-password' } : null
+  { name: 'db-password' }
+  { name: 'jwt-secret' }
+  { name: 'mqtt-password' }
+  { name: 'owm-api-key' }
 ]
 
-var filteredSecrets = [for s in appSecrets: s != null ? s : {}]
+var secretValueMap = {
+  'db-password': hasDbPassword ? dbPassword : 'temp'
+  'jwt-secret': hasJwtSecret ? jwtSecret : 'temp'
+  'mqtt-password': hasMqttPassword ? mqttPassword : 'temp'
+  'owm-api-key': hasOwmApiKey ? owmApiKey : 'temp'
+  'service-bus-connection': hasServiceBus ? serviceBusConnection : 'temp'
+  'smtp-password': hasSmtpPassword ? smtpPassword : 'temp'
+}
 var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'
 var keyVaultName = '${namePrefix}-${environmentSuffix}-kv'
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
@@ -172,16 +177,9 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
     memory: service.memory
     minReplicas: service.minReplicas
     maxReplicas: service.maxReplicas
-    secrets: filteredSecrets
-    secretValues: {
-      'db-password': hasDbPassword ? dbPassword : ''
-      'jwt-secret': hasJwtSecret ? jwtSecret : ''
-      'mqtt-password': hasMqttPassword ? mqttPassword : ''
-      'owm-api-key': hasOwmApiKey ? owmApiKey : ''
-      'service-bus-connection': hasServiceBus ? serviceBusConnection : ''
-      'smtp-password': hasSmtpPassword ? smtpPassword : ''
-    }
-    environmentVariables: concat(service.environmentVariables, [
+    secrets: appSecrets
+    secretValues: secretValueMap
+    environmentVariables: union(service.environmentVariables, [
       {
         name: 'DB_HOST'
         value: postgresql.outputs.fullyQualifiedDomainName
@@ -194,12 +192,6 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
         name: 'CORS_ALLOW_ORIGIN'
         value: 'https://agri-wizard.vercel.app'
       }
-      hasDbPassword ? { name: 'DB_PASSWORD', secretRef: 'db-password' } : {}
-      hasJwtSecret ? { name: 'JWT_SECRET', secretRef: 'jwt-secret' } : {}
-      hasMqttPassword ? { name: 'MQTT_PASSWORD', secretRef: 'mqtt-password' } : {}
-      hasOwmApiKey ? { name: 'OWM_API_KEY', secretRef: 'owm-api-key' } : {}
-      hasServiceBus ? { name: 'SERVICE_BUS_CONNECTION', secretRef: 'service-bus-connection' } : {}
-      hasSmtpPassword ? { name: 'SMTP_PASSWORD', secretRef: 'smtp-password' } : {}
     ])
     externalIngress: service.externalIngress
   }
