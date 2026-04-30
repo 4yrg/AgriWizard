@@ -206,16 +206,31 @@ jobs:
 
       - name: What-if infrastructure changes
         id: whatif
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SERVICE_BUS_CONNECTION: ${{ secrets.SERVICE_BUS_CONNECTION }}
         run: |
           set -euo pipefail
           az deployment sub what-if \
             --name "whatif-${GITHUB_RUN_ID}" \
             --location "${{ vars.AZURE_REGION }}" \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam \
+            --parameters \
+              infra/main.bicepparam \
+              acrName=${{ vars.ACR_NAME }} \
             --result-format FullResourcePayloads \
-            -o json > whatif.json
-          CHANGES="$(jq '[.changes[] | select(.changeType != "NoChange")] | length' whatif.json)"
+            -o json > whatif.json || true
+          
+          if [ ! -s whatif.json ]; then
+            echo "changes=0" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          CHANGES="$(jq '[.changes[]? | select(.changeType != "NoChange")] | length' whatif.json || echo "0")"
           echo "changes=${CHANGES}" >> "${GITHUB_OUTPUT}"
           if [ "${CHANGES}" -eq 0 ]; then
             echo "No infrastructure changes" >> "${GITHUB_STEP_SUMMARY}"
@@ -223,6 +238,13 @@ jobs:
 
       - name: Deploy infrastructure
         if: steps.whatif.outputs.changes != '0'
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SERVICE_BUS_CONNECTION: ${{ secrets.SERVICE_BUS_CONNECTION }}
         run: |
           set -euo pipefail
           az deployment sub create \
