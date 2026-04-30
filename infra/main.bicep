@@ -53,8 +53,23 @@ var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
 
 var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 
-var hasSmtpPassword = !empty(smtpPassword)
+var hasDbPassword = !empty(dbPassword)
+var hasJwtSecret = !empty(jwtSecret)
+var hasMqttPassword = !empty(mqttPassword)
+var hasOwmApiKey = !empty(owmApiKey)
 var hasServiceBus = !empty(serviceBusConnection)
+var hasSmtpPassword = !empty(smtpPassword)
+
+var appSecrets = [
+  hasDbPassword ? { name: 'db-password' } : null
+  hasJwtSecret ? { name: 'jwt-secret' } : null
+  hasMqttPassword ? { name: 'mqtt-password' } : null
+  hasOwmApiKey ? { name: 'owm-api-key' } : null
+  hasServiceBus ? { name: 'service-bus-connection' } : null
+  hasSmtpPassword ? { name: 'smtp-password' } : null
+]
+
+var filteredSecrets = [for s in appSecrets: s != null ? s : {}]
 var serviceBusName = '${namePrefix}-${environmentSuffix}-sb'
 var keyVaultName = '${namePrefix}-${environmentSuffix}-kv'
 var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
@@ -157,17 +172,14 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
     memory: service.memory
     minReplicas: service.minReplicas
     maxReplicas: service.maxReplicas
-    secrets: [
-      { name: 'db-password' }
-      { name: 'jwt-secret' }
-      { name: 'mqtt-password' }
-      { name: 'owm-api-key' }
-    ]
+    secrets: filteredSecrets
     secretValues: {
-      'db-password': dbPassword
-      'jwt-secret': jwtSecret
-      'mqtt-password': mqttPassword
-      'owm-api-key': owmApiKey
+      'db-password': hasDbPassword ? dbPassword : ''
+      'jwt-secret': hasJwtSecret ? jwtSecret : ''
+      'mqtt-password': hasMqttPassword ? mqttPassword : ''
+      'owm-api-key': hasOwmApiKey ? owmApiKey : ''
+      'service-bus-connection': hasServiceBus ? serviceBusConnection : ''
+      'smtp-password': hasSmtpPassword ? smtpPassword : ''
     }
     environmentVariables: concat(service.environmentVariables, [
       {
@@ -182,24 +194,12 @@ module apps './modules/aca-app.bicep' = [for service in backendServices: {
         name: 'CORS_ALLOW_ORIGIN'
         value: 'https://agri-wizard.vercel.app'
       }
-      {
-        name: 'DB_PASSWORD'
-        secretRef: 'db-password'
-      }
-      {
-        name: 'JWT_SECRET'
-        secretRef: 'jwt-secret'
-      }
-      {
-        name: 'MQTT_PASSWORD'
-        secretRef: 'mqtt-password'
-      }
-      {
-        name: 'OWM_API_KEY'
-        secretRef: 'owm-api-key'
-      }
-      hasSmtpPassword ? { name: 'SMTP_PASSWORD', value: smtpPassword } : {}
-      hasServiceBus ? { name: 'SERVICE_BUS_CONNECTION', value: serviceBusConnection } : {}
+      hasDbPassword ? { name: 'DB_PASSWORD', secretRef: 'db-password' } : {}
+      hasJwtSecret ? { name: 'JWT_SECRET', secretRef: 'jwt-secret' } : {}
+      hasMqttPassword ? { name: 'MQTT_PASSWORD', secretRef: 'mqtt-password' } : {}
+      hasOwmApiKey ? { name: 'OWM_API_KEY', secretRef: 'owm-api-key' } : {}
+      hasServiceBus ? { name: 'SERVICE_BUS_CONNECTION', secretRef: 'service-bus-connection' } : {}
+      hasSmtpPassword ? { name: 'SMTP_PASSWORD', secretRef: 'smtp-password' } : {}
     ])
     externalIngress: service.externalIngress
   }
