@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "11335081505914726195"
+      "templateHash": "3373112631296419342"
     }
   },
   "parameters": {
@@ -247,7 +247,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "39721687351502982"
+              "templateHash": "1004221936942529725"
             }
           },
           "parameters": {
@@ -301,7 +301,7 @@
           "resources": [
             {
               "type": "Microsoft.DBforPostgreSQL/flexibleServers",
-              "apiVersion": "2024-04-01",
+              "apiVersion": "2022-12-01",
               "name": "[parameters('serverName')]",
               "location": "[parameters('location')]",
               "sku": {
@@ -326,7 +326,7 @@
             },
             {
               "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
-              "apiVersion": "2024-04-01",
+              "apiVersion": "2022-12-01",
               "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllAzureInternal')]",
               "properties": {
                 "startIpAddress": "0.0.0.0",
@@ -344,7 +344,7 @@
             },
             "fullyQualifiedDomainName": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2024-04-01').fullyQualifiedDomainName]"
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2022-12-01').fullyQualifiedDomainName]"
             }
           }
         }

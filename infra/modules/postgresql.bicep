@@ -20,7 +20,7 @@ param version string = '15'
 @description('Storage size in GB.')
 param storageSizeGB int = 32
 
-resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-04-01' = {
+resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
   name: serverName
   location: location
   sku: {
@@ -44,7 +44,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-04-01' = {
   }
 }
 
-resource firewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-04-01' = {
+resource firewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
   parent: server
   name: 'AllowAllAzureInternal'
   properties: {
