@@ -314,12 +314,12 @@ services:
       - agriwizard-net
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
-    depends_on:
-      - iam-service
-      - hardware-service
-      - analytics-service
-      - weather-service
-      - notification-service
+    # depends_on:
+    #   - iam-service
+    #   - hardware-service
+    #   - analytics-service
+    #   - weather-service
+    #   - notification-service
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
