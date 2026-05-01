@@ -594,6 +594,11 @@ jobs:
           esac
           
           if [ -z "${APP_NAME}" ]; then
+            if [ "${{ matrix.service }}" == "gateway" ]; then
+              FALLBACK_NAME="agriwizard-prod-gateway"
+            else
+              FALLBACK_NAME="${{ matrix.service }}-prod"
+            fi
             echo "GitHub variable '${{ matrix.app_name_var }}' is empty. Falling back to: ${FALLBACK_NAME}"
             APP_NAME="${FALLBACK_NAME}"
           fi
@@ -659,9 +664,6 @@ jobs:
               service-bus-connection="${SB_CONN_STR}"
 
           az containerapp update \
-            --user-assigned "${{ needs.deploy-infra.outputs.identity_id }}" \
-            --registry-identity "${{ needs.deploy-infra.outputs.identity_id }}" \
-            --registry-server "${{ needs.deploy-bootstrap.outputs.acr_login_server }}" \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --image "${IMAGE}" \
