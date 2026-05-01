@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -11,19 +12,27 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"context"
 )
 
 // Handler holds the database status and config for all handlers.
 type Handler struct {
-	dbStatus  *DBStatus
-	jwtSecret string
-	jwtIssuer string
-	jwtTTL    time.Duration
+	dbStatus                *DBStatus
+	jwtSecret               string
+	jwtIssuer               string
+	jwtTTL                  time.Duration
+	sbNotificationPublisher *AzureServiceBusNotificationPublisher
 }
 
 // NewHandler creates a new Handler instance.
-func NewHandler(dbStatus *DBStatus, jwtSecret, jwtIssuer string, jwtTTL time.Duration) *Handler {
-	return &Handler{dbStatus: dbStatus, jwtSecret: jwtSecret, jwtIssuer: jwtIssuer, jwtTTL: jwtTTL}
+func NewHandler(dbStatus *DBStatus, jwtSecret, jwtIssuer string, jwtTTL time.Duration, sbNotificationPublisher *AzureServiceBusNotificationPublisher) *Handler {
+	return &Handler{
+		dbStatus:                dbStatus,
+		jwtSecret:               jwtSecret,
+		jwtIssuer:               jwtIssuer,
+		jwtTTL:                  jwtTTL,
+		sbNotificationPublisher: sbNotificationPublisher,
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -108,6 +117,16 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 
 	log.Printf("[INFO] Register: new user created id=%s email=%s role=%s", userID, req.Email, req.Role)
+
+	// Send notification for new registration
+	recipient := getServiceBusNotificationRecipient()
+	go h.sendNotification(
+		recipient,
+		"New user registered",
+		fmt.Sprintf("A new user has registered: %s (%s)", req.FullName, req.Email),
+		map[string]string{"user_id": userID, "email": req.Email},
+	)
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Message: "user registered successfully",
 		Data:    UserDTO{ID: userID, Email: req.Email, FullName: req.FullName, Role: req.Role},
@@ -338,5 +357,27 @@ func AdminOnly() gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+// sendNotification is a helper to send notifications via Service Bus
+func (h *Handler) sendNotification(recipient, subject, body string, metadata map[string]string) {
+	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := NotificationRequest{
+		Channel:   "email",
+		Recipient: recipient,
+		Subject:   subject,
+		Body:      body,
+		Metadata:  metadata,
+	}
+
+	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
+		log.Printf("[WARN] Failed to send notification: %v", err)
 	}
 }
