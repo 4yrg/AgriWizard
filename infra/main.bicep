@@ -54,6 +54,9 @@ param tenantId string = ''
 @description('Global image tag override (e.g. github.sha).')
 param globalImageTag string = ''
 
+@description('APIM publisher email.')
+param publisherEmail string = 'devops@agriwizard.io'
+
 var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
 var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
 var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
@@ -92,6 +95,15 @@ var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 var dbServerName = take('${namePrefix}-${environmentSuffix}-db-${uniqueSuffix}', 50)
+var apimName = take('${namePrefix}-${environmentSuffix}-apim', 50)
+
+var backendUrls = {
+  iamUrl: 'iam-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
+  hardwareUrl: 'hardware-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
+  analyticsUrl: 'analytics-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
+  weatherUrl: 'weather-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
+  notificationUrl: 'notification-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
+}
 
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group'
@@ -235,79 +247,51 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
         secretRef: 'smtp-username'
       }
     ])
-    externalIngress: service.externalIngress
+    externalIngress: false
   }
 }]
 
-// Gateway service (deployed after core services)
-module gatewayApp './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName == 'kong') {
-  name: 'deploy-gateway-${service.serviceName}'
+// Azure API Management (replaces Kong gateway)
+module apim './modules/apim.bicep' = {
+  name: 'apim'
   scope: resourceGroup(resourceGroupName)
   params: {
-    appName: '${service.serviceName}-${environmentSuffix}'
-    managedEnvironmentId: acaEnvironment.outputs.managedEnvironmentId
-    identityResourceId: identity.outputs.identityId
-    acrLoginServer: acr.outputs.acrLoginServer
-    serviceName: service.serviceName
-    imageName: service.imageName
-    imageTag: (service.serviceName == 'kong') ? service.imageTag : (empty(globalImageTag) ? service.imageTag : globalImageTag)
-    containerPort: service.containerPort
-    cpu: service.cpu
-    memory: service.memory
-    minReplicas: service.minReplicas
-    maxReplicas: service.maxReplicas
-    secrets: appSecrets
-    secretValues: secretValueMap
-    environmentVariables: union(service.environmentVariables, [
+    apimName: apimName
+    location: location
+    publisherEmail: publisherEmail
+    publisherName: 'AgriWizard Platform'
+    backendServices: [
       {
-        name: 'PORT'
-        value: string(service.containerPort)
+        name: 'iam'
+        backendUrl: backendUrls.iamUrl
+        port: 8086
       }
       {
-        name: 'DB_HOST'
-        value: postgresql.outputs.fullyQualifiedDomainName
+        name: 'hardware'
+        backendUrl: backendUrls.hardwareUrl
+        port: 8087
       }
       {
-        name: 'DB_USER'
-        value: dbUser
+        name: 'analytics'
+        backendUrl: backendUrls.analyticsUrl
+        port: 8088
       }
       {
-        name: 'CORS_ALLOW_ORIGIN'
-        value: 'https://agri-wizard.vercel.app'
-      }
-      // Secret mappings
-      {
-        name: 'DB_PASSWORD'
-        secretRef: 'db-password'
+        name: 'weather'
+        backendUrl: backendUrls.weatherUrl
+        port: 8089
       }
       {
-        name: 'JWT_SECRET'
-        secretRef: 'jwt-secret'
+        name: 'notification'
+        backendUrl: backendUrls.notificationUrl
+        port: 8091
       }
-      {
-        name: 'MQTT_PASSWORD'
-        secretRef: 'mqtt-password'
-      }
-      {
-        name: 'OWM_API_KEY'
-        secretRef: 'owm-api-key'
-      }
-      {
-        name: 'SERVICE_BUS_CONNECTION'
-        secretRef: 'service-bus-connection'
-      }
-      {
-        name: 'SMTP_PASSWORD'
-        secretRef: 'smtp-password'
-      }
-      {
-        name: 'SMTP_USERNAME'
-        secretRef: 'smtp-username'
-      }
-    ])
-    externalIngress: service.externalIngress
+    ]
   }
-}]
+  dependsOn: [
+    coreApps
+  ]
+}
 
 output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
@@ -325,3 +309,7 @@ output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
 output dbName string = 'agriwizard'
 output dbUser string = dbUser
+output apimName string = apimName
+output apimGatewayUrl string = apim.outputs.apimGatewayUrl
+output apimGatewayHostName string = apim.outputs.apimGatewayHostName
+output apimPortalUrl string = apim.outputs.apimPortalUrl
