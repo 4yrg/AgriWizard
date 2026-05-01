@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "8133275290997546929"
+      "templateHash": "9185268484891364135"
     }
   },
   "parameters": {
@@ -89,13 +89,6 @@
       "defaultValue": "agriwizard_admin",
       "metadata": {
         "description": "DB administrator username."
-      }
-    },
-    "dbName": {
-      "type": "string",
-      "defaultValue": "agriwizard",
-      "metadata": {
-        "description": "Database name."
       }
     },
     "acrName": {
@@ -254,7 +247,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "1004221936942529725"
+              "templateHash": "3541455920873083450"
             }
           },
           "parameters": {
@@ -352,6 +345,10 @@
             "fullyQualifiedDomainName": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2022-12-01').fullyQualifiedDomainName]"
+            },
+            "serverNameOutput": {
+              "type": "string",
+              "value": "[parameters('serverName')]"
             }
           }
         }
@@ -1655,7 +1652,7 @@
     },
     "dbName": {
       "type": "string",
-      "value": "[parameters('dbName')]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.serverNameOutput.value]"
     },
     "dbUser": {
       "type": "string",

@@ -55,3 +55,4 @@ resource firewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2
 
 output serverName string = server.name
 output fullyQualifiedDomainName string = server.properties.fullyQualifiedDomainName
+output serverNameOutput string = server.name

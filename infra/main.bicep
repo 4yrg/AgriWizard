@@ -45,9 +45,6 @@ param serviceBusConnection string
 @description('DB administrator username.')
 param dbUser string = 'agriwizard_admin'
 
-@description('Database name.')
-param dbName string = 'agriwizard'
-
 @description('The name of the ACR.')
 param acrName string = ''
 
@@ -326,5 +323,5 @@ output containerAppFqdns array = [for (service, i) in backendServices: {
 }]
 output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
-output dbName string = dbName
+output dbName string = postgresql.outputs.serverNameOutput
 output dbUser string = dbUser
