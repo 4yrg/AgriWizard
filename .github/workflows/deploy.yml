@@ -313,6 +313,10 @@ jobs:
             image_name: agriwizard-notification
             dockerfile: services/notification-service/Dockerfile
             context: .
+          - service: gateway
+            image_name: agriwizard-gateway
+            dockerfile: gateway/Dockerfile
+            context: ./gateway
           
     steps:
       - name: Checkout repository
