@@ -323,5 +323,5 @@ output containerAppFqdns array = [for (service, i) in backendServices: {
 }]
 output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
-output dbName string = postgresql.outputs.serverNameOutput
+output dbName string = 'agriwizard'
 output dbUser string = dbUser

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "9185268484891364135"
+      "templateHash": "4506857756452638287"
     }
   },
   "parameters": {
@@ -1652,7 +1652,7 @@
     },
     "dbName": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.serverNameOutput.value]"
+      "value": "agriwizard"
     },
     "dbUser": {
       "type": "string",
