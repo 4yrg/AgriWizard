@@ -511,10 +511,6 @@ jobs:
             image_name: agriwizard-notification
             app_name_var: ACA_APP_NOTIFICATION_PRODUCTION
             port: "8091"
-          - service: web
-            image_name: agriwizard-web
-            app_name_var: ACA_APP_WEB_PRODUCTION
-            port: "3000"
           - service: kong
             image_name: kong
             app_name_var: ACA_APP_KONG_PRODUCTION
