@@ -31,15 +31,18 @@ properties:
             include /etc/nginx/mime.types;
             server {
                 listen 8080;
-                location /api/v1/iam/ { proxy_pass http://iam-prod; }
+                server_name _;
+                absolute_redirect off;
+                port_in_redirect off;
+                location /api/v1/iam { proxy_pass http://iam-prod; }
                 location /api/v1/iam/health { proxy_pass http://iam-prod/health; }
-                location /api/v1/hardware/ { proxy_pass http://hardware-prod; }
+                location /api/v1/hardware { proxy_pass http://hardware-prod; }
                 location /api/v1/hardware/health { proxy_pass http://hardware-prod/health; }
-                location /api/v1/analytics/ { proxy_pass http://analytics-prod; }
+                location /api/v1/analytics { proxy_pass http://analytics-prod; }
                 location /api/v1/analytics/health { proxy_pass http://analytics-prod/health; }
-                location /api/v1/weather/ { proxy_pass http://weather-prod; }
+                location /api/v1/weather { proxy_pass http://weather-prod; }
                 location /api/v1/weather/health { proxy_pass http://weather-prod/health; }
-                location /api/v1/notifications/ { proxy_pass http://notification-prod; }
+                location /api/v1/notifications { proxy_pass http://notification-prod; }
                 location /api/v1/notifications/health { proxy_pass http://notification-prod/health; }
                 location /health { return 200 "healthy\n"; }
             }

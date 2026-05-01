@@ -32,6 +32,7 @@ http {
         listen 8080;
         server_name _;
         absolute_redirect off;
+        port_in_redirect off;
 
         location /api/v1/iam {
             proxy_pass http://${IAM_SERVICE_HOST};
