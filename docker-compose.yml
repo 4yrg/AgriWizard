@@ -113,7 +113,7 @@ services:
         condition: service_healthy
       iam-service:
         condition: service_healthy
-      kong:
+      gateway:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8087/health || exit 1"]
@@ -142,7 +142,7 @@ services:
         condition: service_healthy
       iam-service:
         condition: service_healthy
-      kong:
+      gateway:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8088/health || exit 1"]
@@ -173,7 +173,7 @@ services:
     depends_on:
       iam-service:
         condition: service_healthy
-      kong:
+      gateway:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8089/health || exit 1"]
@@ -263,7 +263,7 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
-      kong:
+      gateway:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8091/health || exit 1"]

@@ -55,6 +55,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: agriwizard-pgadmin
     restart: unless-stopped
+    profiles: ["admin"]
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@agriwizard.local
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -70,6 +71,3 @@ services:
   #  Profiles for optional services
   # ────────────────────────────────────────────
 
-profiles:
-  admin:
-    - pgadmin
