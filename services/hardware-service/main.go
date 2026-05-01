@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -249,11 +250,12 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
 		SetConnectRetryInterval(5 * time.Second).
+		SetResumeSubs(true).
 		SetOnConnectHandler(func(c mqtt.Client) {
-			log.Println("[INFO] MQTT connected")
+			log.Println("[INFO] MQTT connected - subscriptions will be restored automatically")
 		}).
 		SetConnectionLostHandler(func(c mqtt.Client, err error) {
-			log.Printf("[WARN] MQTT connection lost: %v", err)
+			log.Printf("[WARN] MQTT connection lost: %v (will attempt auto-reconnect)", err)
 		})
 
 	if username != "" {
@@ -268,7 +270,7 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 			time.Sleep(3 * time.Second)
 			continue
 		}
-		log.Println("[INFO] MQTT client connected")
+		log.Println("[INFO] MQTT client connected successfully")
 		return client
 	}
 	log.Println("[WARN] Could not connect to MQTT broker, continuing without MQTT")
@@ -276,26 +278,76 @@ func connectMQTT(broker, username, password string) mqtt.Client {
 }
 
 // restoreSubscriptions re-subscribes to all sensor and equipment MQTT topics on startup.
+// Note: With SetResumeSubs enabled, subscriptions persist across reconnects
 func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) {
-	if !client.IsConnected() {
+	if client == nil {
+		log.Println("[WARN] restoreSubscriptions: MQTT client is null, skipping subscription restore")
 		return
 	}
-	rows, _ := db.Query(`SELECT mqtt_topic FROM hardware.sensors`)
-	if rows != nil {
-		defer rows.Close()
-		for rows.Next() {
-			var topic string
-			if rows.Scan(&topic) == nil {
-				client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
-					log.Printf("[INFO] MQTT telemetry received on %s", msg.Topic())
-					// Also publish to RabbitMQ/Service Bus for analytics
-					if rmqPublisher != nil && rmqPublisher.IsConnected() {
-						log.Printf("[DEBUG] Would publish to RabbitMQ: %s", msg.Topic())
-					}
-					if sbPublisher != nil && sbPublisher.IsConnected() {
-						log.Printf("[DEBUG] Would publish to Service Bus: %s", msg.Topic())
-					}
-				})
+	if !client.IsConnected() {
+		log.Println("[WARN] restoreSubscriptions: MQTT not connected yet, subscriptions will be restored after connection")
+		return
+	}
+
+	// Load sensor topics from database and subscribe
+	rows, err := db.Query(`SELECT mqtt_topic FROM hardware.sensors`)
+	if err != nil {
+		log.Printf("[ERROR] restoreSubscriptions: failed to query sensor topics: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	topicCount := 0
+	for rows.Next() {
+		var topic string
+		if err := rows.Scan(&topic); err != nil {
+			log.Printf("[ERROR] restoreSubscriptions: scan error: %v", err)
+			continue
+		}
+		if token := client.Subscribe(topic, 1, handleTelemetryStandalone(rmqPublisher, sbPublisher)); token.Wait() && token.Error() != nil {
+			log.Printf("[ERROR] restoreSubscriptions: failed to subscribe to %s: %v", topic, token.Error())
+		} else {
+			topicCount++
+		}
+	}
+	if topicCount > 0 {
+		log.Printf("[INFO] restoreSubscriptions: restored %d sensor subscriptions", topicCount)
+	}
+}
+
+// handleTelemetryStandalone processes MQTT telemetry messages and publishes to Service Bus/RabbitMQ
+// This is used during startup restore when the handler isn't available yet
+func handleTelemetryStandalone(rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) mqtt.MessageHandler {
+	return func(_ mqtt.Client, msg mqtt.Message) {
+		var payload TelemetryPayload
+		if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+			log.Printf("[WARN] handleTelemetryStandalone: unmarshal error on %s: %v", msg.Topic(), err)
+			return
+		}
+
+		log.Printf("[INFO] MQTT telemetry received: %d readings from %s", len(payload.Readings), msg.Topic())
+
+		// Publish to message bus for analytics
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		for _, reading := range payload.Readings {
+			event := TelemetryEvent{
+				SensorID:    payload.SensorID,
+				ParameterID: reading.ParameterID,
+				Value:       reading.Value,
+				Timestamp:   payload.Timestamp,
+				Metadata:    nil,
+			}
+			if sbPublisher != nil && sbPublisher.IsConnected() {
+				if err := sbPublisher.PublishTelemetry(ctx, event); err != nil {
+					log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+				}
+			}
+			if rmqPublisher != nil && rmqPublisher.IsConnected() {
+				if err := rmqPublisher.PublishTelemetry(ctx, event); err != nil {
+					log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+				}
 			}
 		}
 	}
