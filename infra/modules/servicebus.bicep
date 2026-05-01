@@ -86,3 +86,5 @@ output serviceBusNameOut string = serviceBusNamespace.name
 output connectionString string = connectionString
 output telemetryTopicName string = telemetryTopic.name
 output notificationsTopicName string = notificationsTopic.name
+output analyticsSubscriptionName string = analyticsSubscription.name
+output notificationSubscriptionName string = notificationSubscription.name
