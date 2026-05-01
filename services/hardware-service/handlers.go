@@ -401,10 +401,19 @@ func (h *Handler) CreateSensor(c *gin.Context) {
 	}
 
 	// Subscribe to telemetry topic for incoming data when MQTT is available.
-	if client := h.mqttClient(); client != nil && client.IsConnected() {
-		if token := client.Subscribe(mqttTopic, 1, h.handleTelemetry); token.Wait() && token.Error() != nil {
-			log.Printf("[WARN] CreateSensor: mqtt subscribe failed: %v", token.Error())
+	// Note: With SetResumeSubs enabled, subscriptions will persist across reconnections
+	if client := h.mqttClient(); client != nil {
+		if !client.IsConnected() {
+			log.Printf("[WARN] CreateSensor: MQTT not yet connected for topic %s (will retry on reconnect)", mqttTopic)
+		} else {
+			if token := client.Subscribe(mqttTopic, 1, h.handleTelemetry); token.Wait() && token.Error() != nil {
+				log.Printf("[ERROR] CreateSensor: mqtt subscribe failed for %s: %v", mqttTopic, token.Error())
+			} else {
+				log.Printf("[INFO] CreateSensor: subscribed to MQTT topic %s", mqttTopic)
+			}
 		}
+	} else {
+		log.Printf("[WARN] CreateSensor: MQTT client not available for topic %s", mqttTopic)
 	}
 
 	log.Printf("[INFO] CreateSensor: provisioned id=%s name=%s topic=%s", id, req.Name, mqttTopic)
