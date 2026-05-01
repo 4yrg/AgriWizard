@@ -45,6 +45,9 @@ param serviceBusConnection string
 @description('DB administrator username.')
 param dbUser string = 'agriwizard_admin'
 
+@description('Database name.')
+param dbName string = 'agriwizard'
+
 @description('The name of the ACR.')
 param acrName string = ''
 

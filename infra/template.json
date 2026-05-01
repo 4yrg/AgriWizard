@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "15684846857391326296"
+      "templateHash": "8133275290997546929"
     }
   },
   "parameters": {
@@ -89,6 +89,13 @@
       "defaultValue": "agriwizard_admin",
       "metadata": {
         "description": "DB administrator username."
+      }
+    },
+    "dbName": {
+      "type": "string",
+      "defaultValue": "agriwizard",
+      "metadata": {
+        "description": "Database name."
       }
     },
     "acrName": {
@@ -1637,6 +1644,22 @@
           "fqdn": ""
         }
       }
+    },
+    "dbHost": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'postgresql'), '2025-04-01').outputs.fullyQualifiedDomainName.value]"
+    },
+    "dbPort": {
+      "type": "string",
+      "value": "5432"
+    },
+    "dbName": {
+      "type": "string",
+      "value": "[parameters('dbName')]"
+    },
+    "dbUser": {
+      "type": "string",
+      "value": "[parameters('dbUser')]"
     }
   }
 }
