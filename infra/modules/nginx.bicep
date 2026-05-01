@@ -36,6 +36,8 @@ param maxReplicas int = 3
 @description('Container port.')
 param containerPort int = 8080
 
+var fqdnSuffix = 'yellowocean-38e04fed.centralindia.azurecontainerapps.io'
+
 resource nginxApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: appName
   location: location
@@ -65,6 +67,28 @@ resource nginxApp 'Microsoft.App/containerApps@2023-05-01' = {
         {
           name: appName
           image: '${acrLoginServer}/${imageName}:${imageTag}'
+          env: [
+            {
+              name: 'IAM_SERVICE_HOST'
+              value: 'iam-prod.${fqdnSuffix}'
+            }
+            {
+              name: 'HARDWARE_SERVICE_HOST'
+              value: 'hardware-prod.${fqdnSuffix}'
+            }
+            {
+              name: 'ANALYTICS_SERVICE_HOST'
+              value: 'analytics-prod.${fqdnSuffix}'
+            }
+            {
+              name: 'WEATHER_SERVICE_HOST'
+              value: 'weather-prod.${fqdnSuffix}'
+            }
+            {
+              name: 'NOTIFICATION_SERVICE_HOST'
+              value: 'notification-prod.${fqdnSuffix}'
+            }
+          ]
           resources: {
             cpu: json(cpu)
             memory: memory

@@ -627,6 +627,7 @@ jobs:
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
+          FQDN_SUFFIX="yellowocean-38e04fed.centralindia.azurecontainerapps.io"
 
           SB_CONN_STR="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
 
@@ -696,11 +697,11 @@ jobs:
               SMTP_PASSWORD=secretref:smtp-password \
               SMTP_USERNAME=secretref:smtp-username \
               SERVICE_BUS_CONNECTION=secretref:service-bus-connection \
-              IAM_SERVICE_HOST="iam-prod" \
-              HARDWARE_SERVICE_HOST="hardware-prod" \
-              ANALYTICS_SERVICE_HOST="analytics-prod" \
-              WEATHER_SERVICE_HOST="weather-prod" \
-              NOTIFICATION_SERVICE_HOST="notification-prod"
+              IAM_SERVICE_HOST="iam-prod.${FQDN_SUFFIX}" \
+              HARDWARE_SERVICE_HOST="hardware-prod.${FQDN_SUFFIX}" \
+              ANALYTICS_SERVICE_HOST="analytics-prod.${FQDN_SUFFIX}" \
+              WEATHER_SERVICE_HOST="weather-prod.${FQDN_SUFFIX}" \
+              NOTIFICATION_SERVICE_HOST="notification-prod.${FQDN_SUFFIX}"
 
           az containerapp ingress enable \
             --name "${APP_NAME}" \
