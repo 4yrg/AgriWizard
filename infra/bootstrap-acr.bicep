@@ -25,7 +25,7 @@ var resourceGroupName = '${namePrefix}-${environmentSuffix}-rg'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
 var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
-var apimName = take('${namePrefix}-${environmentSuffix}-apim', 50)
+var apimNameBase = take('${namePrefix}-${environmentSuffix}-apim', 24)
 
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group-bootstrap'
@@ -68,10 +68,9 @@ module apim './modules/apim.bicep' = {
   name: 'apim-bootstrap'
   scope: resourceGroup(resourceGroupName)
   params: {
-    apimName: apimName
+    apimNameBase: apimNameBase
     location: location
     publisherEmail: publisherEmail
-    publisherName: 'AgriWizard Platform'
     jwtIssuer: jwtIssuer
     allowedOrigins: allowedOrigins
     backendServices: []
@@ -85,5 +84,5 @@ output resourceGroupName string = resourceGroupName
 output acrName string = acr.outputs.acrNameOut
 output acrLoginServer string = acr.outputs.acrLoginServer
 output serviceBusConnectionString string = servicebus.outputs.connectionString
-output apimName string = apimName
+output apimName string = apim.outputs.apimName
 output apimGatewayUrl string = apim.outputs.apimGatewayUrl

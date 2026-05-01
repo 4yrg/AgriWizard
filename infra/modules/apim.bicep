@@ -2,17 +2,17 @@
 @allowed(['Consumption'])
 param apimSkuName string = 'Consumption'
 
-@description('API Management service name.')
-param apimName string
+@description('API Management service name base.')
+param apimNameBase string = 'agriwizard'
 
 @description('Location for the APIM instance.')
 param location string = resourceGroup().location
 
 @description('Publisher email for SSL certificates and notifications.')
-param publisherEmail string
+param publisherEmail string = '4yrg.main@gmail.com'
 
 @description('Publisher name.')
-param publisherName string = 'AgriWizard Platform'
+param publisherName string = 'AgriWizard Admin'
 
 @description('JWT issuer for API authentication.')
 param jwtIssuer string = 'agriwizard-iam'
@@ -27,7 +27,8 @@ param jwtSecret string = ''
 @description('List of backend services with their internal URLs.')
 param backendServices array = []
 
-var apimResourceName = apimName
+var uniqueSuffix = uniqueString(resourceGroup().id)
+var apimResourceName = '${apimNameBase}-${uniqueSuffix}'
 
 var backendUrlsMap = {
   iam: 'iam-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
@@ -56,7 +57,7 @@ resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
 module apimApi './apim-api.bicep' = {
   name: 'apim-api-config'
   params: {
-    apimName: apimName
+    apimName: apimResourceName
     location: location
     jwtIssuer: jwtIssuer
     jwtSecret: !empty(jwtSecret) ? jwtSecret : 'temp'
@@ -74,3 +75,4 @@ output apimPortalUrl string = apim.properties.portalUrl
 output apimGatewayUrl string = apim.properties.gatewayUrl
 output apimGatewayHostName string = apim.properties.gatewayUrl
 output managedIdentityPrincipalId string = apim.identity.principalId
+output apimNameBase string = apimNameBase

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "11647845241112953162"
+      "templateHash": "16352779037747702531"
     }
   },
   "parameters": {
@@ -65,7 +65,7 @@
     "identityName": "[format('{0}-{1}-aca-mi', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "uniqueSuffix": "[uniqueString(subscription().id, variables('resourceGroupName'))]",
     "computedAcrName": "[if(empty(parameters('acrName')), take(format('{0}acr{1}', parameters('namePrefix'), variables('uniqueSuffix')), 50), parameters('acrName'))]",
-    "apimName": "[take(format('{0}-{1}-apim', parameters('namePrefix'), parameters('environmentSuffix')), 50)]"
+    "apimNameBase": "[take(format('{0}-{1}-apim', parameters('namePrefix'), parameters('environmentSuffix')), 24)]"
   },
   "resources": [
     {
@@ -471,17 +471,14 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "apimName": {
-            "value": "[variables('apimName')]"
+          "apimNameBase": {
+            "value": "[variables('apimNameBase')]"
           },
           "location": {
             "value": "[parameters('location')]"
           },
           "publisherEmail": {
             "value": "[parameters('publisherEmail')]"
-          },
-          "publisherName": {
-            "value": "AgriWizard Platform"
           },
           "jwtIssuer": {
             "value": "[parameters('jwtIssuer')]"
@@ -500,7 +497,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "2834994923968319976"
+              "templateHash": "1996495072091514749"
             }
           },
           "parameters": {
@@ -514,10 +511,11 @@
                 "description": "API Management - Consumption tier"
               }
             },
-            "apimName": {
+            "apimNameBase": {
               "type": "string",
+              "defaultValue": "agriwizard",
               "metadata": {
-                "description": "API Management service name."
+                "description": "API Management service name base."
               }
             },
             "location": {
@@ -529,13 +527,14 @@
             },
             "publisherEmail": {
               "type": "string",
+              "defaultValue": "4yrg.main@gmail.com",
               "metadata": {
                 "description": "Publisher email for SSL certificates and notifications."
               }
             },
             "publisherName": {
               "type": "string",
-              "defaultValue": "AgriWizard Platform",
+              "defaultValue": "AgriWizard Admin",
               "metadata": {
                 "description": "Publisher name."
               }
@@ -572,7 +571,8 @@
             }
           },
           "variables": {
-            "apimResourceName": "[parameters('apimName')]",
+            "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+            "apimResourceName": "[format('{0}-{1}', parameters('apimNameBase'), variables('uniqueSuffix'))]",
             "backendUrlsMap": {
               "iam": "iam-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
               "hardware": "hardware-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
@@ -610,7 +610,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "apimName": {
-                    "value": "[parameters('apimName')]"
+                    "value": "[variables('apimResourceName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -862,6 +862,10 @@
             "managedIdentityPrincipalId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview', 'full').identity.principalId]"
+            },
+            "apimNameBase": {
+              "type": "string",
+              "value": "[parameters('apimNameBase')]"
             }
           }
         }
@@ -890,7 +894,7 @@
     },
     "apimName": {
       "type": "string",
-      "value": "[variables('apimName')]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'apim-bootstrap'), '2025-04-01').outputs.apimName.value]"
     },
     "apimGatewayUrl": {
       "type": "string",

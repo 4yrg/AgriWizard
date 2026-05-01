@@ -101,7 +101,7 @@ var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 var dbServerName = take('${namePrefix}-${environmentSuffix}-db-${uniqueSuffix}', 50)
-var apimName = take('${namePrefix}-${environmentSuffix}-apim', 50)
+var apimNameBase = take('${namePrefix}-${environmentSuffix}-apim', 24)
 
 var backendUrls = {
   iamUrl: 'iam-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
@@ -262,10 +262,8 @@ module apim './modules/apim.bicep' = {
   name: 'apim'
   scope: resourceGroup(resourceGroupName)
   params: {
-    apimName: apimName
+    apimNameBase: apimNameBase
     location: location
-    publisherEmail: publisherEmail
-    publisherName: 'AgriWizard Platform'
     jwtIssuer: jwtIssuer
     allowedOrigins: allowedOrigins
     backendServices: [
@@ -317,7 +315,7 @@ output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
 output dbName string = 'agriwizard'
 output dbUser string = dbUser
-output apimName string = apimName
+output apimName string = apim.outputs.apimName
 output apimGatewayUrl string = apim.outputs.apimGatewayUrl
 output apimGatewayHostName string = apim.outputs.apimGatewayHostName
 output apimPortalUrl string = apim.outputs.apimPortalUrl

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "16243531967996857036"
+      "templateHash": "6933205001485588151"
     }
   },
   "parameters": {
@@ -176,7 +176,7 @@
     "logAnalyticsWorkspaceName": "[format('{0}-{1}-law', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "identityName": "[format('{0}-{1}-aca-mi', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "dbServerName": "[take(format('{0}-{1}-db-{2}', parameters('namePrefix'), parameters('environmentSuffix'), variables('uniqueSuffix')), 50)]",
-    "apimName": "[take(format('{0}-{1}-apim', parameters('namePrefix'), parameters('environmentSuffix')), 50)]",
+    "apimNameBase": "[take(format('{0}-{1}-apim', parameters('namePrefix'), parameters('environmentSuffix')), 24)]",
     "backendUrls": {
       "iamUrl": "[format('iam-prod.{0}.centralindia.azurecontainerapps.io', variables('resourceGroupName'))]",
       "hardwareUrl": "[format('hardware-prod.{0}.centralindia.azurecontainerapps.io', variables('resourceGroupName'))]",
@@ -1333,17 +1333,11 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "apimName": {
-            "value": "[variables('apimName')]"
+          "apimNameBase": {
+            "value": "[variables('apimNameBase')]"
           },
           "location": {
             "value": "[parameters('location')]"
-          },
-          "publisherEmail": {
-            "value": "[parameters('publisherEmail')]"
-          },
-          "publisherName": {
-            "value": "AgriWizard Platform"
           },
           "jwtIssuer": {
             "value": "[parameters('jwtIssuer')]"
@@ -1388,7 +1382,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "5644576544592190488"
+              "templateHash": "1996495072091514749"
             }
           },
           "parameters": {
@@ -1402,10 +1396,11 @@
                 "description": "API Management - Consumption tier"
               }
             },
-            "apimName": {
+            "apimNameBase": {
               "type": "string",
+              "defaultValue": "agriwizard",
               "metadata": {
-                "description": "API Management service name."
+                "description": "API Management service name base."
               }
             },
             "location": {
@@ -1417,13 +1412,14 @@
             },
             "publisherEmail": {
               "type": "string",
+              "defaultValue": "4yrg.main@gmail.com",
               "metadata": {
                 "description": "Publisher email for SSL certificates and notifications."
               }
             },
             "publisherName": {
               "type": "string",
-              "defaultValue": "AgriWizard Platform",
+              "defaultValue": "AgriWizard Admin",
               "metadata": {
                 "description": "Publisher name."
               }
@@ -1460,7 +1456,8 @@
             }
           },
           "variables": {
-            "apimResourceName": "[parameters('apimName')]",
+            "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+            "apimResourceName": "[format('{0}-{1}', parameters('apimNameBase'), variables('uniqueSuffix'))]",
             "backendUrlsMap": {
               "iam": "iam-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
               "hardware": "hardware-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
@@ -1498,7 +1495,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "apimName": {
-                    "value": "[parameters('apimName')]"
+                    "value": "[variables('apimResourceName')]"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -1521,7 +1518,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.42.1.51946",
-                      "templateHash": "10951916497469475007"
+                      "templateHash": "9182399167870587364"
                     }
                   },
                   "parameters": {
@@ -1584,7 +1581,7 @@
                       "name": "[format('{0}/{1}', variables('apimResourceName'), 'policy')]",
                       "properties": {
                         "format": "rawxml",
-                        "value": "<policies>\n  <inbound>\n    <cors allow-credentials=\"true\" preserve-vary=\"true\">\n      <allowed-origins>\n        ${join([for origin in allowedOrigins: '<origin>${origin}</origin>'], '\\n        ')}\n      </allowed-origins>\n      <allowed-methods>\n        <method>GET</method>\n        <method>POST</method>\n        <method>PUT</method>\n        <method>DELETE</method>\n        <method>PATCH</method>\n        <method>OPTIONS</method>\n      </allowed-methods>\n      <allowed-headers>\n        <header>Authorization</header>\n        <header>Content-Type</header>\n        <header>X-Request-ID</header>\n        <header>X-Internal-Service</header>\n      </allowed-headers>\n    </cors>\n    <rate-limit-by-key calls=\"${rateLimitCalls}\" renewal-period=\"60\" counter-key=\"@(context.Request.IpAddress)\" />\n    <validate-jwt header-name=\"Authorization\" failed-validation-httpcode=\"401\" require-expiration-time=\"false\">\n      <openid-config url=\"https://${backendUrls.iamUrl}/.well-known/openid-configuration\" />\n      <audiences>\n        <audience>agriwizard</audience>\n      </audiences>\n      <issuers>\n        <issuer>${jwtIssuer}</issuer>\n      </issuers>\n    </validate-jwt>\n  </inbound>\n  <backend>\n    <forward-request />\n  </backend>\n  <outbound>\n    <set-header name=\"X-Kong-Upstream-Latency\" exists-action=\"override\" />\n    <set-header name=\"X-Kong-Proxy-Latency\" exists-action=\"override\" />\n  </outbound>\n</policies>\n"
+                        "value": "<policies>\n  <inbound>\n    <cors allow-credentials=\"true\">\n      <allowed-origins>\n        ${join([for origin in allowedOrigins: '<origin>${origin}</origin>'], '\\n        ')}\n      </allowed-origins>\n      <allowed-methods>\n        <method>GET</method>\n        <method>POST</method>\n        <method>PUT</method>\n        <method>DELETE</method>\n        <method>PATCH</method>\n        <method>OPTIONS</method>\n      </allowed-methods>\n      <allowed-headers>\n        <header>Authorization</header>\n        <header>Content-Type</header>\n      </allowed-headers>\n    </cors>\n    <set-header name=\"X-Forwarded-Host\" exists-action=\"override\">\n      <value>@(context.Request.Headers.GetValueOrDefault(\"Host\",\"\"))</value>\n    </set-header>\n  </inbound>\n  <backend>\n    <forward-request />\n  </backend>\n  <outbound>\n  </outbound>\n</policies>\n"
                       }
                     },
                     {
@@ -1750,6 +1747,10 @@
             "managedIdentityPrincipalId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview', 'full').identity.principalId]"
+            },
+            "apimNameBase": {
+              "type": "string",
+              "value": "[parameters('apimNameBase')]"
             }
           }
         }
@@ -1817,7 +1818,7 @@
     },
     "apimName": {
       "type": "string",
-      "value": "[variables('apimName')]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'apim'), '2025-04-01').outputs.apimName.value]"
     },
     "apimGatewayUrl": {
       "type": "string",
