@@ -49,9 +49,9 @@ func main() {
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"status":   "ok",
-			"service":  "weather-service",
-			"mock_mode": useMock,
+			"status":                  "ok",
+			"service":                 "weather-service",
+			"mock_mode":               useMock,
 			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
 		})
 	})

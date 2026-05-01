@@ -8,9 +8,7 @@ import {
   Activity, 
   Zap, 
   BarChart3, 
-  Settings2, 
   Clock, 
-  AlertCircle,
   Cpu
 } from "lucide-react";
 import { 
@@ -20,12 +18,7 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
+  ResponsiveContainer
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 

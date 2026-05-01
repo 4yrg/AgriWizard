@@ -43,9 +43,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":                "ok",
-		"service":               "notification-service",
-		"sb_notification_conn":  h.sbConsumer != nil && h.sbConsumer.IsConnected(),
+		"status":               "ok",
+		"service":              "notification-service",
+		"sb_notification_conn": h.sbConsumer != nil && h.sbConsumer.IsConnected(),
 	})
 }
 

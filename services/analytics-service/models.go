@@ -48,7 +48,7 @@ type DailySummary struct {
 	MaxRecorded float64   `json:"max_recorded" db:"max_recorded"`
 	Date        time.Time `json:"date" db:"date"`
 }
- 
+
 // EquipmentAnalysis tracks performance and usage for a specific device.
 type EquipmentAnalysis struct {
 	ID              string    `json:"id" db:"id"`

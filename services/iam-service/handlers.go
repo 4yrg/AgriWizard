@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"context"
 )
 
 // Handler holds the database status and config for all handlers.

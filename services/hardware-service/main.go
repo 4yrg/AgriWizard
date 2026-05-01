@@ -137,13 +137,13 @@ func main() {
 		rmqConnected := rmqPublisher != nil && rmqPublisher.IsConnected()
 		sbConnected := sbPublisher != nil && sbPublisher.IsConnected()
 		c.JSON(http.StatusOK, gin.H{
-			"status":    s,
-			"service":   "hardware-service",
-			"db_ready":  status.IsReady(),
-			"migrated":  status.migrated,
-			"mqtt_conn": mqttConnected,
-			"rmq_conn":  rmqConnected,
-			"sb_conn":   sbConnected,
+			"status":                  s,
+			"service":                 "hardware-service",
+			"db_ready":                status.IsReady(),
+			"migrated":                status.migrated,
+			"mqtt_conn":               mqttConnected,
+			"rmq_conn":                rmqConnected,
+			"sb_conn":                 sbConnected,
 			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
 		})
 	})
