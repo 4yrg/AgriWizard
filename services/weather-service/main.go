@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var sbNotificationPublisher *AzureServiceBusNotificationPublisher
+
 func main() {
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	owmAPIKey := getEnv("OWM_API_KEY", "") // Empty = use mock
@@ -32,12 +34,26 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	h := NewHandler(jwtSecret, owmAPIKey, owmBaseURL, lat, lon, cityName, useMock)
+	serviceBusConnection := getServiceBusConnection()
+	serviceBusNotificationsTopic := getServiceBusNotificationsTopic()
+
+	var err error
+	sbNotificationPublisher, err = NewAzureServiceBusNotificationPublisher(serviceBusConnection, serviceBusNotificationsTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification publisher initialization failed: %v", err)
+	}
+
+	h := NewHandler(jwtSecret, owmAPIKey, owmBaseURL, lat, lon, cityName, useMock, sbNotificationPublisher)
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "weather-service", "mock_mode": useMock})
+		c.JSON(200, gin.H{
+			"status":                  "ok",
+			"service":                 "weather-service",
+			"mock_mode":               useMock,
+			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
+		})
 	})
 
 	api := r.Group("/api/v1/weather")

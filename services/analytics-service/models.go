@@ -49,6 +49,17 @@ type DailySummary struct {
 	Date        time.Time `json:"date" db:"date"`
 }
 
+// EquipmentAnalysis tracks performance and usage for a specific device.
+type EquipmentAnalysis struct {
+	ID              string    `json:"id" db:"id"`
+	EquipmentID     string    `json:"equipment_id" db:"equipment_id"`
+	Date            time.Time `json:"date" db:"date"`
+	UsageCount      int       `json:"usage_count" db:"usage_count"`
+	EfficiencyScore float64   `json:"efficiency_score" db:"efficiency_score"`
+	LastAction      string    `json:"last_action" db:"last_action"`
+	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
+}
+
 // IngestPayload is the payload received from the Hardware Service.
 type IngestPayload struct {
 	SensorID  string                 `json:"sensor_id" binding:"required"`

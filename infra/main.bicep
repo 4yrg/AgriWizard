@@ -239,6 +239,22 @@ module coreApps './modules/aca-app.bicep' = [for (service, i) in backendServices
         secretRef: 'service-bus-connection'
       }
       {
+        name: 'SERVICE_BUS_TELEMETRY_TOPIC'
+        value: servicebus.outputs.telemetryTopicName
+      }
+      {
+        name: 'SERVICE_BUS_ANALYTICS_SUBSCRIPTION'
+        value: servicebus.outputs.analyticsSubscriptionName
+      }
+      {
+        name: 'SERVICE_BUS_NOTIFICATIONS_TOPIC'
+        value: servicebus.outputs.notificationsTopicName
+      }
+      {
+        name: 'SERVICE_BUS_NOTIFICATION_SUBSCRIPTION'
+        value: servicebus.outputs.notificationSubscriptionName
+      }
+      {
         name: 'SMTP_PASSWORD'
         secretRef: 'smtp-password'
       }

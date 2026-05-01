@@ -206,6 +206,7 @@ func main() {
 		api.POST("/ingest", h.Ingest)
 
 		api.GET("/summaries", h.GetDailySummaries)
+		api.GET("/equipment-analytics", h.GetEquipmentAnalytics)
 	}
 
 	// Block main thread
@@ -268,6 +269,19 @@ func runMigrations(db *sql.DB) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_summaries_date ON analytics.daily_summaries(date DESC);
+
+	CREATE TABLE IF NOT EXISTS analytics.equipment_analysis (
+		id           TEXT PRIMARY KEY,
+		equipment_id TEXT NOT NULL,
+		date         DATE NOT NULL,
+		usage_count  INTEGER NOT NULL DEFAULT 0,
+		efficiency_score DOUBLE PRECISION NOT NULL DEFAULT 100.0,
+		last_action  TEXT,
+		updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		UNIQUE (equipment_id, date)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_equip_analysis_date ON analytics.equipment_analysis(date DESC);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("analytics migration: %w", err)

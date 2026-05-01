@@ -456,6 +456,52 @@ func (h *Handler) GetDailySummaries(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Data: summaries})
 }
 
+// GetEquipmentAnalytics godoc
+// @Summary      Retrieve analytics for all equipment
+// @Tags         analytics
+// @Produce      json
+// @Security     BearerAuth
+// @Param        date  query  string  false  "Date in YYYY-MM-DD format (defaults to today)"
+// @Success      200   {object}  SuccessResponse
+// @Router       /api/v1/analytics/equipment-analytics [get]
+func (h *Handler) GetEquipmentAnalytics(c *gin.Context) {
+	dateStr := c.Query("date")
+	var date time.Time
+	if dateStr == "" {
+		date = time.Now().UTC().Truncate(24 * time.Hour)
+	} else {
+		var err error
+		date, err = time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_date"})
+			return
+		}
+	}
+
+	rows, err := h.db().Query(
+		`SELECT id, equipment_id, usage_count, efficiency_score, last_action, date, updated_at FROM analytics.equipment_analysis WHERE date=$1`,
+		date,
+	)
+	if err != nil {
+		log.Printf("[ERROR] GetEquipmentAnalytics: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "db_error"})
+		return
+	}
+	defer rows.Close()
+
+	var analytics []EquipmentAnalysis
+	for rows.Next() {
+		var a EquipmentAnalysis
+		if err := rows.Scan(&a.ID, &a.EquipmentID, &a.UsageCount, &a.EfficiencyScore, &a.LastAction, &a.Date, &a.UpdatedAt); err == nil {
+			analytics = append(analytics, a)
+		}
+	}
+	if analytics == nil {
+		analytics = []EquipmentAnalysis{}
+	}
+	c.JSON(http.StatusOK, SuccessResponse{Data: analytics})
+}
+
 // ──────────────────────────────────────────────
 //  Internal helpers
 // ──────────────────────────────────────────────
@@ -538,6 +584,27 @@ func (h *Handler) dispatchHardwareCommand(equipmentID, action string) {
 	}
 	defer resp.Body.Close()
 	log.Printf("[INFO] dispatchHardwareCommand: equipment=%s action=%s status=%d", equipmentID, action, resp.StatusCode)
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
+		h.updateEquipmentUsage(equipmentID, action)
+	}
+}
+
+// updateEquipmentUsage increments the usage count for an equipment.
+func (h *Handler) updateEquipmentUsage(equipmentID, action string) {
+	date := time.Now().UTC().Truncate(24 * time.Hour)
+	id := uuid.New().String()
+	_, err := h.db().Exec(`
+		INSERT INTO analytics.equipment_analysis (id, equipment_id, date, usage_count, last_action, updated_at)
+		VALUES ($1, $2, $3, 1, $4, NOW())
+		ON CONFLICT (equipment_id, date) DO UPDATE SET
+			usage_count = analytics.equipment_analysis.usage_count + 1,
+			last_action = EXCLUDED.last_action,
+			updated_at  = NOW()
+	`, id, equipmentID, date, action)
+	if err != nil {
+		log.Printf("[WARN] updateEquipmentUsage: %v", err)
+	}
 }
 
 func (h *Handler) publishAutomationNotification(sensorID, parameterID, equipmentID string, value float64, action, reason string, scaleFactor float64) {

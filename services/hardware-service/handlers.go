@@ -18,16 +18,24 @@ import (
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	status       *ServiceStatus
-	jwtSecret    string
-	analyticsURL string
-	rmqPublisher *RabbitMQPublisher
-	sbPublisher  *AzureServiceBusPublisher
+	status                  *ServiceStatus
+	jwtSecret               string
+	analyticsURL            string
+	rmqPublisher            *RabbitMQPublisher
+	sbPublisher             *AzureServiceBusPublisher
+	sbNotificationPublisher *AzureServiceBusNotificationPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, analyticsURL: analyticsURL, rmqPublisher: rmqPublisher, sbPublisher: sbPublisher}
+func NewHandler(status *ServiceStatus, jwtSecret, analyticsURL string, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher, sbNotificationPublisher *AzureServiceBusNotificationPublisher) *Handler {
+	return &Handler{
+		status:                  status,
+		jwtSecret:               jwtSecret,
+		analyticsURL:            analyticsURL,
+		rmqPublisher:            rmqPublisher,
+		sbPublisher:             sbPublisher,
+		sbNotificationPublisher: sbNotificationPublisher,
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -805,7 +813,30 @@ func (h *Handler) JWTAuthMiddleware() gin.HandlerFunc {
 		}
 		claims, _ := token.Claims.(jwt.MapClaims)
 		c.Set("user_id", claims["user_id"])
+		c.Set("email", claims["email"])
 		c.Set("role", claims["role"])
 		c.Next()
+	}
+}
+
+// sendNotification is a helper to send notifications via Service Bus
+func (h *Handler) sendNotification(recipient, subject, body string, metadata map[string]string) {
+	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := NotificationRequest{
+		Channel:   "email",
+		Recipient: recipient,
+		Subject:   subject,
+		Body:      body,
+		Metadata:  metadata,
+	}
+
+	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
+		log.Printf("[WARN] Failed to send notification: %v", err)
 	}
 }

@@ -199,6 +199,16 @@ export interface DailySummary {
   rules_triggered: number;
 }
 
+export interface EquipmentAnalysis {
+  id: string;
+  equipment_id: string;
+  usage_count: number;
+  efficiency_score: number;
+  last_action: string;
+  date: string;
+  updated_at: string;
+}
+
 // ── Weather Types ───────────────────────────────────────────────────────────
 
 export interface WeatherLocation {

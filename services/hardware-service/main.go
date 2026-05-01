@@ -17,6 +17,9 @@ import (
 	_ "github.com/lib/pq"
 )
 
+var sbPublisher *AzureServiceBusPublisher
+var sbNotificationPublisher *AzureServiceBusNotificationPublisher
+
 // ServiceStatus holds the shared service state.
 type ServiceStatus struct {
 	mu         sync.RWMutex
@@ -90,6 +93,7 @@ func main() {
 
 	serviceBusConnection := getServiceBusConnection()
 	serviceBusTopic := getServiceBusTopic()
+	serviceBusNotificationsTopic := getServiceBusNotificationsTopic()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
@@ -101,9 +105,14 @@ func main() {
 		log.Printf("[WARN] RabbitMQ publisher initialization failed: %v", err)
 	}
 
-	sbPublisher, err := NewAzureServiceBusPublisher(serviceBusConnection, serviceBusTopic)
+	sbPublisher, err = NewAzureServiceBusPublisher(serviceBusConnection, serviceBusTopic)
 	if err != nil {
 		log.Printf("[WARN] Azure Service Bus publisher initialization failed: %v", err)
+	}
+
+	sbNotificationPublisher, err = NewAzureServiceBusNotificationPublisher(serviceBusConnection, serviceBusNotificationsTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification publisher initialization failed: %v", err)
 	}
 
 	// --- Router ---
@@ -128,13 +137,14 @@ func main() {
 		rmqConnected := rmqPublisher != nil && rmqPublisher.IsConnected()
 		sbConnected := sbPublisher != nil && sbPublisher.IsConnected()
 		c.JSON(http.StatusOK, gin.H{
-			"status":    s,
-			"service":   "hardware-service",
-			"db_ready":  status.IsReady(),
-			"migrated":  status.migrated,
-			"mqtt_conn": mqttConnected,
-			"rmq_conn":  rmqConnected,
-			"sb_conn":   sbConnected,
+			"status":                  s,
+			"service":                 "hardware-service",
+			"db_ready":                status.IsReady(),
+			"migrated":                status.migrated,
+			"mqtt_conn":               mqttConnected,
+			"rmq_conn":                rmqConnected,
+			"sb_conn":                 sbConnected,
+			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
 		})
 	})
 
@@ -177,7 +187,7 @@ func main() {
 	}()
 
 	// Setup API routes
-	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher, sbPublisher)
+	h := NewHandler(status, jwtSecret, analyticsURL, rmqPublisher, sbPublisher, sbNotificationPublisher)
 	api := r.Group("/api/v1/hardware")
 	api.Use(h.requireDB(), h.JWTAuthMiddleware())
 	{
