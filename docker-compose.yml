@@ -82,7 +82,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kong:
+      gateway:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8086/health || exit 1"]
@@ -273,48 +273,22 @@ services:
       start_period: 30s
 
   # ────────────────────────────────────────────
-  #  API Gateway (Kong)
+  #  API Gateway (Nginx)
   # ────────────────────────────────────────────
 
-  kong:
+  gateway:
     build:
-      context: .
-      dockerfile: infrastructure/kong/Dockerfile
-    container_name: agriwizard-kong
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: agriwizard-gateway
     restart: unless-stopped
-    environment:
-      KONG_DATABASE: "off"
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_PROXY_LISTEN: 0.0.0.0:8000
-      KONG_LOG_LEVEL: info
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_JWT_SHARED_SECRET: "${JWT_SECRET:-super-secret-jwt-key-change-in-production}"
-      KONG_JWT_ISSUER: "${JWT_ISSUER:-agriwizard-iam}"
-      CORS_ALLOW_ORIGIN: "${CORS_ALLOW_ORIGIN:-*}"
-      IAM_UPSTREAM_PROTOCOL: "http"
-      IAM_UPSTREAM_HOST: iam-service
-      IAM_UPSTREAM_PORT: "8086"
-      HARDWARE_UPSTREAM_PROTOCOL: "http"
-      HARDWARE_UPSTREAM_HOST: hardware-service
-      HARDWARE_UPSTREAM_PORT: "8087"
-      ANALYTICS_UPSTREAM_PROTOCOL: "http"
-      ANALYTICS_UPSTREAM_HOST: analytics-service
-      ANALYTICS_UPSTREAM_PORT: "8088"
-      WEATHER_UPSTREAM_PROTOCOL: "http"
-      WEATHER_UPSTREAM_HOST: weather-service
-      WEATHER_UPSTREAM_PORT: "8089"
-      NOTIFICATION_UPSTREAM_PROTOCOL: "http"
-      NOTIFICATION_UPSTREAM_HOST: notification-service
-      NOTIFICATION_UPSTREAM_PORT: "8091"
     networks:
       - agriwizard-net
     ports:
-      - "${KONG_PROXY_PORT:-8000}:8000"
-      - "8081:8443"
-      - "8001:8001"
+      - "${GATEWAY_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD", "kong", "health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10s

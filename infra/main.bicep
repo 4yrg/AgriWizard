@@ -54,14 +54,8 @@ param tenantId string = ''
 @description('Global image tag override (e.g. github.sha).')
 param globalImageTag string = ''
 
-@description('APIM publisher email.')
-param publisherEmail string = 'devops@agriwizard.io'
-
-@description('JWT issuer for API authentication.')
-param jwtIssuer string = 'agriwizard-iam'
-
-@description('Allowed CORS origins.')
-param allowedOrigins array = ['*']
+@description('Gateway image tag.')
+param gatewayImageTag string = 'latest'
 
 var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
 var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
@@ -101,7 +95,7 @@ var managedEnvironmentName = '${namePrefix}-${environmentSuffix}-aca-env'
 var logAnalyticsWorkspaceName = '${namePrefix}-${environmentSuffix}-law'
 var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 var dbServerName = take('${namePrefix}-${environmentSuffix}-db-${uniqueSuffix}', 50)
-var apimNameBase = take('${namePrefix}-${environmentSuffix}-apim', 24)
+var nginxGatewayName = '${namePrefix}-${environmentSuffix}-gateway'
 
 var backendUrls = {
   iamUrl: 'iam-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
@@ -257,42 +251,22 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
   }
 }]
 
-// Azure API Management (replaces Kong gateway)
-module apim './modules/apim.bicep' = {
-  name: 'apim'
+// Nginx Gateway (replaces APIM)
+module gateway './modules/nginx.bicep' = {
+  name: 'nginx-gateway'
   scope: resourceGroup(resourceGroupName)
   params: {
-    apimNameBase: apimNameBase
-    location: location
-    jwtIssuer: jwtIssuer
-    allowedOrigins: allowedOrigins
-    backendServices: [
-      {
-        name: 'iam'
-        backendUrl: backendUrls.iamUrl
-        port: 8086
-      }
-      {
-        name: 'hardware'
-        backendUrl: backendUrls.hardwareUrl
-        port: 8087
-      }
-      {
-        name: 'analytics'
-        backendUrl: backendUrls.analyticsUrl
-        port: 8088
-      }
-      {
-        name: 'weather'
-        backendUrl: backendUrls.weatherUrl
-        port: 8089
-      }
-      {
-        name: 'notification'
-        backendUrl: backendUrls.notificationUrl
-        port: 8091
-      }
-    ]
+    appName: nginxGatewayName
+    managedEnvironmentId: acaEnvironment.outputs.managedEnvironmentId
+    identityResourceId: identity.outputs.identityId
+    acrLoginServer: acr.outputs.acrLoginServer
+    imageName: 'agriwizard-gateway'
+    imageTag: empty(globalImageTag) ? gatewayImageTag : globalImageTag
+    containerPort: 8080
+    cpu: '0.5'
+    memory: '1Gi'
+    minReplicas: 1
+    maxReplicas: 3
   }
   dependsOn: [
     coreApps
@@ -315,7 +289,5 @@ output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
 output dbName string = 'agriwizard'
 output dbUser string = dbUser
-output apimName string = apim.outputs.apimName
-output apimGatewayUrl string = apim.outputs.apimGatewayUrl
-output apimGatewayHostName string = apim.outputs.apimGatewayHostName
-output apimPortalUrl string = apim.outputs.apimPortalUrl
+output gatewayUrl string = 'https://${gateway.outputs.fqdn}'
+output gatewayFqdn string = gateway.outputs.fqdn

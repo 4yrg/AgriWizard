@@ -14,14 +14,8 @@
     "acrSku": {
       "value": "Standard"
     },
-    "publisherEmail": {
-      "value": "devops@agriwizard.io"
-    },
-    "jwtIssuer": {
-      "value": "agriwizard-iam"
-    },
-    "allowedOrigins": {
-      "value": ["*"]
+    "gatewayImageTag": {
+      "value": "latest"
     },
     "backendServices": {
       "value": [
