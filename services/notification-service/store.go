@@ -262,8 +262,7 @@ func RunMigrations(db *sql.DB) error {
 		error_msg  TEXT DEFAULT '',
 		metadata   JSONB DEFAULT '{}',
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		sent_at    TIMESTAMPTZ,
-		read_at    TIMESTAMPTZ
+		sent_at    TIMESTAMPTZ
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_notifications_status
@@ -272,16 +271,19 @@ func RunMigrations(db *sql.DB) error {
 		ON notifications.notifications(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_notifications_recipient
 		ON notifications.notifications(recipient);
-	CREATE INDEX IF NOT EXISTS idx_notifications_read_at
-		ON notifications.notifications(read_at) WHERE read_at IS NULL;
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("notification migrations: %w", err)
 	}
 
 	if _, err := db.Exec(`ALTER TABLE notifications.notifications ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`); err != nil {
-		log.Printf("[WARN] Could not add read_at column (may already exist): %v", err)
+		return fmt.Errorf("notification migrations (add read_at): %w", err)
 	}
+
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_notifications_read_at ON notifications.notifications(read_at) WHERE read_at IS NULL`); err != nil {
+		return fmt.Errorf("notification migrations (read_at index): %w", err)
+	}
+
 	log.Println("[INFO] Migrations applied")
 	return nil
 }
