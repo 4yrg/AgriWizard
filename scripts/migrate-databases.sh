@@ -1,15 +1,9 @@
 #!/bin/bash
 #
 # Database Migration Script for Per-Service Databases
-# Migrates schema from single 'agriwizard' database to per-service databases
 #
 
 set -euo pipefail
-
-echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║   AgriWizard Database Migration: Single DB → Per-Service DBs   ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
-echo ""
 
 # Configuration
 RESOURCE_GROUP="agriwizard-prod-rg"
@@ -17,218 +11,111 @@ DB_HOST="${DB_HOST:-}"
 DB_USER="${DB_USER:-agriwizard_admin}"
 
 if [ -z "$DB_HOST" ]; then
-  echo "🔎 Querying PostgreSQL server name in resource group $RESOURCE_GROUP..."
   DB_HOST=$(az postgres flexible-server list -g "$RESOURCE_GROUP" --query "[0].fullyQualifiedDomainName" -o tsv)
 fi
 
-if [ -z "$DB_HOST" ]; then
-  echo "❌ ERROR: Could not determine PostgreSQL host"
-  exit 1
-fi
-
-echo "🔎 Using Database Host: $DB_HOST"
-
-# Allow overrides, but default to the deployed Key Vault in the target resource group.
-KEY_VAULT="${KEY_VAULT:-}"
-if [ -z "$KEY_VAULT" ]; then
-  KEY_VAULT=$(az keyvault list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv)
-fi
-
-if [ -z "$KEY_VAULT" ]; then
-  echo "❌ ERROR: Could not determine Key Vault name in resource group $RESOURCE_GROUP"
-  exit 1
-fi
-
-echo "🔎 Using Key Vault: $KEY_VAULT"
-
-# Fetch credentials from Key Vault
-echo "🔐 Retrieving database password from Key Vault..."
+KEY_VAULT=$(az keyvault list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv)
 DB_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT" --name db-password --query 'value' -o tsv)
-
-if [ -z "$DB_PASSWORD" ]; then
-  echo "❌ ERROR: Could not retrieve DB password from Key Vault"
-  exit 1
-fi
 
 export PGPASSWORD="$DB_PASSWORD"
 
-echo "✅ Database credentials retrieved"
-echo ""
-
-# Verify connectivity
-echo "🔗 Testing connection to PostgreSQL server..."
-if psql -h "$DB_HOST" -U "$DB_USER" -d postgres -c "SELECT NOW();" &>/dev/null; then
-  echo "✅ Connected successfully"
-else
-  echo "❌ ERROR: Could not connect to PostgreSQL server"
-  exit 1
-fi
-
-echo ""
-echo "📋 Starting schema migration for all services..."
-echo ""
-
 # Migration SQL for each service
-declare -A SCHEMAS
+migrate_service() {
+  local service=$1
+  local db="agriwizard-$service-prod"
+  local sql_file="/tmp/migrate-$service.sql"
 
-# IAM Service Schema
-SCHEMAS[iam]='
-  CREATE SCHEMA IF NOT EXISTS iam;
-  CREATE TABLE IF NOT EXISTS iam.users (
-    id            TEXT PRIMARY KEY,
-    email         TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL DEFAULT '"'"'Agromist'"'"',
-    full_name     TEXT NOT NULL,
-    phone         TEXT,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_iam_users_email ON iam.users(email);
-  CREATE TABLE IF NOT EXISTS iam.tokens (
-    token_id      TEXT PRIMARY KEY,
-    user_id       TEXT NOT NULL REFERENCES iam.users(id),
-    issued_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at    TIMESTAMPTZ NOT NULL,
-    revoked_at    TIMESTAMPTZ
-  );
-  CREATE INDEX IF NOT EXISTS idx_iam_tokens_user ON iam.tokens(user_id);
-'
+  case "$service" in
+    iam)
+      cat <<EOF > "$sql_file"
+CREATE SCHEMA IF NOT EXISTS iam;
+CREATE TABLE IF NOT EXISTS iam.users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'Agromist',
+  full_name TEXT NOT NULL,
+  phone TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+EOF
+      ;;
+    hardware)
+      cat <<EOF > "$sql_file"
+CREATE SCHEMA IF NOT EXISTS hardware;
+CREATE TABLE IF NOT EXISTS hardware.equipment (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  location TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS hardware.sensors (
+  id TEXT PRIMARY KEY,
+  equipment_id TEXT NOT NULL REFERENCES hardware.equipment(id),
+  sensor_type TEXT NOT NULL,
+  unit TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS hardware.sensor_readings (
+  id TEXT PRIMARY KEY,
+  sensor_id TEXT NOT NULL REFERENCES hardware.sensors(id),
+  value FLOAT NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+EOF
+      ;;
+    analytics)
+      cat <<EOF > "$sql_file"
+CREATE SCHEMA IF NOT EXISTS analytics;
+CREATE TABLE IF NOT EXISTS analytics.thresholds (
+  id TEXT PRIMARY KEY,
+  parameter_type TEXT NOT NULL,
+  min_value FLOAT,
+  max_value FLOAT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+EOF
+      ;;
+    weather)
+      cat <<EOF > "$sql_file"
+CREATE SCHEMA IF NOT EXISTS weather;
+CREATE TABLE IF NOT EXISTS weather.cache (
+  location TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+EOF
+      ;;
+    notification)
+      cat <<EOF > "$sql_file"
+CREATE SCHEMA IF NOT EXISTS notification;
+CREATE TABLE IF NOT EXISTS notification.messages (
+  id TEXT PRIMARY KEY,
+  recipient TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+EOF
+      ;;
+  esac
 
-# Hardware Service Schema
-SCHEMAS[hardware]='
-  CREATE SCHEMA IF NOT EXISTS hardware;
-  CREATE TABLE IF NOT EXISTS hardware.equipment (
-    id           TEXT PRIMARY KEY,
-    name         TEXT NOT NULL,
-    type         TEXT NOT NULL,
-    location     TEXT,
-    status       TEXT NOT NULL DEFAULT '"'"'active'"'"',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE TABLE IF NOT EXISTS hardware.sensors (
-    id           TEXT PRIMARY KEY,
-    equipment_id TEXT NOT NULL REFERENCES hardware.equipment(id),
-    sensor_type  TEXT NOT NULL,
-    unit         TEXT NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE TABLE IF NOT EXISTS hardware.sensor_readings (
-    id          TEXT PRIMARY KEY,
-    sensor_id   TEXT NOT NULL REFERENCES hardware.sensors(id),
-    value       FLOAT NOT NULL,
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_hardware_sensors_equipment ON hardware.sensors(equipment_id);
-  CREATE INDEX IF NOT EXISTS idx_hardware_readings_sensor ON hardware.sensor_readings(sensor_id);
-  CREATE INDEX IF NOT EXISTS idx_hardware_readings_time ON hardware.sensor_readings(recorded_at DESC);
-'
-
-# Analytics Service Schema
-SCHEMAS[analytics]='
-  CREATE SCHEMA IF NOT EXISTS analytics;
-  CREATE TABLE IF NOT EXISTS analytics.thresholds (
-    id              TEXT PRIMARY KEY,
-    parameter_type  TEXT NOT NULL,
-    min_value       FLOAT,
-    max_value       FLOAT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE TABLE IF NOT EXISTS analytics.rules (
-    id              TEXT PRIMARY KEY,
-    parameter_type  TEXT NOT NULL,
-    condition       TEXT NOT NULL,
-    action          TEXT NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE TABLE IF NOT EXISTS analytics.decisions (
-    id              TEXT PRIMARY KEY,
-    rule_id         TEXT NOT NULL REFERENCES analytics.rules(id),
-    parameter_type  TEXT NOT NULL,
-    decision        TEXT NOT NULL,
-    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_analytics_decisions_rule ON analytics.decisions(rule_id);
-  CREATE INDEX IF NOT EXISTS idx_analytics_decisions_time ON analytics.decisions(recorded_at DESC);
-'
-
-# Weather Service Schema  
-SCHEMAS[weather]='
-  CREATE SCHEMA IF NOT EXISTS weather;
-  CREATE TABLE IF NOT EXISTS weather.cache (
-    location      TEXT PRIMARY KEY,
-    data          JSONB NOT NULL,
-    cached_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at    TIMESTAMPTZ NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS weather.alerts (
-    id            TEXT PRIMARY KEY,
-    location      TEXT NOT NULL,
-    alert_type    TEXT NOT NULL,
-    severity      TEXT NOT NULL,
-    message       TEXT NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at    TIMESTAMPTZ
-  );
-  CREATE INDEX IF NOT EXISTS idx_weather_alerts_location ON weather.alerts(location);
-  CREATE INDEX IF NOT EXISTS idx_weather_alerts_time ON weather.alerts(created_at DESC);
-'
-
-# Notification Service Schema
-SCHEMAS[notification]='
-  CREATE SCHEMA IF NOT EXISTS notification;
-  CREATE TABLE IF NOT EXISTS notification.messages (
-    id         TEXT PRIMARY KEY,
-    recipient  TEXT NOT NULL,
-    subject    TEXT NOT NULL,
-    body       TEXT NOT NULL,
-    status     TEXT NOT NULL DEFAULT '"'"'pending'"'"',
-    sent_at    TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE TABLE IF NOT EXISTS notification.templates (
-    id          TEXT PRIMARY KEY,
-    name        TEXT UNIQUE NOT NULL,
-    subject     TEXT NOT NULL,
-    body_template TEXT NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_notification_messages_recipient ON notification.messages(recipient);
-  CREATE INDEX IF NOT EXISTS idx_notification_messages_status ON notification.messages(status);
-  CREATE INDEX IF NOT EXISTS idx_notification_messages_time ON notification.messages(created_at DESC);
-'
-
-# Databases to migrate to
-declare -A DATABASES
-DATABASES[iam]="agriwizard-iam-prod"
-DATABASES[hardware]="agriwizard-hardware-prod"
-DATABASES[analytics]="agriwizard-analytics-prod"
-DATABASES[weather]="agriwizard-weather-prod"
-DATABASES[notification]="agriwizard-notification-prod"
-
-# Execute migrations
-failed=0
-for service in iam hardware analytics weather notification; do
-  db="${DATABASES[$service]}"
-  schema="${SCHEMAS[$service]}"
   echo "📦 Migrating $service → $db"
-  if psql -h "$DB_HOST" -U "$DB_USER" -d "$db" -c "$schema" &>/dev/null; then
-    echo "   ✅ Schema created successfully"
-  else
-    echo "   ❌ ERROR: Schema creation failed"
-    ((failed++))
-  fi
+  psql -h "$DB_HOST" -U "$DB_USER" -d "$db" -f "$sql_file" > /dev/null
+  echo "   ✅ Success"
+}
+
+for s in iam hardware analytics weather notification; do
+  migrate_service "$s"
 done
 
-echo ""
-if [ $failed -eq 0 ]; then
-  echo "✅ All database migrations completed successfully!"
-else
-  echo "❌ $failed migration(s) failed."
-  exit 1
-fi
+echo "✅ All migrations completed!"

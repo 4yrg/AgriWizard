@@ -93,13 +93,13 @@ echo ""
 
 # 6. Notifications Service
 echo "--- 🔔 Notifications Service ---"
-check_res "Send Notification" $(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/v1/notifications" \
+check_res "Send Notification" $(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/v1/notifications/send" \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $TOKEN" \
-     -d '{"recipient": "admin@agriwizard.local", "subject": "Test Notification", "body": "This is a test from the gateway verification script."}')
+     -d '{"channel": "email", "recipient": "admin@agriwizard.local", "subject": "Test Notification", "body": "This is a test from the gateway verification script."}')
 
 check_res "List Notifications" $(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/notifications")
-check_res "List Templates" $(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/notifications/templates")
+check_res "List Templates" $(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/templates")
 echo ""
 
 echo "Verification Complete."
