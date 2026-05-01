@@ -693,8 +693,8 @@ jobs:
             --only-show-errors \
             --set-env-vars \
               JWT_ISSUER="${JWT_ISSUER}" \
+              JWT_SECRET="${{ secrets.JWT_SECRET }}" \
               ACA_FQDN_SUFFIX="${{ vars.ACA_FQDN_SUFFIX || 'centralindia.azurecontainerapps.io' }}" \
-              KONG_JWT_SHARED_SECRET="${{ secrets.KONG_JWT_SHARED_SECRET || 'agriwizard-kong-secret' }}" \
               CORS_ALLOW_ORIGIN="${{ vars.CORS_ALLOW_ORIGIN || '*' }}"
 
           az containerapp ingress enable \

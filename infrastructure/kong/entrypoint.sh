@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-export KONG_JWT_SHARED_SECRET="${KONG_JWT_SHARED_SECRET:-super-secret-jwt-key-change-in-production}"
-export KONG_JWT_ISSUER="${KONG_JWT_ISSUER:-${JWT_ISSUER:-agriwizard-iam}}"
+export KONG_JWT_SHARED_SECRET="${JWT_SECRET:-super-secret-jwt-key-change-in-production}"
+export KONG_JWT_ISSUER="${JWT_ISSUER:-agriwizard-iam}"
 export CORS_ALLOW_ORIGIN="${CORS_ALLOW_ORIGIN:-*}"
 
 # Azure Container Apps - Public FQDN suffix
