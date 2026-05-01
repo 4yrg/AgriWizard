@@ -356,6 +356,11 @@ jobs:
     timeout-minutes: 30
     needs: [push, deploy-bootstrap]
     if: github.event_name != 'pull_request'
+    outputs:
+      db_host: ${{ steps.deploy.outputs.db_host }}
+      db_port: ${{ steps.deploy.outputs.db_port }}
+      db_name: ${{ steps.deploy.outputs.db_name }}
+      db_user: ${{ steps.deploy.outputs.db_user }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -469,6 +474,11 @@ jobs:
           echo "## Infrastructure Deployment Outputs" >> "$GITHUB_STEP_SUMMARY"
           jq '.properties.outputs' deployment.json >> "$GITHUB_STEP_SUMMARY"
 
+          echo "db_host=$(jq -r '.properties.outputs.dbHost.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          echo "db_port=$(jq -r '.properties.outputs.dbPort.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          echo "db_name=$(jq -r '.properties.outputs.dbName.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          echo "db_user=$(jq -r '.properties.outputs.dbUser.value' deployment.json)" >> "$GITHUB_OUTPUT"
+
   # ───────────────────────────────────────────────
   # ───────────────────────────────────────────────
   # 8. DEPLOY TO PRODUCTION
@@ -523,17 +533,19 @@ jobs:
       MEMORY: ${{ vars.ACA_MEMORY || '1Gi' }}
       MIN_REPLICAS: ${{ vars.ACA_MIN_REPLICAS_PRODUCTION || '2' }}
       MAX_REPLICAS: ${{ vars.ACA_MAX_REPLICAS_PRODUCTION || '5' }}
-      DB_HOST: ${{ vars.DB_HOST }}
-      DB_PORT: ${{ vars.DB_PORT }}
-      DB_USER: ${{ vars.DB_USER }}
-      DB_NAME: ${{ vars.DB_NAME }}
-      DB_SSLMODE: ${{ vars.DB_SSLMODE }}
+      DB_HOST: ${{ needs.deploy-infra.outputs.db_host }}
+      DB_PORT: ${{ needs.deploy-infra.outputs.db_port }}
+      DB_USER: ${{ needs.deploy-infra.outputs.db_user }}
+      DB_NAME: ${{ needs.deploy-infra.outputs.db_name }}
+      DB_SSLMODE: ${{ vars.DB_SSLMODE || 'require' }}
       JWT_ISSUER: ${{ vars.JWT_ISSUER }}
       OWM_BASE_URL: ${{ vars.OWM_BASE_URL }}
       LOCATION_LAT: ${{ vars.LOCATION_LAT }}
       LOCATION_LON: ${{ vars.LOCATION_LON }}
       LOCATION_CITY: ${{ vars.LOCATION_CITY }}
       USE_MOCK: ${{ vars.USE_MOCK }}
+      MQTT_BROKER: ${{ vars.MQTT_BROKER }}
+      MQTT_USERNAME: ${{ vars.MQTT_USERNAME }}
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
     steps:
@@ -601,12 +613,7 @@ jobs:
           APP_NAME="${{ steps.app.outputs.name }}"
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
-          SB_NAME=$(az servicebus namespace list --resource-group "${ACA_RESOURCE_GROUP}" --query '[0].name' -o tsv)
-          SB_CONN_STR=$(az servicebus namespace authorization-rule keys list \
-            --resource-group "${ACA_RESOURCE_GROUP}" \
-            --namespace-name "${SB_NAME}" \
-            --name "RootManageSharedAccessKey" \
-            --query primaryConnectionString -o tsv)
+          SB_CONN_STR="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
 
           az containerapp secret set \
             --name "${APP_NAME}" \
@@ -643,6 +650,8 @@ jobs:
               LOCATION_LON="${LOCATION_LON}" \
               LOCATION_CITY="${LOCATION_CITY}" \
               USE_MOCK="${USE_MOCK}" \
+              MQTT_BROKER="${MQTT_BROKER}" \
+              MQTT_USERNAME="${MQTT_USERNAME}" \
               NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
               NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
               DB_PASSWORD=secretref:db-password \
@@ -660,7 +669,7 @@ jobs:
             --type external \
             --only-show-errors
 
-      - name: Apply Kong scaling policy
+      - name: Apply Kong scaling policy, env vars, and ingress
         if: matrix.service == 'kong'
         shell: bash
         run: |
@@ -672,7 +681,12 @@ jobs:
             --memory "${MEMORY}" \
             --min-replicas "${MIN_REPLICAS}" \
             --max-replicas "${MAX_REPLICAS}" \
-            --only-show-errors
+            --only-show-errors \
+            --set-env-vars \
+              JWT_ISSUER="${JWT_ISSUER}" \
+              ACA_FQDN_SUFFIX="${{ vars.ACA_FQDN_SUFFIX }}" \
+              KONG_JWT_SHARED_SECRET="${{ secrets.KONG_JWT_SHARED_SECRET }}" \
+              CORS_ALLOW_ORIGIN="${{ vars.CORS_ALLOW_ORIGIN }}"
 
           az containerapp ingress enable \
             --name "${{ steps.app.outputs.name }}" \
