@@ -10,7 +10,6 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    # Enable slash merging to handle //api/v1... cases gracefully
     merge_slashes on;
 
     client_header_buffer_size 16k;
@@ -34,67 +33,111 @@ http {
     server {
         listen 8080;
         server_name _;
-        
-        # Disable absolute redirects to prevent internal port/HTTP leaks
         absolute_redirect off;
         port_in_redirect off;
 
-        # IAM Service
-        location /api/v1/iam/ {
-            proxy_pass http://${IAM_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/iam {
+            return 301 /api/v1/iam/;
+        }
+
+        location ^~ /api/v1/iam/ {
+            rewrite ^/api/v1/iam/health/?$ /health break;
+            proxy_pass https://${IAM_SERVICE_HOST};
+            proxy_set_header Host ${IAM_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/iam/.*)$ $1;
         }
 
-        # Hardware Service
-        location /api/v1/hardware/ {
-            proxy_pass http://${HARDWARE_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/hardware {
+            return 301 /api/v1/hardware/;
+        }
+
+        location ^~ /api/v1/hardware/ {
+            rewrite ^/api/v1/hardware/health/?$ /health break;
+            proxy_pass https://${HARDWARE_SERVICE_HOST};
+            proxy_set_header Host ${HARDWARE_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/hardware/.*)$ $1;
         }
 
-        # Analytics Service
-        location /api/v1/analytics/ {
-            proxy_pass http://${ANALYTICS_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/analytics {
+            return 301 /api/v1/analytics/;
+        }
+
+        location ^~ /api/v1/analytics/ {
+            rewrite ^/api/v1/analytics/health/?$ /health break;
+            proxy_pass https://${ANALYTICS_SERVICE_HOST};
+            proxy_set_header Host ${ANALYTICS_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/analytics/.*)$ $1;
         }
 
-        # Weather Service
-        location /api/v1/weather/ {
-            proxy_pass http://${WEATHER_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/weather {
+            return 301 /api/v1/weather/;
+        }
+
+        location ^~ /api/v1/weather/ {
+            rewrite ^/api/v1/weather/health/?$ /health break;
+            proxy_pass https://${WEATHER_SERVICE_HOST};
+            proxy_set_header Host ${WEATHER_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/weather/.*)$ $1;
         }
 
-        # Notifications Service
-        location /api/v1/notifications/ {
-            proxy_pass http://${NOTIFICATION_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/notifications {
+            return 301 /api/v1/notifications/;
+        }
+
+        location ^~ /api/v1/notifications/ {
+            rewrite ^/api/v1/notifications/health/?$ /health break;
+            proxy_pass https://${NOTIFICATION_SERVICE_HOST};
+            proxy_set_header Host ${NOTIFICATION_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/notifications/.*)$ $1;
         }
 
-        # Templates (part of Notification Service)
-        location /api/v1/templates/ {
-            proxy_pass http://${NOTIFICATION_SERVICE_HOST}/;
-            proxy_set_header Host $host;
+        location = /api/v1/templates {
+            return 301 /api/v1/templates/;
+        }
+
+        location ^~ /api/v1/templates/ {
+            proxy_pass https://${NOTIFICATION_SERVICE_HOST};
+            proxy_set_header Host ${NOTIFICATION_SERVICE_HOST};
+            proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_ssl_server_name on;
+            proxy_ssl_verify off;
+            proxy_redirect ~^https?://[^/]+(/api/v1/templates/.*)$ $1;
         }
 
-        # Gateway Internal Health Check
-        location /health {
+        location = /health {
             access_log off;
             return 200 "healthy\n";
             add_header Content-Type text/plain;
