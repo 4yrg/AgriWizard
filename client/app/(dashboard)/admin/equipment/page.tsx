@@ -631,6 +631,153 @@ function TableSkeleton() {
   );
 }
 
+function ManualDispatchPanel({ equipment }: { equipment: Equipment[] }) {
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState("");
+  const [selectedOperation, setSelectedOperation] = useState("");
+  const [isDispatching, setIsDispatching] = useState(false);
+
+  const selectedEquip = equipment.find((e) => e.id === selectedEquipmentId);
+
+  const handleDispatch = async () => {
+    if (!selectedEquipmentId || !selectedOperation) {
+      toast.error("Please select equipment and operation");
+      return;
+    }
+
+    setIsDispatching(true);
+    try {
+      await hardwareApi.controlEquipment(selectedEquipmentId, {
+        operation: selectedOperation,
+      });
+
+      toast.success("Command dispatched", {
+        description: `${selectedOperation} command sent to ${selectedEquip?.name}`,
+      });
+
+      mutate("equipment");
+      setSelectedEquipmentId("");
+      setSelectedOperation("");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error("Dispatch failed", {
+          description: err.message,
+        });
+      } else {
+        toast.error("Dispatch failed", {
+          description: "An unexpected error occurred",
+        });
+      }
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
+  return (
+    <Card className="mb-6 border-blue-200/50 bg-gradient-to-br from-blue-50/50 to-transparent">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Zap className="h-5 w-5 text-blue-500" />
+          Manual Equipment Dispatch
+        </CardTitle>
+        <CardDescription>
+          Directly trigger equipment operations via MQTT
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field>
+            <FieldLabel htmlFor="select-equipment">Select Equipment</FieldLabel>
+            <Select value={selectedEquipmentId} onValueChange={setSelectedEquipmentId}>
+              <SelectTrigger id="select-equipment">
+                <SelectValue placeholder="Choose equipment..." />
+              </SelectTrigger>
+              <SelectContent>
+                {equipment.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    <div className="flex items-center gap-2">
+                      <Server className="h-4 w-4" />
+                      {item.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {selectedEquip && (
+            <Field>
+              <FieldLabel htmlFor="select-operation">Operation</FieldLabel>
+              <Select value={selectedOperation} onValueChange={setSelectedOperation}>
+                <SelectTrigger id="select-operation">
+                  <SelectValue placeholder="Choose operation..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedEquip.supported_operations.map((op) => (
+                    <SelectItem key={op} value={op}>
+                      {op}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {selectedEquip && selectedOperation && (
+            <div className="flex flex-col justify-between">
+              <div>
+                <FieldLabel>MQTT Topic</FieldLabel>
+                <code className="text-xs bg-white border rounded px-2 py-1.5 block mt-2 font-mono text-muted-foreground">
+                  {selectedEquip.mqtt_topic}
+                </code>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {selectedEquip && selectedOperation && (
+          <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-200/50 text-sm">
+            <p className="font-medium text-blue-900">Preview</p>
+            <p className="text-blue-700 text-xs mt-1">
+              Sending <span className="font-mono font-semibold">{selectedOperation}</span> command to{" "}
+              <span className="font-mono font-semibold">{selectedEquip.name}</span> via MQTT
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSelectedEquipmentId("");
+              setSelectedOperation("");
+            }}
+            disabled={isDispatching || !selectedEquipmentId}
+          >
+            Clear
+          </Button>
+          <Button
+            onClick={handleDispatch}
+            disabled={isDispatching || !selectedEquipmentId || !selectedOperation}
+            className="bg-blue-500 hover:bg-blue-600"
+          >
+            {isDispatching ? (
+              <>
+                <Spinner className="mr-2" />
+                Dispatching...
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4 mr-2" />
+                Dispatch Command
+              </>
+            )}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function EquipmentPage() {
   const { isLoading: authLoading } = useRequireAuth("Admin");
   const { data: equipment, isLoading: equipmentLoading } = useEquipment();
@@ -648,6 +795,10 @@ export default function EquipmentPage() {
         </div>
         <AddEquipmentDialog />
       </div>
+
+      {!isLoading && equipment && equipment.length > 0 && (
+        <ManualDispatchPanel equipment={equipment} />
+      )}
 
       <Card>
         <CardHeader>
