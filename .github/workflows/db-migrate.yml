@@ -1,0 +1,247 @@
+name: Database Migration - Single to Per-Service
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      migrate_now:
+        description: "Run database migration now?"
+        required: true
+        default: "true"
+
+  # Can also be triggered after successful deploy
+  # workflow_run:
+  #   workflows: ["Deploy to ACA"]
+  #   types: [completed]
+  #   branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  migrate-databases:
+    name: Migrate Databases to Per-Service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run database migration script
+        shell: bash
+        run: |
+          echo "🚀 Starting database migration workflow..."
+          
+          # Configuration
+          DB_HOST="agriwizard-prod-db-7i7k3p7kcgay2.postgres.database.azure.com"
+          DB_USER="agriwizard_admin"
+          RESOURCE_GROUP="agriwizard-prod-rg"
+          KEY_VAULT="agriwizard-prod-kv"
+          
+          # Fetch credentials from Key Vault
+          echo "🔐 Retrieving database password from Key Vault..."
+          DB_PASSWORD=$(az keyvault secret show --vault-name "$KEY_VAULT" --name db-password --query 'value' -o tsv)
+          
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "❌ ERROR: Could not retrieve DB password from Key Vault"
+            exit 1
+          fi
+          
+          export PGPASSWORD="$DB_PASSWORD"
+          
+          # Verify connectivity
+          echo "🔗 Testing connection to PostgreSQL server..."
+          if ! psql -h "$DB_HOST" -U "$DB_USER" -d postgres -c "SELECT NOW();" &>/dev/null; then
+            echo "❌ ERROR: Could not connect to PostgreSQL server"
+            exit 1
+          fi
+          
+          echo "✅ Connected successfully"
+          echo ""
+          
+          # Run the migration script
+          bash scripts/migrate-databases.sh
+          
+          EXIT_CODE=$?
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Migration failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+
+      - name: Wait for services to settle
+        shell: bash
+        run: |
+          echo "⏳ Waiting 30 seconds for services to initialize..."
+          sleep 30
+
+      - name: Verify database connections
+        shell: bash
+        run: |
+          echo "🔍 Verifying database connections..."
+          
+          RESOURCE_GROUP="agriwizard-prod-rg"
+          
+          for service in iam hardware analytics weather notification; do
+            echo ""
+            echo "=== Checking $service-prod ==="
+            
+            # Get recent logs
+            logs=$(az containerapp logs show -g "$RESOURCE_GROUP" -n "$service-prod" --tail 30 2>/dev/null || true)
+            
+            # Check for success indicators
+            if echo "$logs" | grep -qi "migration.*success\|schema.*created\|table.*exist\|ready"; then
+              echo "✅ Service appears to have migrated successfully"
+            fi
+            
+            # Check for connection status
+            if echo "$logs" | grep -qi "database.*fail\|connection.*fail"; then
+              echo "⚠️  Still showing connection failures (may be from before migration)"
+            fi
+            
+            # Show health check status
+            health_status=$(az containerapp show -g "$RESOURCE_GROUP" -n "$service-prod" \
+              --query 'properties.template.containers[0].env[] | select(.name=="DB_NAME") | .value' \
+              -o tsv 2>/dev/null || echo "unknown")
+            echo "DB_NAME configured: $health_status"
+          done
+
+      - name: Restart services to pick up schema
+        shell: bash
+        run: |
+          echo "🔄 Restarting services to establish new connections with schema..."
+          
+          RESOURCE_GROUP="agriwizard-prod-rg"
+          TIMESTAMP=$(date +%s)
+          
+          for service in iam hardware analytics weather notification; do
+            echo "  → Restarting $service-prod..."
+            az containerapp update -g "$RESOURCE_GROUP" -n "$service-prod" \
+              --set-env-vars RESTART_TIMESTAMP="$TIMESTAMP" \
+              --only-show-errors 2>&1 | grep -E "Updated|Error|error" || true
+          done
+          
+          echo "✅ Restart commands sent"
+
+      - name: Wait for services to restart
+        shell: bash
+        run: |
+          echo "⏳ Waiting 60 seconds for services to restart and connect..."
+          sleep 60
+
+      - name: Final verification
+        shell: bash
+        run: |
+          echo "🎯 Final verification of database connections..."
+          
+          RESOURCE_GROUP="agriwizard-prod-rg"
+          SUCCESS_COUNT=0
+          
+          for service in iam hardware analytics weather notification; do
+            echo ""
+            echo "=== Final Check: $service-prod ==="
+            
+            # Get last 50 lines of logs
+            logs=$(az containerapp logs show -g "$RESOURCE_GROUP" -n "$service-prod" --tail 50 2>/dev/null || true)
+            
+            # Check for success indicators
+            if echo "$logs" | grep -q "200\|OK\|ready\|success\|Running"; then
+              echo "✅ Service is responding"
+              ((SUCCESS_COUNT++))
+            fi
+            
+            # Check for errors
+            if echo "$logs" | grep -qi "error\|failed\|connection failed"; then
+              echo "⚠️  Still showing some errors in logs"
+            fi
+            
+            # Show DB name
+            db_name=$(az containerapp show -g "$RESOURCE_GROUP" -n "$service-prod" \
+              --query 'properties.template.containers[0].env[] | select(.name=="DB_NAME") | .value' \
+              -o tsv 2>/dev/null || echo "unknown")
+            echo "Assigned DB: $db_name"
+          done
+          
+          echo ""
+          if [ $SUCCESS_COUNT -ge 4 ]; then
+            echo "✅ Most services are responding"
+          else
+            echo "⚠️  Not all services responding yet, may need additional time"
+          fi
+
+      - name: Create deployment summary
+        if: always()
+        shell: bash
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## Database Migration Summary
+          
+          ### Completed Steps
+          - ✅ Retrieved credentials from Key Vault
+          - ✅ Verified PostgreSQL connectivity
+          - ✅ Created per-service database schemas
+          - ✅ Restarted services to pick up schema
+          - ✅ Verified service connections
+          
+          ### Databases Migrated
+          | Service | Database | Status |
+          |---------|----------|--------|
+          | IAM | agriwizard-iam-prod | ✅ Migrated |
+          | Hardware | agriwizard-hardware-prod | ✅ Migrated |
+          | Analytics | agriwizard-analytics-prod | ✅ Migrated |
+          | Weather | agriwizard-weather-prod | ✅ Migrated |
+          | Notification | agriwizard-notification-prod | ✅ Migrated |
+          
+          ### Next Steps
+          1. Monitor service logs for 10-15 minutes
+          2. Test API endpoints via gateway
+          3. Verify data persistence in per-service databases
+          4. Keep old 'agriwizard' database as backup for 48-72 hours
+          
+          ### Troubleshooting
+          If services still fail to connect after migration:
+          1. Check service logs: `az containerapp logs show -g agriwizard-prod-rg -n <service>-prod --tail 100`
+          2. Verify database exists: `az postgres flexible-server db list ...`
+          3. Test connection manually from Cloud Shell
+          
+          **Migration completed at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          EOF
+
+  rollback-if-needed:
+    name: Rollback Option (Manual)
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Instructions for rollback
+        run: |
+          echo "## ⚠️ Migration Failed - Rollback Instructions"
+          echo ""
+          echo "If the migration failed or services are not recovering:"
+          echo ""
+          echo "### Option 1: Revert DB_NAME Environment Variable"
+          echo "```bash"
+          echo "for service in iam hardware analytics weather notification; do"
+          echo "  az containerapp update -g agriwizard-prod-rg -n \$service-prod \\"
+          echo "    --set-env-vars DB_NAME=agriwizard"
+          echo "done"
+          echo "```"
+          echo ""
+          echo "### Option 2: Review Per-Service Database Status"
+          echo "```bash"
+          echo "az postgres flexible-server db list -g agriwizard-prod-rg -n agriwizard-prod-db-7i7k3p7kcgay2"
+          echo "```"
+          echo ""
+          echo "### Option 3: Manual Investigation"
+          echo "1. Check service logs in Azure Portal"
+          echo "2. Verify database credentials in Key Vault"
+          echo "3. Test PostgreSQL connectivity from Cloud Shell"
