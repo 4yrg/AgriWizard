@@ -21,7 +21,7 @@ param rateLimitCalls int = 120
 
 var apimResourceName = apimName
 
-resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
+resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' existing = {
   name: apimResourceName
 }
 
