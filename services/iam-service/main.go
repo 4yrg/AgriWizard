@@ -101,7 +101,6 @@ func main() {
 			"db_ready":                dbStatus.IsReady(),
 			"migrated":                dbStatus.IsMigrated(),
 			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
-			"test_field":              true,
 		})
 	})
 
