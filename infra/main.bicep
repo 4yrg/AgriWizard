@@ -97,14 +97,6 @@ var identityName = '${namePrefix}-${environmentSuffix}-aca-mi'
 var dbServerName = take('${namePrefix}-${environmentSuffix}-db-${uniqueSuffix}', 50)
 var nginxGatewayName = '${namePrefix}-${environmentSuffix}-gateway'
 
-var backendUrls = {
-  iamUrl: 'iam-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
-  hardwareUrl: 'hardware-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
-  analyticsUrl: 'analytics-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
-  weatherUrl: 'weather-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
-  notificationUrl: 'notification-prod.${resourceGroupName}.centralindia.azurecontainerapps.io'
-}
-
 module rg './modules/resource-group.bicep' = {
   name: 'resource-group'
   params: {
@@ -113,6 +105,9 @@ module rg './modules/resource-group.bicep' = {
   }
 }
 
+// Compute per-service DB names
+var dbNames = [for s in backendServices: take('${namePrefix}-${s.serviceName}-${environmentSuffix}', 50)]
+
 module postgresql './modules/postgresql.bicep' = {
   name: 'postgresql'
   scope: resourceGroup(resourceGroupName)
@@ -120,6 +115,7 @@ module postgresql './modules/postgresql.bicep' = {
     serverName: dbServerName
     adminUsername: dbUser
     adminPassword: dbPassword
+    databaseNames: dbNames
   }
   dependsOn: [
     rg
@@ -182,7 +178,7 @@ module acaEnvironment './modules/aca-environment.bicep' = {
 }
 
 // Core backend services
-module coreApps './modules/aca-app.bicep' = [for service in backendServices: if (service.serviceName != 'kong') {
+module coreApps './modules/aca-app.bicep' = [for (service, i) in backendServices: if (service.serviceName != 'kong') {
   name: 'deploy-core-${service.serviceName}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -212,6 +208,10 @@ module coreApps './modules/aca-app.bicep' = [for service in backendServices: if 
       {
         name: 'DB_USER'
         value: dbUser
+      }
+      {
+        name: 'DB_NAME'
+        value: dbNames[i]
       }
       {
         name: 'CORS_ALLOW_ORIGIN'
@@ -287,7 +287,10 @@ output containerAppFqdns array = [for (service, i) in backendServices: {
 }]
 output dbHost string = postgresql.outputs.fullyQualifiedDomainName
 output dbPort string = '5432'
-output dbName string = 'agriwizard'
+output dbNames array = [for (s, i) in backendServices: {
+  serviceName: s.serviceName
+  dbName: dbNames[i]
+}]
 output dbUser string = dbUser
 output gatewayUrl string = 'https://${gateway.outputs.fqdn}'
 output gatewayFqdn string = gateway.outputs.fqdn

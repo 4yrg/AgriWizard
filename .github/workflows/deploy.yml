@@ -363,7 +363,11 @@ jobs:
     outputs:
       db_host: ${{ steps.deploy.outputs.db_host }}
       db_port: ${{ steps.deploy.outputs.db_port }}
-      db_name: ${{ steps.deploy.outputs.db_name }}
+      db_name_iam: ${{ steps.deploy.outputs.db_name_iam }}
+      db_name_hardware: ${{ steps.deploy.outputs.db_name_hardware }}
+      db_name_analytics: ${{ steps.deploy.outputs.db_name_analytics }}
+      db_name_weather: ${{ steps.deploy.outputs.db_name_weather }}
+      db_name_notification: ${{ steps.deploy.outputs.db_name_notification }}
       db_user: ${{ steps.deploy.outputs.db_user }}
     steps:
       - name: Checkout repository
@@ -480,7 +484,13 @@ jobs:
 
           echo "db_host=$(jq -r '.properties.outputs.dbHost.value' deployment.json)" >> "$GITHUB_OUTPUT"
           echo "db_port=$(jq -r '.properties.outputs.dbPort.value' deployment.json)" >> "$GITHUB_OUTPUT"
-          echo "db_name=$(jq -r '.properties.outputs.dbName.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          # extract per-service db names from dbNames array
+          DB_NAMES_ARRAY=$(jq -r '.properties.outputs.dbNames.value' deployment.json)
+          echo "db_name_iam=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="iam") | .dbName')" >> "$GITHUB_OUTPUT"
+          echo "db_name_hardware=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="hardware") | .dbName')" >> "$GITHUB_OUTPUT"
+          echo "db_name_analytics=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="analytics") | .dbName')" >> "$GITHUB_OUTPUT"
+          echo "db_name_weather=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="weather") | .dbName')" >> "$GITHUB_OUTPUT"
+          echo "db_name_notification=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="notification") | .dbName')" >> "$GITHUB_OUTPUT"
           echo "db_user=$(jq -r '.properties.outputs.dbUser.value' deployment.json)" >> "$GITHUB_OUTPUT"
 
   # ───────────────────────────────────────────────
@@ -535,7 +545,6 @@ jobs:
       DB_HOST: ${{ needs.deploy-infra.outputs.db_host }}
       DB_PORT: ${{ needs.deploy-infra.outputs.db_port }}
       DB_USER: ${{ needs.deploy-infra.outputs.db_user }}
-      DB_NAME: ${{ needs.deploy-infra.outputs.db_name }}
       DB_SSLMODE: ${{ vars.DB_SSLMODE || 'require' }}
       JWT_ISSUER: ${{ vars.JWT_ISSUER || 'agriwizard-iam' }}
       OWM_BASE_URL: ${{ vars.OWM_BASE_URL || 'https://api.openweathermap.org' }}
@@ -608,6 +617,16 @@ jobs:
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           SB_CONN_STR="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
+
+          # Resolve per-service DB name from infra outputs
+          case "${{ matrix.service }}" in
+            iam) DB_NAME="${{ needs.deploy-infra.outputs.db_name_iam }}" ;;
+            hardware) DB_NAME="${{ needs.deploy-infra.outputs.db_name_hardware }}" ;;
+            analytics) DB_NAME="${{ needs.deploy-infra.outputs.db_name_analytics }}" ;;
+            weather) DB_NAME="${{ needs.deploy-infra.outputs.db_name_weather }}" ;;
+            notification) DB_NAME="${{ needs.deploy-infra.outputs.db_name_notification }}" ;;
+            *) echo "Unknown service: ${matrix.service}" && exit 1 ;;
+          esac
           if [ -z "${SB_CONN_STR}" ]; then
             echo "Service Bus connection empty, querying dynamically..."
             SB_NAME=$(az servicebus namespace list --resource-group "${ACA_RESOURCE_GROUP}" --query '[0].name' -o tsv)

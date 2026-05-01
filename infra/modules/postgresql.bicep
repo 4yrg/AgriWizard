@@ -53,6 +53,17 @@ resource firewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2
   }
 }
 
+@description('List of logical database names to create on the server.')
+param databaseNames array = []
+
+// Create each database as a child resource of the server
+resource databases 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = [for dbName in databaseNames: {
+  parent: server
+  name: dbName
+  properties: {}
+}]
+
 output serverName string = server.name
 output fullyQualifiedDomainName string = server.properties.fullyQualifiedDomainName
 output serverNameOutput string = server.name
+output databaseNamesCreated array = databaseNames
