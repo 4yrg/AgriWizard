@@ -282,10 +282,33 @@ services:
       dockerfile: Dockerfile
     container_name: agriwizard-gateway
     restart: unless-stopped
+    environment:
+      # Service URLs for local Docker Compose
+      IAM_SERVICE_HOST: iam-service:8086
+      IAM_SERVICE_PROTOCOL: http
+      IAM_SSL_CONFIG: ""
+      HARDWARE_SERVICE_HOST: hardware-service:8087
+      HARDWARE_SERVICE_PROTOCOL: http
+      HARDWARE_SSL_CONFIG: ""
+      ANALYTICS_SERVICE_HOST: analytics-service:8088
+      ANALYTICS_SERVICE_PROTOCOL: http
+      ANALYTICS_SSL_CONFIG: ""
+      WEATHER_SERVICE_HOST: weather-service:8089
+      WEATHER_SERVICE_PROTOCOL: http
+      WEATHER_SSL_CONFIG: ""
+      NOTIFICATION_SERVICE_HOST: notification-service:8091
+      NOTIFICATION_SERVICE_PROTOCOL: http
+      NOTIFICATION_SSL_CONFIG: ""
     networks:
       - agriwizard-net
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      - iam-service
+      - hardware-service
+      - analytics-service
+      - weather-service
+      - notification-service
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
