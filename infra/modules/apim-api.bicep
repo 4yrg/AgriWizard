@@ -33,7 +33,7 @@ resource globalPolicy 'Microsoft.ApiManagement/service/policies@2023-05-01-previ
     value: '''
 <policies>
   <inbound>
-    <cors allow-credentials="true" preserve-vary="true">
+    <cors allow-credentials="true">
       <allowed-origins>
         ${join([for origin in allowedOrigins: '<origin>${origin}</origin>'], '\n        ')}
       </allowed-origins>
@@ -48,27 +48,16 @@ resource globalPolicy 'Microsoft.ApiManagement/service/policies@2023-05-01-previ
       <allowed-headers>
         <header>Authorization</header>
         <header>Content-Type</header>
-        <header>X-Request-ID</header>
-        <header>X-Internal-Service</header>
       </allowed-headers>
     </cors>
-    <rate-limit-by-key calls="${rateLimitCalls}" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
-    <validate-jwt header-name="Authorization" failed-validation-httpcode="401" require-expiration-time="false">
-      <openid-config url="https://${backendUrls.iamUrl}/.well-known/openid-configuration" />
-      <audiences>
-        <audience>agriwizard</audience>
-      </audiences>
-      <issuers>
-        <issuer>${jwtIssuer}</issuer>
-      </issuers>
-    </validate-jwt>
+    <set-header name="X-Forwarded-Host" exists-action="override">
+      <value>@(context.Request.Headers.GetValueOrDefault("Host",""))</value>
+    </set-header>
   </inbound>
   <backend>
     <forward-request />
   </backend>
   <outbound>
-    <set-header name="X-Kong-Upstream-Latency" exists-action="override" />
-    <set-header name="X-Kong-Proxy-Latency" exists-action="override" />
   </outbound>
 </policies>
 '''
