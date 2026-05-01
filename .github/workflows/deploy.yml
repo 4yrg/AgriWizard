@@ -545,7 +545,7 @@ jobs:
       LOCATION_CITY: ${{ vars.LOCATION_CITY || 'Colombo' }}
       USE_MOCK: ${{ vars.USE_MOCK || 'false' }}
       MQTT_BROKER: ${{ vars.MQTT_BROKER || 'tcp://0844c36e03374e7682f81036bb673d45.s1.eu.hivemq.cloud:8883' }}
-      MQTT_USERNAME: ${{ vars.MQTT_USERNAME }}
+      MQTT_USERNAME: ${{ vars.MQTT_USERNAME || 'Hasintha' }}
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
     steps:
