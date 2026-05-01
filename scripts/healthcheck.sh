@@ -6,7 +6,7 @@ set -e
 
 BASE_URL=${1:-"http://localhost:8080"}
 
-services=("/health" "/api/v1/iam/health" "/api/v1/hardware/health" "/api/v1/analytics/health" "/api/v1/weather/health")
+services=("/health" "/api/v1/iam/health" "/api/v1/hardware/health" "/api/v1/analytics/health" "/api/v1/weather/health" "/api/v1/notification/health")
 
 echo "Checking health for services at $BASE_URL..."
 
