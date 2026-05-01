@@ -29,6 +29,8 @@ import type {
   WeatherForecast,
   WeatherAlert,
   IrrigationRecommendation,
+  Notification,
+  UnreadCountResponse,
   EquipmentAnalysis,
 } from "@/types/api";
 
@@ -259,5 +261,36 @@ export const weatherApi = {
   getRecommendations: () =>
     apiFetch<SuccessResponse<IrrigationRecommendation>>(
       "/api/v1/weather/recommendations"
+    ),
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Notification Service API
+// ════════════════════════════════════════════════════════════════════════════
+
+export const notificationApi = {
+  listNotifications: (recipient: string, options?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams({ recipient });
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.offset) params.set("offset", String(options.offset));
+    return apiFetch<SuccessResponse<Notification[]>>(
+      `/api/v1/notifications?${params.toString()}`
+    );
+  },
+
+  getUnreadCount: (recipient: string) =>
+    apiFetch<SuccessResponse<UnreadCountResponse>>(
+      `/api/v1/notifications/unread-count?recipient=${encodeURIComponent(recipient)}`
+    ),
+
+  markAsRead: (id: string) =>
+    apiFetch<SuccessResponse>(`/api/v1/notifications/${id}/read`, {
+      method: "PUT",
+    }),
+
+  markAllAsRead: (recipient: string) =>
+    apiFetch<SuccessResponse>(
+      `/api/v1/notifications/read-all?recipient=${encodeURIComponent(recipient)}`,
+      { method: "PUT" }
     ),
 };

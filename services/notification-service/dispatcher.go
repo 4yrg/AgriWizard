@@ -38,6 +38,7 @@ func (d *Dispatcher) RegisterChannel(s Sender) {
 }
 
 // Process handles a single notification request end-to-end.
+// When channel is "all", it dispatches to both "email" and "in_app" channels.
 func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) error {
 	// 1. Validate
 	if req.Channel == "" {
@@ -47,7 +48,23 @@ func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) erro
 		return fmt.Errorf("recipient is required")
 	}
 
-	// 2. Resolve content — template takes precedence over raw fields
+	// 2. Expand "all" into separate channels
+	channels := []string{req.Channel}
+	if req.Channel == "all" {
+		channels = []string{"email", "in_app"}
+	}
+
+	var firstErr error
+	for _, ch := range channels {
+		if err := d.processSingle(ctx, req, ch); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (d *Dispatcher) processSingle(ctx context.Context, req *NotificationRequest, channel string) error {
+	// Resolve content — template takes precedence over raw fields
 	subject, body := req.Subject, req.Body
 	if req.TemplateID != "" {
 		var err error
@@ -57,10 +74,10 @@ func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) erro
 		}
 	}
 
-	// 3. Create persisted record
+	// Create persisted record
 	n := &Notification{
 		ID:        uuid.New().String(),
-		Channel:   req.Channel,
+		Channel:   channel,
 		Recipient: req.Recipient,
 		Subject:   subject,
 		Body:      body,
@@ -72,25 +89,25 @@ func (d *Dispatcher) Process(ctx context.Context, req *NotificationRequest) erro
 		return fmt.Errorf("save notification: %w", err)
 	}
 
-	// 4. Route to channel sender
-	sender, ok := d.channels[req.Channel]
+	// Route to channel sender
+	sender, ok := d.channels[channel]
 	if !ok {
-		errMsg := fmt.Sprintf("unknown channel: %s", req.Channel)
+		errMsg := fmt.Sprintf("unknown channel: %s", channel)
 		if statusErr := d.store.UpdateStatus(n.ID, "failed", errMsg, nil); statusErr != nil {
 			log.Printf("[ERROR] Failed to update notification status to failed: %v", statusErr)
 		}
 		return errors.New(errMsg)
 	}
 
-	// 5. Deliver
+	// Deliver
 	if err := sender.Send(ctx, n); err != nil {
 		if statusErr := d.store.UpdateStatus(n.ID, "failed", err.Error(), nil); statusErr != nil {
 			log.Printf("[ERROR] Failed to update notification status to failed: %v", statusErr)
 		}
-		return fmt.Errorf("send via %s: %w", req.Channel, err)
+		return fmt.Errorf("send via %s: %w", channel, err)
 	}
 
-	// 6. Mark as sent
+	// Mark as sent
 	now := time.Now().UTC()
 	if statusErr := d.store.UpdateStatus(n.ID, "sent", "", &now); statusErr != nil {
 		log.Printf("[ERROR] Failed to update notification status to sent: %v", statusErr)

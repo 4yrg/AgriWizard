@@ -84,6 +84,7 @@ func main() {
 	mqttBroker := getEnv("MQTT_BROKER", "tcp://localhost:1883")
 	mqttUsername := getEnv("MQTT_USERNAME", "")
 	mqttPassword := getEnv("MQTT_PASSWORD", "")
+	log.Printf("[INFO] MQTT config loaded: broker=%s username_set=%t", mqttBroker, mqttUsername != "")
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production")
 	analyticsURL := getEnv("ANALYTICS_SERVICE_URL", "http://analytics-service:8083")
 	port := getEnv("PORT", "8082")
@@ -285,14 +286,33 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQ
 		return
 	}
 	if !client.IsConnected() {
-		log.Println("[WARN] restoreSubscriptions: MQTT not connected yet, subscriptions will be restored after connection")
+		log.Println("[WARN] restoreSubscriptions: MQTT not connected yet, will retry subscription restore once connected")
+		go waitAndRestoreSubscriptions(db, client, rmqPublisher, sbPublisher)
 		return
 	}
+
+	restoreSubscriptionsWhenConnected(db, client, rmqPublisher, sbPublisher)
+}
+
+func waitAndRestoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if client != nil && client.IsConnected() {
+			log.Println("[INFO] waitAndRestoreSubscriptions: MQTT connected, restoring subscriptions")
+			restoreSubscriptionsWhenConnected(db, client, rmqPublisher, sbPublisher)
+			return
+		}
+	}
+}
+
+func restoreSubscriptionsWhenConnected(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQPublisher, sbPublisher *AzureServiceBusPublisher) {
 
 	// Load sensor topics from database and subscribe
 	rows, err := db.Query(`SELECT mqtt_topic FROM hardware.sensors`)
 	if err != nil {
-		log.Printf("[ERROR] restoreSubscriptions: failed to query sensor topics: %v", err)
+		log.Printf("[ERROR] restoreSubscriptionsWhenConnected: failed to query sensor topics: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -301,17 +321,46 @@ func restoreSubscriptions(db *sql.DB, client mqtt.Client, rmqPublisher *RabbitMQ
 	for rows.Next() {
 		var topic string
 		if err := rows.Scan(&topic); err != nil {
-			log.Printf("[ERROR] restoreSubscriptions: scan error: %v", err)
+			log.Printf("[ERROR] restoreSubscriptionsWhenConnected: sensor scan error: %v", err)
 			continue
 		}
 		if token := client.Subscribe(topic, 1, handleTelemetryStandalone(rmqPublisher, sbPublisher)); token.Wait() && token.Error() != nil {
-			log.Printf("[ERROR] restoreSubscriptions: failed to subscribe to %s: %v", topic, token.Error())
+			log.Printf("[ERROR] restoreSubscriptionsWhenConnected: failed to subscribe to sensor topic %s: %v", topic, token.Error())
 		} else {
 			topicCount++
 		}
 	}
 	if topicCount > 0 {
-		log.Printf("[INFO] restoreSubscriptions: restored %d sensor subscriptions", topicCount)
+		log.Printf("[INFO] restoreSubscriptionsWhenConnected: restored %d sensor subscriptions", topicCount)
+	}
+
+	// Load equipment topics from database and subscribe to status topics
+	equipmentRows, err := db.Query(`SELECT mqtt_topic FROM hardware.equipments`)
+	if err != nil {
+		log.Printf("[ERROR] restoreSubscriptionsWhenConnected: failed to query equipment topics: %v", err)
+		return
+	}
+	defer equipmentRows.Close()
+
+	statusTopicCount := 0
+	for equipmentRows.Next() {
+		var commandTopic string
+		if err := equipmentRows.Scan(&commandTopic); err != nil {
+			log.Printf("[ERROR] restoreSubscriptionsWhenConnected: equipment scan error: %v", err)
+			continue
+		}
+
+		statusTopic := strings.TrimSuffix(commandTopic, "/") + "/status"
+		if token := client.Subscribe(statusTopic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+			log.Printf("[INFO] MQTT equipment status received on %s", msg.Topic())
+		}); token.Wait() && token.Error() != nil {
+			log.Printf("[ERROR] restoreSubscriptionsWhenConnected: failed to subscribe to equipment status topic %s: %v", statusTopic, token.Error())
+		} else {
+			statusTopicCount++
+		}
+	}
+	if statusTopicCount > 0 {
+		log.Printf("[INFO] restoreSubscriptionsWhenConnected: restored %d equipment status subscriptions", statusTopicCount)
 	}
 }
 

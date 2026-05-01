@@ -6,9 +6,10 @@ import "time"
 
 // NotificationRequest is the incoming payload via NATS or REST.
 // Publishers only need to know this schema — nothing about the notification service internals.
+// Channel can be "email", "in_app", or "all" (sends to both email and in-app).
 type NotificationRequest struct {
-	Channel    string            `json:"channel"`               // "email" (required)
-	Recipient  string            `json:"recipient"`             // target address: email, phone, webhook URL, etc.
+	Channel    string            `json:"channel"`               // "email", "in_app", or "all"
+	Recipient  string            `json:"recipient"`             // target address: email, user ID, etc.
 	TemplateID string            `json:"template_id,omitempty"` // render a stored template instead of raw content
 	Variables  map[string]string `json:"variables,omitempty"`   // template variables (e.g. {"name": "John"})
 	Subject    string            `json:"subject,omitempty"`     // raw subject (ignored when template_id is set)
@@ -28,6 +29,7 @@ type Notification struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
 	SentAt    *time.Time        `json:"sent_at,omitempty"`
+	ReadAt    *time.Time        `json:"read_at,omitempty"`
 }
 
 // --- Templates ---

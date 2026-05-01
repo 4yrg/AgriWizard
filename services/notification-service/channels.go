@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/smtp"
 )
@@ -80,4 +81,15 @@ func (e *EmailSender) Send(ctx context.Context, n *Notification) error {
 	}
 
 	return c.Quit()
+}
+
+// --- In-App channel ---
+
+type InAppSender struct{}
+
+func (s *InAppSender) Type() string { return "in_app" }
+
+func (s *InAppSender) Send(ctx context.Context, n *Notification) error {
+	log.Printf("[INFO] In-app notification stored: id=%s recipient=%s subject=%s", n.ID, n.Recipient, n.Subject)
+	return nil
 }

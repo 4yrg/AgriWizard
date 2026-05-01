@@ -64,6 +64,8 @@ func main() {
 		Password: smtpPass,
 	})
 
+	dispatcher.RegisterChannel(&InAppSender{})
+
 	// ---- NATS JetStream consumer (fallback) ----
 	consumer, err := StartConsumer(natsURL, dispatcher)
 	if err != nil {
