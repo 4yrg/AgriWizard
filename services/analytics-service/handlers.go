@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -17,15 +18,22 @@ import (
 
 // Handler holds shared dependencies.
 type Handler struct {
-	status      *ServiceStatus
-	jwtSecret   string
-	hardwareURL string
-	weatherURL  string
+	status                  *ServiceStatus
+	jwtSecret               string
+	hardwareURL             string
+	weatherURL              string
+	sbNotificationPublisher *AzureServiceBusNotificationPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(status *ServiceStatus, jwtSecret, hardwareURL, weatherURL string) *Handler {
-	return &Handler{status: status, jwtSecret: jwtSecret, hardwareURL: hardwareURL, weatherURL: weatherURL}
+func NewHandler(status *ServiceStatus, jwtSecret, hardwareURL, weatherURL string, sbNotificationPublisher *AzureServiceBusNotificationPublisher) *Handler {
+	return &Handler{
+		status:                  status,
+		jwtSecret:               jwtSecret,
+		hardwareURL:             hardwareURL,
+		weatherURL:              weatherURL,
+		sbNotificationPublisher: sbNotificationPublisher,
+	}
 }
 
 // requireDB is a middleware that checks if the database is ready.
@@ -391,6 +399,8 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 				})
 				// Dispatch command to hardware service
 				go h.dispatchHardwareCommand(equipID, action)
+				// Publish notification for the event
+				go h.publishAutomationNotification(payload.SensorID, reading.ParameterID, equipID, reading.Value, action, reason, scaleFactor)
 			}
 		}
 
@@ -528,6 +538,44 @@ func (h *Handler) dispatchHardwareCommand(equipmentID, action string) {
 	}
 	defer resp.Body.Close()
 	log.Printf("[INFO] dispatchHardwareCommand: equipment=%s action=%s status=%d", equipmentID, action, resp.StatusCode)
+}
+
+func (h *Handler) publishAutomationNotification(sensorID, parameterID, equipmentID string, value float64, action, reason string, scaleFactor float64) {
+	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
+		return
+	}
+
+	recipient := getServiceBusNotificationRecipient()
+	if recipient == "" {
+		log.Println("[WARN] publishAutomationNotification: notification recipient not configured")
+		return
+	}
+
+	req := NotificationRequest{
+		Channel:   "email",
+		Recipient: recipient,
+		Subject:   fmt.Sprintf("Automation alert: %s action triggered", strings.ToUpper(action)),
+		Body: fmt.Sprintf(
+			"Sensor %s triggered parameter %s for equipment %s. Value: %.2f. Action: %s. Reason: %s. Scale factor: %.2f.",
+			sensorID, parameterID, equipmentID, value, action, reason, scaleFactor,
+		),
+		Metadata: map[string]string{
+			"sensor_id":    sensorID,
+			"parameter_id": parameterID,
+			"equipment_id": equipmentID,
+			"action":       action,
+			"value":        fmt.Sprintf("%.2f", value),
+			"reason":       reason,
+			"scale_factor": fmt.Sprintf("%.2f", scaleFactor),
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
+		log.Printf("[WARN] Failed to publish automation notification: %v", err)
+	}
 }
 
 // JWTAuthMiddleware validates Bearer tokens.

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type ServiceStatus struct {
 
 var rmqConsumer *RabbitMQConsumer
 var sbConsumer *AzureServiceBusConsumer
+var sbNotificationPublisher *AzureServiceBusNotificationPublisher
 
 func (s *ServiceStatus) GetDB() *sql.DB {
 	s.mu.RLock()
@@ -74,6 +76,9 @@ func main() {
 	serviceBusConnection := getServiceBusConnection()
 	serviceBusTopic := getServiceBusTopic()
 	serviceBusSubscription := getServiceBusSubscription()
+	serviceBusNotificationTopic := getServiceBusNotificationTopic()
+	serviceBusNotificationSubscription := getServiceBusNotificationSubscription()
+	notificationRecipient := getServiceBusNotificationRecipient()
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		dbHost, dbPort, dbUser, dbPass, dbName, dbSSLMode)
@@ -96,12 +101,13 @@ func main() {
 			s = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":       s,
-			"service":      "analytics-service",
-			"db_ready":     status.IsReady(),
-			"migrated":     status.migrated,
-			"rmq_ready":    rmqConsumer != nil && rmqConsumer.IsConnected(),
-			"sb_connected": sbConsumer != nil && sbConsumer.IsConnected(),
+			"status":                  s,
+			"service":                 "analytics-service",
+			"db_ready":                status.IsReady(),
+			"migrated":                status.migrated,
+			"rmq_ready":               rmqConsumer != nil && rmqConsumer.IsConnected(),
+			"sb_connected":            sbConsumer != nil && sbConsumer.IsConnected(),
+			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
 		})
 	})
 
@@ -114,20 +120,29 @@ func main() {
 		}
 	}()
 
-	// Setup handler first (before SB consumer needs it)
-	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL)
+	// Initialize Service Bus notification publisher
+	var err error
+	sbNotificationPublisher, err = NewAzureServiceBusNotificationPublisher(serviceBusConnection, serviceBusNotificationTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification publisher initialization failed: %v", err)
+	}
 
-	// Initialize Service Bus consumer
-	rmqConsumer, err := NewRabbitMQConsumer(rabbitmqUrl, queueName, h)
+	// Setup handler with dependencies
+	h := NewHandler(status, jwtSecret, hardwareURL, weatherURL, sbNotificationPublisher)
+
+	// Initialize Service Bus consumer (telemetry)
+	rmqConsumer, err = NewRabbitMQConsumer(rabbitmqUrl, queueName, h)
 	if err != nil {
 		log.Printf("[WARN] RabbitMQ consumer initialization failed: %v", err)
 	}
 
-	// Initialize Azure Service Bus consumer
+	// Initialize Azure Service Bus consumer (telemetry)
 	sbConsumer, err = NewAzureServiceBusConsumer(serviceBusConnection, serviceBusTopic, serviceBusSubscription, h)
 	if err != nil {
 		log.Printf("[WARN] Azure Service Bus consumer initialization failed: %v", err)
 	}
+
+	validateServiceBusConfiguration(serviceBusConnection, serviceBusTopic, serviceBusSubscription, serviceBusNotificationTopic, serviceBusNotificationSubscription, notificationRecipient)
 
 	// Start RabbitMQ consumer in background
 	if rmqConsumer != nil && rmqConsumer.IsConnected() {
@@ -266,4 +281,24 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func validateServiceBusConfiguration(connectionString, telemetryTopic, telemetrySubscription, notificationTopic, notificationSubscription, notificationRecipient string) {
+	if connectionString == "" {
+		log.Println("[WARN] SERVICE_BUS_CONNECTION not set; Azure Service Bus is disabled")
+		return
+	}
+
+	if !strings.Contains(connectionString, "Endpoint=") || !strings.Contains(connectionString, "SharedAccessKey") {
+		log.Println("[WARN] SERVICE_BUS_CONNECTION does not look like a valid Azure Service Bus connection string")
+	}
+	if telemetryTopic == "" || telemetrySubscription == "" || notificationTopic == "" || notificationSubscription == "" {
+		log.Println("[WARN] Service Bus topic or subscription configuration is incomplete")
+	}
+	if telemetryTopic == notificationTopic {
+		log.Printf("[WARN] Service Bus telemetry and notification topics are the same: %s", telemetryTopic)
+	}
+	if notificationRecipient == "" {
+		log.Println("[WARN] Notification recipient is not configured; alerts will be skipped")
+	}
 }
