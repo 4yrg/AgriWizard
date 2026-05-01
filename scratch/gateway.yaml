@@ -1,0 +1,80 @@
+id: /subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-prod-rg/providers/Microsoft.App/containerapps/agriwizard-prod-gateway
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    ? /subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourcegroups/agriwizard-prod-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/agriwizard-prod-aca-mi
+    : clientId: 04e128ed-31d5-4ed9-9455-246f4cd8ec3d
+      principalId: 281da310-fc46-4057-8a5d-891d8163694a
+location: Central India
+name: agriwizard-prod-gateway
+properties:
+  configuration:
+    activeRevisionsMode: Single
+    dapr: null
+    identitySettings: []
+    ingress:
+      additionalPortMappings: null
+      allowInsecure: false
+      clientCertificateMode: null
+      corsPolicy: null
+      customDomains: null
+      exposedPort: 0
+      external: true
+      fqdn: agriwizard-prod-gateway.yellowocean-38e04fed.centralindia.azurecontainerapps.io
+      ipSecurityRestrictions: null
+      stickySessions: null
+      targetPort: 8080
+      traffic:
+      - latestRevision: true
+        weight: 100
+      transport: Auto
+    maxInactiveRevisions: null
+    registries:
+    - identity: /subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-prod-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/agriwizard-prod-aca-mi
+      passwordSecretRef: ''
+      server: agriwizardacr7i7k3p7kcgay2.azurecr.io
+      username: ''
+    runtime: null
+    secrets: null
+    service: null
+  customDomainVerificationId: 611F9F7B036E6A9770A1745AE30289C84F5AF0A0FFA1632E896553E5D230E0C7
+  delegatedIdentities: []
+  environmentId: /subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-prod-rg/providers/Microsoft.App/managedEnvironments/agriwizard-prod-aca-env
+  eventStreamEndpoint: https://centralindia.azurecontainerapps.dev/subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-prod-rg/containerApps/agriwizard-prod-gateway/eventstream
+  latestReadyRevisionName: agriwizard-prod-gateway--0000016
+  latestRevisionFqdn: agriwizard-prod-gateway--0000016.yellowocean-38e04fed.centralindia.azurecontainerapps.io
+  latestRevisionName: agriwizard-prod-gateway--0000016
+  managedEnvironmentId: /subscriptions/71dc1447-483b-4aa3-b549-021a60ec7241/resourceGroups/agriwizard-prod-rg/providers/Microsoft.App/managedEnvironments/agriwizard-prod-aca-env
+  outboundIpAddresses:
+  - 4.213.210.102
+  provisioningState: Succeeded
+  runningStatus: Running
+  template:
+    containers:
+    - image: agriwizardacr7i7k3p7kcgay2.azurecr.io/agriwizard-gateway:7e8b0599d5920cf931398c19dbc46484b8d90525
+      name: agriwizard-prod-gateway
+      resources:
+        cpu: 0.5
+        ephemeralStorage: 2Gi
+        memory: 1Gi
+    initContainers: null
+    revisionSuffix: ''
+    scale:
+      cooldownPeriod: 300
+      maxReplicas: 3
+      minReplicas: 1
+      pollingInterval: 30
+      rules: null
+    serviceBinds: null
+    terminationGracePeriodSeconds: null
+    volumes: null
+  workloadProfileName: null
+resourceGroup: agriwizard-prod-rg
+systemData:
+  createdAt: '2026-05-01T04:36:40.9324212'
+  createdBy: d1e96f12-4a0f-45aa-ab72-88eeac752478
+  createdByType: Application
+  lastModifiedAt: '2026-05-01T09:47:09.3344136'
+  lastModifiedBy: d1e96f12-4a0f-45aa-ab72-88eeac752478
+  lastModifiedByType: Application
+type: Microsoft.App/containerApps

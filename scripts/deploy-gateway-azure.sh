@@ -2,37 +2,34 @@
 set -euo pipefail
 
 # deploy-gateway-azure.sh
-# Build, push gateway nginx image to ACR and update the Azure Container App.
+# Build, push gateway nginx image to ACR using 'az acr build' and update the Azure Container App.
 # Usage:
-#   ACR_LOGIN_SERVER=<myacr>.azurecr.io RG=<resource-group> APP_NAME=<containerapp-name> ./scripts/deploy-gateway-azure.sh [tag]
+#   ACR_NAME=<myacr> RG=<resource-group> APP_NAME=<containerapp-name> ./scripts/deploy-gateway-azure.sh [tag]
 
 IMAGE_NAME=agriwizard-gateway
 TAG=${1:-latest}
-ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER:-}
 RG=${RG:-agriwizard-prod-rg}
-APP_NAME=${APP_NAME:-agriwizard-gateway}
+APP_NAME=${APP_NAME:-agriwizard-prod-gateway}
 
-if [ -z "$ACR_LOGIN_SERVER" ]; then
-  echo "ACR_LOGIN_SERVER must be set (e.g. myacr.azurecr.io)"
+# Determine ACR_NAME if not provided
+if [ -z "${ACR_NAME:-}" ]; then
+  echo "🔍 Querying ACR name in resource group $RG..."
+  ACR_NAME=$(az acr list --resource-group "$RG" --query "[0].name" -o tsv)
+fi
+
+if [ -z "$ACR_NAME" ]; then
+  echo "❌ ERROR: ACR_NAME must be set or available in the resource group."
   exit 1
 fi
 
-echo "Building Docker image..."
-docker build -t ${IMAGE_NAME}:${TAG} -f gateway/Dockerfile gateway
+ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
 
-FULL_IMAGE=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${TAG}
+echo "🚀 Building and pushing image to ACR: ${ACR_NAME} (using az acr build)..."
+az acr build --registry "$ACR_NAME" --image "${IMAGE_NAME}:${TAG}" gateway/
 
-echo "Tagging image: ${FULL_IMAGE}"
-docker tag ${IMAGE_NAME}:${TAG} ${FULL_IMAGE}
+FULL_IMAGE="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${TAG}"
 
-echo "Logging in to ACR..."
-ACR_NAME=${ACR_LOGIN_SERVER%%.azurecr.io}
-az acr login --name "$ACR_NAME"
-
-echo "Pushing image to ACR: ${FULL_IMAGE}"
-docker push ${FULL_IMAGE}
-
-echo "Updating Azure Container App: ${APP_NAME} in RG ${RG} to image ${FULL_IMAGE}"
+echo "🔄 Updating Azure Container App: ${APP_NAME} in RG ${RG} to image ${FULL_IMAGE}"
 az containerapp update --name "$APP_NAME" --resource-group "$RG" --image "$FULL_IMAGE"
 
-echo "Done. New image deployed: ${FULL_IMAGE}"
+echo "✅ Done. New image deployed: ${FULL_IMAGE}"

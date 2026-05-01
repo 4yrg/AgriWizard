@@ -535,6 +535,10 @@ jobs:
             image_name: agriwizard-notification
             app_name_var: ACA_APP_NOTIFICATION_PRODUCTION
             port: "8091"
+          - service: gateway
+            image_name: agriwizard-gateway
+            app_name_var: ACA_APP_GATEWAY_PRODUCTION
+            port: "8080"
     env:
       ACA_RESOURCE_GROUP: ${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg' }}
       AZURE_REGION: ${{ vars.AZURE_REGION || 'centralindia' }}
@@ -582,6 +586,7 @@ jobs:
             ACA_APP_WEATHER_PRODUCTION)      APP_NAME="${{ vars.ACA_APP_WEATHER_PRODUCTION }}" ;;
             ACA_APP_NOTIFICATION_PRODUCTION) APP_NAME="${{ vars.ACA_APP_NOTIFICATION_PRODUCTION }}" ;;
             ACA_APP_WEB_PRODUCTION)          APP_NAME="${{ vars.ACA_APP_WEB_PRODUCTION }}" ;;
+            ACA_APP_GATEWAY_PRODUCTION)      APP_NAME="${{ vars.ACA_APP_GATEWAY_PRODUCTION }}" ;;
             ACA_APP_KONG_PRODUCTION)         APP_NAME="${{ vars.ACA_APP_KONG_PRODUCTION }}" ;;
             *) echo "Unknown app_name_var: ${{ matrix.app_name_var }}" && exit 1 ;;
           esac
@@ -625,7 +630,8 @@ jobs:
             analytics) DB_NAME="${{ needs.deploy-infra.outputs.db_name_analytics }}" ;;
             weather) DB_NAME="${{ needs.deploy-infra.outputs.db_name_weather }}" ;;
             notification) DB_NAME="${{ needs.deploy-infra.outputs.db_name_notification }}" ;;
-            *) echo "Unknown service: ${matrix.service}" && exit 1 ;;
+            gateway) DB_NAME="none" ;;
+            *) echo "Unknown service: ${{ matrix.service }}" && exit 1 ;;
           esac
           if [ -z "${SB_CONN_STR}" ]; then
             echo "Service Bus connection empty, querying dynamically..."
@@ -682,7 +688,12 @@ jobs:
               OWM_API_KEY=secretref:owm-api-key \
               SMTP_PASSWORD=secretref:smtp-password \
               SMTP_USERNAME=secretref:smtp-username \
-              SERVICE_BUS_CONNECTION=secretref:service-bus-connection
+              SERVICE_BUS_CONNECTION=secretref:service-bus-connection \
+              IAM_SERVICE_HOST="iam-prod" \
+              HARDWARE_SERVICE_HOST="hardware-prod" \
+              ANALYTICS_SERVICE_HOST="analytics-prod" \
+              WEATHER_SERVICE_HOST="weather-prod" \
+              NOTIFICATION_SERVICE_HOST="notification-prod"
 
           az containerapp ingress enable \
             --name "${APP_NAME}" \
@@ -705,11 +716,11 @@ jobs:
           echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Backend Services (Internal-only)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- IAM: https://iam-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Hardware: https://hardware-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Analytics: https://analytics-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Weather: https://weather-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Notification: https://notification-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
+          echo "- IAM: https://iam-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Hardware: https://hardware-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Analytics: https://analytics-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Weather: https://weather-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Notification: https://notification-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### API Gateway" >> "$GITHUB_STEP_SUMMARY"
           echo "APIM is deployed via Bicep. Configure APIs through Azure Portal." >> "$GITHUB_STEP_SUMMARY"
