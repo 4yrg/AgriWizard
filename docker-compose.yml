@@ -104,6 +104,8 @@ services:
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
       ANALYTICS_SERVICE_URL: "http://analytics-service:8088"
+      SERVICE_BUS_CONNECTION: "${SERVICE_BUS_CONNECTION:-}"
+      SERVICE_BUS_TELEMETRY_TOPIC: "telemetry"
     networks:
       - agriwizard-net
     ports:
@@ -133,6 +135,12 @@ services:
       PORT: "8088"
       HARDWARE_SERVICE_URL: "http://hardware-service:8087"
       WEATHER_SERVICE_URL: "http://weather-service:8089"
+      SERVICE_BUS_CONNECTION: "${SERVICE_BUS_CONNECTION:-}"
+      SERVICE_BUS_TELEMETRY_TOPIC: "telemetry"
+      SERVICE_BUS_ANALYTICS_SUBSCRIPTION: "analytics-service"
+      SERVICE_BUS_NOTIFICATIONS_TOPIC: "notifications"
+      SERVICE_BUS_NOTIFICATION_SUBSCRIPTION: "notification-service"
+      ALERT_NOTIFICATION_RECIPIENT: "alerts@agriwizard.local"
     networks:
       - agriwizard-net
     ports:
@@ -249,6 +257,9 @@ services:
       DB_NAME: agriwizard
       DB_SSLMODE: "${DB_SSLMODE:-disable}"
       NATS_URL: nats://nats:4222
+      SERVICE_BUS_CONNECTION: "${SERVICE_BUS_CONNECTION:-}"
+      SERVICE_BUS_NOTIFICATIONS_TOPIC: "notifications"
+      SERVICE_BUS_NOTIFICATION_SUBSCRIPTION: "notification-service"
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"
       SMTP_FROM: noreply@agriwizard.local

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 )
@@ -16,6 +18,91 @@ type AzureServiceBusConsumer struct {
 	connected    bool
 	ready        chan struct{}
 	receiver     *azservicebus.Receiver
+}
+
+type AzureServiceBusNotificationPublisher struct {
+	client    *azservicebus.Client
+	topicName string
+	connected bool
+	sender    *azservicebus.Sender
+}
+
+type NotificationRequest struct {
+	Channel    string            `json:"channel"`
+	Recipient  string            `json:"recipient"`
+	TemplateID string            `json:"template_id,omitempty"`
+	Variables  map[string]string `json:"variables,omitempty"`
+	Subject    string            `json:"subject,omitempty"`
+	Body       string            `json:"body,omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+}
+
+func NewAzureServiceBusNotificationPublisher(connectionString, topicName string) (*AzureServiceBusNotificationPublisher, error) {
+	if connectionString == "" {
+		log.Println("[WARN] Azure Service Bus connection string not provided, running without Service Bus notification publisher")
+		return &AzureServiceBusNotificationPublisher{connected: false}, nil
+	}
+
+	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
+	if err != nil {
+		log.Printf("[WARN] Failed to create Service Bus notification client: %v", err)
+		return &AzureServiceBusNotificationPublisher{connected: false}, nil
+	}
+
+	sender, err := client.NewSender(topicName, nil)
+	if err != nil {
+		log.Printf("[WARN] Failed to create Service Bus notification sender: %v", err)
+		client.Close(context.TODO())
+		return &AzureServiceBusNotificationPublisher{connected: false}, nil
+	}
+
+	log.Printf("[INFO] Azure Service Bus notification publisher ready, topic: %s", topicName)
+
+	return &AzureServiceBusNotificationPublisher{
+		client:    client,
+		topicName: topicName,
+		connected: true,
+		sender:    sender,
+	}, nil
+}
+
+func (p *AzureServiceBusNotificationPublisher) PublishNotification(ctx context.Context, req NotificationRequest) error {
+	if !p.connected || p.sender == nil {
+		log.Println("[DEBUG] Azure Service Bus notification publisher not connected, skipping publish")
+		return nil
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	message := &azservicebus.Message{
+		Body:        body,
+		ContentType: stringPtr("application/json"),
+	}
+
+	if err := p.sender.SendMessage(ctx, message, nil); err != nil {
+		log.Printf("[ERROR] Azure Service Bus notification publish failed: %v", err)
+		return err
+	}
+
+	log.Printf("[DEBUG] Published automation notification to Service Bus: recipient=%s topic=%s", req.Recipient, p.topicName)
+	return nil
+}
+
+func (p *AzureServiceBusNotificationPublisher) IsConnected() bool {
+	return p.connected
+}
+
+func (p *AzureServiceBusNotificationPublisher) Close() error {
+	if p.sender != nil {
+		p.sender.Close(context.TODO())
+	}
+	if p.client != nil {
+		return p.client.Close(context.TODO())
+	}
+	return nil
 }
 
 func NewAzureServiceBusConsumer(connectionString, topicName, subscription string, handler *Handler) (*AzureServiceBusConsumer, error) {
@@ -66,8 +153,13 @@ func (c *AzureServiceBusConsumer) Start(ctx context.Context) error {
 			log.Println("[INFO] Azure Service Bus consumer shutting down")
 			return nil
 		default:
-			messages, err := c.receiver.ReceiveMessages(ctx, 1, nil)
+			receiveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			messages, err := c.receiver.ReceiveMessages(receiveCtx, 1, nil)
+			cancel()
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					continue
+				}
 				log.Printf("[ERROR] Failed to receive messages: %v", err)
 				continue
 			}
@@ -138,9 +230,49 @@ func getServiceBusConnection() string {
 }
 
 func getServiceBusTopic() string {
+	if topic := getEnv("SERVICE_BUS_TELEMETRY_TOPIC", ""); topic != "" {
+		return topic
+	}
 	return getEnv("SERVICE_BUS_TOPIC", "telemetry")
 }
 
 func getServiceBusSubscription() string {
+	if sub := getEnv("SERVICE_BUS_ANALYTICS_SUBSCRIPTION", ""); sub != "" {
+		return sub
+	}
+	if sub := getEnv("SERVICE_BUS_TELEMETRY_SUBSCRIPTION", ""); sub != "" {
+		return sub
+	}
 	return getEnv("SERVICE_BUS_SUBSCRIPTION", "analytics-service")
+}
+
+func getServiceBusNotificationTopic() string {
+	if topic := getEnv("SERVICE_BUS_NOTIFICATIONS_TOPIC", ""); topic != "" {
+		return topic
+	}
+	if topic := getEnv("SERVICE_BUS_NOTIFICATION_TOPIC", ""); topic != "" {
+		return topic
+	}
+	return "notifications"
+}
+
+func getServiceBusNotificationSubscription() string {
+	if sub := getEnv("SERVICE_BUS_NOTIFICATION_SUBSCRIPTION", ""); sub != "" {
+		return sub
+	}
+	return "notification-service"
+}
+
+func getServiceBusNotificationRecipient() string {
+	if recipient := getEnv("ALERT_NOTIFICATION_RECIPIENT", ""); recipient != "" {
+		return recipient
+	}
+	if recipient := getEnv("SERVICE_BUS_NOTIFICATION_RECIPIENT", ""); recipient != "" {
+		return recipient
+	}
+	return "alerts@agriwizard.local"
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

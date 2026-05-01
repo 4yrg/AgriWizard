@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 )
@@ -66,8 +68,13 @@ func (c *AzureServiceBusNotificationConsumer) Start(ctx context.Context) error {
 			log.Println("[INFO] Azure Service Bus notification consumer shutting down")
 			return nil
 		default:
-			messages, err := c.receiver.ReceiveMessages(ctx, 1, nil)
+			receiveCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			messages, err := c.receiver.ReceiveMessages(receiveCtx, 1, nil)
+			cancel()
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					continue
+				}
 				log.Printf("[ERROR] Failed to receive messages: %v", err)
 				continue
 			}
@@ -126,9 +133,18 @@ func getServiceBusNotificationConnection() string {
 }
 
 func getServiceBusNotificationTopic() string {
-	return getEnv("SERVICE_BUS_TOPIC", "notifications")
+	if topic := getEnv("SERVICE_BUS_NOTIFICATIONS_TOPIC", ""); topic != "" {
+		return topic
+	}
+	if topic := getEnv("SERVICE_BUS_NOTIFICATION_TOPIC", ""); topic != "" {
+		return topic
+	}
+	return "notifications"
 }
 
 func getServiceBusNotificationSubscription() string {
-	return getEnv("SERVICE_BUS_SUBSCRIPTION", "notification-service")
+	if sub := getEnv("SERVICE_BUS_NOTIFICATION_SUBSCRIPTION", ""); sub != "" {
+		return sub
+	}
+	return "notification-service"
 }

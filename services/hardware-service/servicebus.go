@@ -90,6 +90,9 @@ func getServiceBusConnection() string {
 }
 
 func getServiceBusTopic() string {
+	if topic := getEnv("SERVICE_BUS_TELEMETRY_TOPIC", ""); topic != "" {
+		return topic
+	}
 	return getEnv("SERVICE_BUS_TOPIC", "telemetry")
 }
 
