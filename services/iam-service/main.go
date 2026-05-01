@@ -24,6 +24,8 @@ type DBStatus struct {
 	migrated bool
 }
 
+var sbNotificationPublisher *AzureServiceBusNotificationPublisher
+
 func (s *DBStatus) GetDB() *sql.DB {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -94,12 +96,22 @@ func main() {
 			status = "starting"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"status":   status,
-			"service":  "iam-service",
-			"db_ready": dbStatus.IsReady(),
-			"migrated": dbStatus.IsMigrated(),
+			"status":                  status,
+			"service":                 "iam-service",
+			"db_ready":                dbStatus.IsReady(),
+			"migrated":                dbStatus.IsMigrated(),
+			"sb_notification_enabled": sbNotificationPublisher != nil && sbNotificationPublisher.IsConnected(),
 		})
 	})
+
+	// --- Service Bus Setup ---
+	serviceBusConnection := getServiceBusConnection()
+	serviceBusNotificationsTopic := getServiceBusNotificationsTopic()
+
+	sbNotificationPublisher, err = NewAzureServiceBusNotificationPublisher(serviceBusConnection, serviceBusNotificationsTopic)
+	if err != nil {
+		log.Printf("[WARN] Azure Service Bus notification publisher initialization failed: %v", err)
+	}
 
 	// Start HTTP server in background
 	server := &http.Server{Addr: ":" + port, Handler: r}
@@ -150,7 +162,7 @@ func main() {
 	}()
 
 	// Setup API routes (will return 503 until DB is ready)
-	h := NewHandler(dbStatus, jwtSecret, jwtIssuer, ttlDur)
+	h := NewHandler(dbStatus, jwtSecret, jwtIssuer, ttlDur, sbNotificationPublisher)
 
 	// Public routes
 	public := r.Group("/api/v1/iam")

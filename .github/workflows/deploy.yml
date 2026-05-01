@@ -627,7 +627,7 @@ jobs:
           set -euo pipefail
           APP_NAME="${{ steps.app.outputs.name }}"
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
-          FQDN_SUFFIX="yellowocean-38e04fed.centralindia.azurecontainerapps.io"
+          FQDN_SUFFIX="internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io"
 
           SB_CONN_STR="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
 
@@ -703,11 +703,16 @@ jobs:
               WEATHER_SERVICE_HOST="weather-prod.${FQDN_SUFFIX}" \
               NOTIFICATION_SERVICE_HOST="notification-prod.${FQDN_SUFFIX}"
 
+          INGRESS_TYPE="internal"
+          if [ "${{ matrix.service }}" == "gateway" ]; then
+            INGRESS_TYPE="external"
+          fi
+
           az containerapp ingress enable \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --target-port "${{ matrix.port }}" \
-            --type external \
+            --type "${INGRESS_TYPE}" \
             --only-show-errors
 
   # ───────────────────────────────────────────────
@@ -731,6 +736,6 @@ jobs:
           echo "- Notification: https://notification-prod.internal.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### API Gateway" >> "$GITHUB_STEP_SUMMARY"
-          echo "APIM is deployed via Bicep. Configure APIs through Azure Portal." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production: https://agriwizard-prod-gateway.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Note**: Backend services are internal-only. Configure APIM to route to backends." >> "$GITHUB_STEP_SUMMARY"

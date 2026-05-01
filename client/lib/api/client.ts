@@ -29,6 +29,7 @@ import type {
   WeatherForecast,
   WeatherAlert,
   IrrigationRecommendation,
+  EquipmentAnalysis,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -226,6 +227,11 @@ export const analyticsApi = {
   getDailySummaries: (date?: string) =>
     apiFetch<SuccessResponse<DailySummary[]>>(
       `/api/v1/analytics/summaries${date ? `?date=${date}` : ""}`
+    ),
+
+  getEquipmentAnalytics: (date?: string) =>
+    apiFetch<SuccessResponse<EquipmentAnalysis[]>>(
+      `/api/v1/analytics/equipment-analytics${date ? `?date=${date}` : ""}`
     ),
 
   // Telemetry Ingestion

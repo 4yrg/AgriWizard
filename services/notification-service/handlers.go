@@ -15,10 +15,11 @@ import (
 type Handler struct {
 	store      *Store
 	dispatcher *Dispatcher
+	sbConsumer *AzureServiceBusNotificationConsumer
 }
 
-func NewHandler(store *Store, dispatcher *Dispatcher) *Handler {
-	return &Handler{store: store, dispatcher: dispatcher}
+func NewHandler(store *Store, dispatcher *Dispatcher, sbConsumer *AzureServiceBusNotificationConsumer) *Handler {
+	return &Handler{store: store, dispatcher: dispatcher, sbConsumer: sbConsumer}
 }
 
 // RegisterRoutes wires all endpoints onto the provided mux.
@@ -41,9 +42,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 // ---- Health ----
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"service": "notification-service",
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":                "ok",
+		"service":               "notification-service",
+		"sb_notification_conn":  h.sbConsumer != nil && h.sbConsumer.IsConnected(),
 	})
 }
 

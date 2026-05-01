@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,25 +16,27 @@ import (
 
 // Handler holds shared dependencies.
 type Handler struct {
-	jwtSecret  string
-	owmAPIKey  string
-	owmBaseURL string
-	latitude   float64
-	longitude  float64
-	cityName   string
-	useMock    bool
+	jwtSecret               string
+	owmAPIKey               string
+	owmBaseURL              string
+	latitude                float64
+	longitude               float64
+	cityName                string
+	useMock                 bool
+	sbNotificationPublisher *AzureServiceBusNotificationPublisher
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(jwtSecret, owmAPIKey, owmBaseURL string, lat, lon float64, city string, useMock bool) *Handler {
+func NewHandler(jwtSecret, owmAPIKey, owmBaseURL string, lat, lon float64, city string, useMock bool, sbNotificationPublisher *AzureServiceBusNotificationPublisher) *Handler {
 	return &Handler{
-		jwtSecret:  jwtSecret,
-		owmAPIKey:  owmAPIKey,
-		owmBaseURL: owmBaseURL,
-		latitude:   lat,
-		longitude:  lon,
-		cityName:   city,
-		useMock:    useMock,
+		jwtSecret:               jwtSecret,
+		owmAPIKey:               owmAPIKey,
+		owmBaseURL:              owmBaseURL,
+		latitude:                lat,
+		longitude:               lon,
+		cityName:                city,
+		useMock:                 useMock,
+		sbNotificationPublisher: sbNotificationPublisher,
 	}
 }
 
@@ -354,5 +357,27 @@ func (h *Handler) JWTAuthMiddleware() gin.HandlerFunc {
 		c.Set("user_id", claims["user_id"])
 		c.Set("role", claims["role"])
 		c.Next()
+	}
+}
+
+// sendNotification is a helper to send notifications via Service Bus
+func (h *Handler) sendNotification(recipient, subject, body string, metadata map[string]string) {
+	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := NotificationRequest{
+		Channel:   "email",
+		Recipient: recipient,
+		Subject:   subject,
+		Body:      body,
+		Metadata:  metadata,
+	}
+
+	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
+		log.Printf("[WARN] Failed to send notification: %v", err)
 	}
 }

@@ -31,7 +31,8 @@
           "externalIngress": false,
           "environmentVariables": [
             { "name": "PORT", "value": "8086" },
-            { "name": "JWT_TTL_HOURS", "value": "24" }
+            { "name": "JWT_TTL_HOURS", "value": "24" },
+            { "name": "DB_SSLMODE", "value": "require" }
           ]
         },
         {
@@ -81,6 +82,7 @@
           "externalIngress": false,
           "environmentVariables": [
             { "name": "PORT", "value": "8089" },
+            { "name": "DB_SSLMODE", "value": "require" },
             { "name": "USE_MOCK", "value": "false" },
             { "name": "OWM_BASE_URL", "value": "https://api.openweathermap.org/data/2.5" },
             { "name": "LOCATION_LAT", "value": "6.9271" },

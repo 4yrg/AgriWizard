@@ -43,6 +43,7 @@ const adminNavItems: NavItem[] = [
 
 const agronomistNavItems: NavItem[] = [
   { title: "Dashboard", href: "/agronomist", icon: LayoutDashboard },
+  { title: "Analytics", href: "/agronomist/analytics", icon: Activity },
   { title: "Thresholds", href: "/agronomist/thresholds", icon: Thermometer },
   { title: "Weather", href: "/agronomist/weather", icon: Cloud },
 ];
