@@ -51,6 +51,12 @@ http {
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
 
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
+
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
@@ -83,6 +89,12 @@ http {
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
+
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
 
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
@@ -117,6 +129,12 @@ http {
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
 
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
+
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
@@ -149,6 +167,12 @@ http {
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
+
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
 
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
@@ -183,6 +207,12 @@ http {
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
 
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
+
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
@@ -214,6 +244,12 @@ http {
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
+
+            # Hide backend CORS headers to prevent duplicates
+            proxy_hide_header 'Access-Control-Allow-Origin';
+            proxy_hide_header 'Access-Control-Allow-Methods';
+            proxy_hide_header 'Access-Control-Allow-Headers';
+            proxy_hide_header 'Access-Control-Expose-Headers';
 
             # CORS Headers
             add_header 'Access-Control-Allow-Origin' 'https://agri-wizard.vercel.app' always;
