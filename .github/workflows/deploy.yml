@@ -669,134 +669,12 @@ jobs:
             --only-show-errors
 
   # ───────────────────────────────────────────────
-  # 9. DEPLOY APIM (after all services are deployed)
-  # ───────────────────────────────────────────────
-  deploy_apim:
-    name: Deploy APIM
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [deploy_production]
-    if: github.event_name != 'pull_request'
-    env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-    steps:
-      - name: Azure login with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Get deployment outputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "APIM_NAME=agriwizard-prod-apim" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy API Management
-        id: apim
-        shell: bash
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="agriwizard-prod-apim"
-          
-          echo "=== Deploying APIM (Consumption tier) ==="
-          
-          az apim create \
-            --name "${APIM_NAME}" \
-            --resource-group "${RG}" \
-            --location "${{ vars.AZURE_REGION || 'centralindia' }}" \
-            --publisher-email "${{ vars.APIM_PUBLISHER_EMAIL || 'devops@agriwizard.io' }}" \
-            --publisher-name "AgriWizard Platform" \
-            --sku-name Consumption \
-            --sku-capacity 0 \
-            --only-show-errors || echo "APIM may already exist"
-
-          echo "APIM_NAME=${APIM_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Set APIM hostname
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="${{ steps.apim.outputs.APIM_NAME || 'agriwizard-prod-apim' }}"
-          CUSTOM_DOMAIN="${{ vars.APIM_CUSTOM_DOMAIN || '' }}"
-          
-          if [ -n "${CUSTOM_DOMAIN}" ]; then
-            echo "=== Configuring custom domain ==="
-            az apim update \
-              --name "${APIM_NAME}" \
-              --resource-group "${RG}" \
-              --hostname-name "${CUSTOM_DOMAIN}" \
-              --only-show-errors || echo "Custom domain not configured"
-          fi
-
-      - name: Import API definitions
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="${{ steps.apim.outputs.APIM_NAME || 'agriwizard-prod-apim' }}"
-          
-          echo "=== Importing IAM API ==="
-          az apim api import \
-            --resource-group "${RG}" \
-            --api-id iam-api \
-            --display-name "IAM Service" \
-            --path "api/v1/iam" \
-            --value "https://iam-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" \
-            --protocol https \
-            --subscription-required false \
-            --only-show-errors || echo "API import may have errors"
-
-      - name: Configure JWT validation
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="${{ steps.apim.outputs.APIM_NAME || 'agriwizard-prod-apim' }}"
-          JWT_ISSUER="${{ vars.JWT_ISSUER || 'agriwizard-iam' }}"
-          
-          echo "=== Setting JWT validation policy ==="
-          az apim policy set-xml \
-            --resource-group "${RG}" \
-            --api-id iam-api \
-            --policy-format rawxml \
-            --value '<policies><inbound><validate-jwt header-name="Authorization" failed-validation-httpcode="401"><openid-config url="https://iam-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io/.well-known/openid-configuration" /><audiences><audience>agriwizard</audience></audiences><issuers><issuer>'${JWT_ISSUER}'</issuer></issuers></validate-jwt></inbound><backend><forward-request /></backend></policies>' \
-            --only-show-errors || echo "Policy may have errors"
-
-      - name: Enable CORS
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="${{ steps.apim.outputs.APIM_NAME || 'agriwizard-prod-apim' }}"
-          ORIGINS="${{ vars.CORS_ALLOW_ORIGIN || '*' }}"
-          
-          echo "=== Setting CORS policy ==="
-          az apim policy set-xml \
-            --resource-group "${RG}" \
-            --api-id iam-api \
-            --policy-format rawxml \
-            --value '<policies><inbound><cors allow-credentials="true"><allowed-origins><origin>*</origin></allowed-origins><allowed-methods><method>GET</method><method>POST</method><method>PUT</method><method>DELETE</method><method>PATCH</method><method>OPTIONS</method></allowed-methods></cors></inbound></policies>' \
-            --only-show-errors || echo "CORS policy error"
-
-      - name: Get APIM URL
-        run: |
-          set -euo pipefail
-          RG="${{ vars.ACA_RESOURCE_GROUP_PRODUCTION || 'agriwizard-prod-rg }}"
-          APIM_NAME="${{ steps.apim.outputs.APIM_NAME || 'agriwizard-prod-apim' }}"
-          
-          GATEWAY_URL=$(az apim show --name "${APIM_NAME}" --resource-group "${RG}" --query properties.gatewayHostname -o tsv)
-          echo "APIM Gateway URL: ${GATEWAY_URL}"
-          echo "apim_gateway_url=${GATEWAY_URL}" >> "$GITHUB_OUTPUT"
-
-  # ───────────────────────────────────────────────
   # COMPLETE DEPLOYMENT SUMMARY
-  # ───────────────────────────────────────────────
+  # ─────────────────────────────────────────────--
   complete:
     name: Deployment Complete
     runs-on: ubuntu-latest
-    needs: [deploy_apim]
+    needs: [deploy_production]
     if: always()
     steps:
       - name: Summary
@@ -810,7 +688,7 @@ jobs:
           echo "- Weather: https://weather-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
           echo "- Notification: https://notification-prod.yellowocean-38e04fed.centralindia.azurecontainerapps.io" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### API Gateway (APIM)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Access services via APIM: https://agriwizard-prod-apim.management.azure-api.net" >> "$GITHUB_STEP_SUMMARY"
+          echo "### API Gateway" >> "$GITHUB_STEP_SUMMARY"
+          echo "APIM is deployed via Bicep. Configure APIs through Azure Portal." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Note**: Backend services are now internal-only. All traffic must go through APIM." >> "$GITHUB_STEP_SUMMARY"
+          echo "**Note**: Backend services are internal-only. Configure APIM to route to backends." >> "$GITHUB_STEP_SUMMARY"
