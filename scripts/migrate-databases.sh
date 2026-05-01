@@ -22,7 +22,19 @@ echo ""
 DB_HOST="agriwizard-prod-db-7i7k3p7kcgay2.postgres.database.azure.com"
 DB_USER="agriwizard_admin"
 RESOURCE_GROUP="agriwizard-prod-rg"
-KEY_VAULT="agriwizard-prod-kv"
+
+# Allow overrides, but default to the deployed Key Vault in the target resource group.
+KEY_VAULT="${KEY_VAULT:-}"
+if [ -z "$KEY_VAULT" ]; then
+  KEY_VAULT=$(az keyvault list -g "$RESOURCE_GROUP" --query "[0].name" -o tsv)
+fi
+
+if [ -z "$KEY_VAULT" ]; then
+  echo "❌ ERROR: Could not determine Key Vault name in resource group $RESOURCE_GROUP"
+  exit 1
+fi
+
+echo "🔎 Using Key Vault: $KEY_VAULT"
 
 # Fetch credentials from Key Vault
 echo "🔐 Retrieving database password from Key Vault..."
