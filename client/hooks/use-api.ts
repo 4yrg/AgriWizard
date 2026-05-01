@@ -16,6 +16,7 @@ import type {
   WeatherForecast,
   WeatherAlert,
   IrrigationRecommendation,
+  EquipmentAnalysis,
 } from "@/types/api";
 
 function parseRefreshInterval(
@@ -138,6 +139,19 @@ export function useDailySummaries(date?: string) {
     },
     {
       refreshInterval: REFRESH_INTERVALS.dailySummaries,
+    }
+  );
+}
+
+export function useEquipmentAnalytics(date?: string) {
+  return useSWR<EquipmentAnalysis[]>(
+    `equipment-analytics-${date || "today"}`,
+    async () => {
+      const response = await analyticsApi.getEquipmentAnalytics(date);
+      return response.data;
+    },
+    {
+      refreshInterval: 30000,
     }
   );
 }
