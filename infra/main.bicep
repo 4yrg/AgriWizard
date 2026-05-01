@@ -294,3 +294,4 @@ output dbNames array = [for (s, i) in backendServices: {
 output dbUser string = dbUser
 output gatewayUrl string = 'https://${gateway.outputs.fqdn}'
 output gatewayFqdn string = gateway.outputs.fqdn
+output identityId string = identity.outputs.identityId

@@ -369,6 +369,7 @@ jobs:
       db_name_weather: ${{ steps.deploy.outputs.db_name_weather }}
       db_name_notification: ${{ steps.deploy.outputs.db_name_notification }}
       db_user: ${{ steps.deploy.outputs.db_user }}
+      identity_id: ${{ steps.deploy.outputs.identity_id }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -492,6 +493,7 @@ jobs:
           echo "db_name_weather=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="weather") | .dbName')" >> "$GITHUB_OUTPUT"
           echo "db_name_notification=$(echo "$DB_NAMES_ARRAY" | jq -r '.[] | select(.serviceName=="notification") | .dbName')" >> "$GITHUB_OUTPUT"
           echo "db_user=$(jq -r '.properties.outputs.dbUser.value' deployment.json)" >> "$GITHUB_OUTPUT"
+          echo "identity_id=$(jq -r '.properties.outputs.identityId.value' deployment.json)" >> "$GITHUB_OUTPUT"
 
   # ───────────────────────────────────────────────
   # ───────────────────────────────────────────────
@@ -657,6 +659,9 @@ jobs:
               service-bus-connection="${SB_CONN_STR}"
 
           az containerapp update \
+            --user-assigned "${{ needs.deploy-infra.outputs.identity_id }}" \
+            --registry-identity "${{ needs.deploy-infra.outputs.identity_id }}" \
+            --registry-server "${{ needs.deploy-bootstrap.outputs.acr_login_server }}" \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
             --image "${IMAGE}" \
