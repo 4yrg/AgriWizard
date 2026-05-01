@@ -57,6 +57,12 @@ param globalImageTag string = ''
 @description('APIM publisher email.')
 param publisherEmail string = 'devops@agriwizard.io'
 
+@description('JWT issuer for API authentication.')
+param jwtIssuer string = 'agriwizard-iam'
+
+@description('Allowed CORS origins.')
+param allowedOrigins array = ['*']
+
 var uniqueSuffix = uniqueString(subscription().id, resourceGroupName)
 var computedAcrName = empty(acrName) ? take('${namePrefix}acr${uniqueSuffix}', 50) : acrName
 var computedTenantId = empty(tenantId) ? subscription().tenantId : tenantId
@@ -260,6 +266,8 @@ module apim './modules/apim.bicep' = {
     location: location
     publisherEmail: publisherEmail
     publisherName: 'AgriWizard Platform'
+    jwtIssuer: jwtIssuer
+    allowedOrigins: allowedOrigins
     backendServices: [
       {
         name: 'iam'

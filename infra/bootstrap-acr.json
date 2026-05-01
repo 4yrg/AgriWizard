@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "11108297155291059555"
+      "templateHash": "14797945905492081098"
     }
   },
   "parameters": {
@@ -31,8 +31,32 @@
     },
     "acrName": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
         "description": "The name of the ACR."
+      }
+    },
+    "publisherEmail": {
+      "type": "string",
+      "defaultValue": "devops@agriwizard.io",
+      "metadata": {
+        "description": "APIM publisher email."
+      }
+    },
+    "jwtIssuer": {
+      "type": "string",
+      "defaultValue": "agriwizard-iam",
+      "metadata": {
+        "description": "JWT issuer for API authentication."
+      }
+    },
+    "allowedOrigins": {
+      "type": "array",
+      "defaultValue": [
+        "*"
+      ],
+      "metadata": {
+        "description": "Allowed CORS origins."
       }
     }
   },
@@ -40,7 +64,8 @@
     "resourceGroupName": "[format('{0}-{1}-rg', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "identityName": "[format('{0}-{1}-aca-mi', parameters('namePrefix'), parameters('environmentSuffix'))]",
     "uniqueSuffix": "[uniqueString(subscription().id, variables('resourceGroupName'))]",
-    "computedAcrName": "[if(empty(parameters('acrName')), take(format('{0}acr{1}', parameters('namePrefix'), variables('uniqueSuffix')), 50), parameters('acrName'))]"
+    "computedAcrName": "[if(empty(parameters('acrName')), take(format('{0}acr{1}', parameters('namePrefix'), variables('uniqueSuffix')), 50), parameters('acrName'))]",
+    "apimName": "[take(format('{0}-{1}-apim', parameters('namePrefix'), parameters('environmentSuffix')), 50)]"
   },
   "resources": [
     {
@@ -434,6 +459,439 @@
       "dependsOn": [
         "[subscriptionResourceId('Microsoft.Resources/deployments', 'resource-group-bootstrap')]"
       ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "apim-bootstrap",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "apimName": {
+            "value": "[variables('apimName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "publisherEmail": {
+            "value": "[parameters('publisherEmail')]"
+          },
+          "publisherName": {
+            "value": "AgriWizard Platform"
+          },
+          "jwtIssuer": {
+            "value": "[parameters('jwtIssuer')]"
+          },
+          "allowedOrigins": {
+            "value": "[parameters('allowedOrigins')]"
+          },
+          "backendServices": {
+            "value": []
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "12398823549474911528"
+            }
+          },
+          "parameters": {
+            "apimSkuName": {
+              "type": "string",
+              "defaultValue": "Consumption",
+              "allowedValues": [
+                "Consumption"
+              ],
+              "metadata": {
+                "description": "API Management - Consumption tier"
+              }
+            },
+            "apimName": {
+              "type": "string",
+              "metadata": {
+                "description": "API Management service name."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for the APIM instance."
+              }
+            },
+            "publisherEmail": {
+              "type": "string",
+              "metadata": {
+                "description": "Publisher email for SSL certificates and notifications."
+              }
+            },
+            "publisherName": {
+              "type": "string",
+              "defaultValue": "AgriWizard Platform",
+              "metadata": {
+                "description": "Publisher name."
+              }
+            },
+            "jwtIssuer": {
+              "type": "string",
+              "defaultValue": "agriwizard-iam",
+              "metadata": {
+                "description": "JWT issuer for API authentication."
+              }
+            },
+            "allowedOrigins": {
+              "type": "array",
+              "defaultValue": [
+                "*"
+              ],
+              "metadata": {
+                "description": "Allowed CORS origins."
+              }
+            },
+            "jwtSecret": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "JWT secret for token validation."
+              }
+            },
+            "backendServices": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "List of backend services with their internal URLs."
+              }
+            }
+          },
+          "variables": {
+            "apimResourceName": "[parameters('apimName')]",
+            "backendUrlsMap": {
+              "iam": "iam-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
+              "hardware": "hardware-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
+              "analytics": "analytics-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
+              "weather": "weather-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io",
+              "notification": "notification-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ApiManagement/service",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[variables('apimResourceName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "[parameters('apimSkuName')]",
+                "capacity": 0
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "publisherEmail": "[parameters('publisherEmail')]",
+                "publisherName": "[parameters('publisherName')]"
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "apim-api-config",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "apimName": {
+                    "value": "[parameters('apimName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "jwtIssuer": {
+                    "value": "[parameters('jwtIssuer')]"
+                  },
+                  "jwtSecret": "[if(not(empty(parameters('jwtSecret'))), createObject('value', parameters('jwtSecret')), createObject('value', 'temp'))]",
+                  "backendUrls": {
+                    "value": "[variables('backendUrlsMap')]"
+                  },
+                  "allowedOrigins": {
+                    "value": "[parameters('allowedOrigins')]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.42.1.51946",
+                      "templateHash": "5408348933227650072"
+                    }
+                  },
+                  "parameters": {
+                    "apimName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Parent APIM resource name"
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Location"
+                      }
+                    },
+                    "jwtIssuer": {
+                      "type": "string",
+                      "defaultValue": "agriwizard-iam",
+                      "metadata": {
+                        "description": "JWT issuer for validation"
+                      }
+                    },
+                    "jwtSecret": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "JWT secret for token validation"
+                      }
+                    },
+                    "backendUrls": {
+                      "type": "object",
+                      "metadata": {
+                        "description": "Backend service URLs (internal ACA URLs)"
+                      }
+                    },
+                    "allowedOrigins": {
+                      "type": "array",
+                      "defaultValue": [
+                        "*"
+                      ],
+                      "metadata": {
+                        "description": "CORS allowed origins"
+                      }
+                    },
+                    "rateLimitCalls": {
+                      "type": "int",
+                      "defaultValue": 120,
+                      "metadata": {
+                        "description": "Rate limit calls per minute"
+                      }
+                    }
+                  },
+                  "variables": {
+                    "apimResourceName": "[parameters('apimName')]"
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.ApiManagement/service",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[variables('apimResourceName')]"
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/policies",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'policy')]",
+                      "properties": {
+                        "format": "rawxml",
+                        "value": "<policies>\n  <inbound>\n    <cors allow-credentials=\"true\" preserve-vary=\"true\">\n      <allowed-origins>\n        ${join([for origin in allowedOrigins: '<origin>${origin}</origin>'], '\\n        ')}\n      </allowed-origins>\n      <allowed-methods>\n        <method>GET</method>\n        <method>POST</method>\n        <method>PUT</method>\n        <method>DELETE</method>\n        <method>PATCH</method>\n        <method>OPTIONS</method>\n      </allowed-methods>\n      <allowed-headers>\n        <header>Authorization</header>\n        <header>Content-Type</header>\n        <header>X-Request-ID</header>\n        <header>X-Internal-Service</header>\n      </allowed-headers>\n    </cors>\n    <rate-limit-by-key calls=\"${rateLimitCalls}\" renewal-period=\"60\" counter-key=\"@(context.Request.IpAddress)\" />\n    <validate-jwt header-name=\"Authorization\" failed-validation-httpcode=\"401\" require-expiration-time=\"false\">\n      <openid-config url=\"https://${backendUrls.iamUrl}/.well-known/openid-configuration\" />\n      <audiences>\n        <audience>agriwizard</audience>\n      </audiences>\n      <issuers>\n        <issuer>${jwtIssuer}</issuer>\n      </issuers>\n    </validate-jwt>\n  </inbound>\n  <backend>\n    <forward-request />\n  </backend>\n  <outbound>\n    <set-header name=\"X-Kong-Upstream-Latency\" exists-action=\"override\" />\n    <set-header name=\"X-Kong-Proxy-Latency\" exists-action=\"override\" />\n  </outbound>\n</policies>\n"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'iam-api')]",
+                      "properties": {
+                        "displayName": "IAM Service",
+                        "description": "Authentication and user management service",
+                        "path": "api/v1/iam",
+                        "protocols": [
+                          "https"
+                        ],
+                        "subscriptionRequired": false
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis/operations",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}/{2}', variables('apimResourceName'), 'iam-api', 'login')]",
+                      "properties": {
+                        "displayName": "Login",
+                        "method": "POST",
+                        "urlTemplate": "/login"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'iam-api')]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis/operations",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}/{2}', variables('apimResourceName'), 'iam-api', 'register')]",
+                      "properties": {
+                        "displayName": "Register",
+                        "method": "POST",
+                        "urlTemplate": "/register"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'iam-api')]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis/operations",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}/{2}', variables('apimResourceName'), 'iam-api', 'me')]",
+                      "properties": {
+                        "displayName": "Get Current User",
+                        "method": "GET",
+                        "urlTemplate": "/me"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'iam-api')]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'hardware-api')]",
+                      "properties": {
+                        "displayName": "Hardware Service",
+                        "description": "IoT device management and MQTT control",
+                        "path": "api/v1/hardware",
+                        "protocols": [
+                          "https"
+                        ],
+                        "subscriptionRequired": false
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'analytics-api')]",
+                      "properties": {
+                        "displayName": "Analytics Service",
+                        "description": "Threshold rules and decision logic",
+                        "path": "api/v1/analytics",
+                        "protocols": [
+                          "https"
+                        ],
+                        "subscriptionRequired": false
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'weather-api')]",
+                      "properties": {
+                        "displayName": "Weather Service",
+                        "description": "External weather intelligence",
+                        "path": "api/v1/weather",
+                        "protocols": [
+                          "https"
+                        ],
+                        "subscriptionRequired": false
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    },
+                    {
+                      "type": "Microsoft.ApiManagement/service/apis",
+                      "apiVersion": "2023-05-01-preview",
+                      "name": "[format('{0}/{1}', variables('apimResourceName'), 'notification-api')]",
+                      "properties": {
+                        "displayName": "Notification Service",
+                        "description": "Email and push notifications",
+                        "path": "api/v1/notifications",
+                        "protocols": [
+                          "https"
+                        ],
+                        "subscriptionRequired": false
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "iamApiId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'iam-api')]"
+                    },
+                    "hardwareApiId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'hardware-api')]"
+                    },
+                    "analyticsApiId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'analytics-api')]"
+                    },
+                    "weatherApiId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'weather-api')]"
+                    },
+                    "notificationApiId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.ApiManagement/service/apis', variables('apimResourceName'), 'notification-api')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "apimName": {
+              "type": "string",
+              "value": "[variables('apimResourceName')]"
+            },
+            "apimResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ApiManagement/service', variables('apimResourceName'))]"
+            },
+            "apimPortalUrl": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview').portalUrl]"
+            },
+            "apimGatewayUrl": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview').gatewayUrl]"
+            },
+            "apimGatewayHostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview').gatewayUrl]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ApiManagement/service', variables('apimResourceName')), '2023-05-01-preview', 'full').identity.principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/deployments', 'resource-group-bootstrap')]"
+      ]
     }
   ],
   "outputs": {
@@ -452,6 +910,14 @@
     "serviceBusConnectionString": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'servicebus-bootstrap'), '2025-04-01').outputs.connectionString.value]"
+    },
+    "apimName": {
+      "type": "string",
+      "value": "[variables('apimName')]"
+    },
+    "apimGatewayUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'apim-bootstrap'), '2025-04-01').outputs.apimGatewayUrl.value]"
     }
   }
 }

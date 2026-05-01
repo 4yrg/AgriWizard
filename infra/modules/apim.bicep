@@ -14,10 +14,28 @@ param publisherEmail string
 @description('Publisher name.')
 param publisherName string = 'AgriWizard Platform'
 
+@description('JWT issuer for API authentication.')
+param jwtIssuer string = 'agriwizard-iam'
+
+@description('Allowed CORS origins.')
+param allowedOrigins array = ['*']
+
+@description('JWT secret for token validation.')
+@secure()
+param jwtSecret string = ''
+
 @description('List of backend services with their internal URLs.')
 param backendServices array = []
 
 var apimResourceName = apimName
+
+var backendUrlsMap = {
+  iam: 'iam-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
+  hardware: 'hardware-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
+  analytics: 'analytics-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
+  weather: 'weather-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
+  notification: 'notification-prod.agriwizard-prod-rg.centralindia.azurecontainerapps.io'
+}
 
 resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
   name: apimResourceName
@@ -33,6 +51,21 @@ resource apim 'Microsoft.ApiManagement/service@2023-05-01-preview' = {
     publisherEmail: publisherEmail
     publisherName: publisherName
   }
+}
+
+module apimApi './apim-api.bicep' = {
+  name: 'apim-api-config'
+  params: {
+    apimName: apimName
+    location: location
+    jwtIssuer: jwtIssuer
+    jwtSecret: !empty(jwtSecret) ? jwtSecret : 'temp'
+    backendUrls: backendUrlsMap
+    allowedOrigins: allowedOrigins
+  }
+  dependsOn: [
+    apim
+  ]
 }
 
 output apimName string = apim.name
