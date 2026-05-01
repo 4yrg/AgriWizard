@@ -118,10 +118,18 @@ func (h *Handler) Register(c *gin.Context) {
 
 	log.Printf("[INFO] Register: new user created id=%s email=%s role=%s", userID, req.Email, req.Role)
 
-	// Send notification for new registration
-	recipient := getServiceBusNotificationRecipient()
+	// Send welcome email to the newly registered user
 	go h.sendNotification(
-		recipient,
+		req.Email,
+		"Welcome to AgriWizard",
+		fmt.Sprintf("Hello %s, your account has been successfully created.", req.FullName),
+		map[string]string{"user_id": userID, "email": req.Email, "channel": "email"},
+	)
+
+	// Also notify admin about new registration
+	adminRecipient := getServiceBusNotificationRecipient()
+	go h.sendNotification(
+		adminRecipient,
 		"New user registered",
 		fmt.Sprintf("A new user has registered: %s (%s)", req.FullName, req.Email),
 		map[string]string{"user_id": userID, "email": req.Email},
@@ -195,6 +203,15 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	log.Printf("[INFO] Login: successful login id=%s role=%s", user.ID, user.Role)
+
+	// Send login notification email to the user
+	go h.sendNotification(
+		user.Email,
+		"AgriWizard Login Notification",
+		fmt.Sprintf("Hello %s, you have successfully logged in to AgriWizard.", user.FullName),
+		map[string]string{"user_id": user.ID, "email": user.Email, "channel": "email"},
+	)
+
 	c.JSON(http.StatusOK, LoginResponse{
 		Token:     tokenStr,
 		ExpiresAt: expiresAt,
@@ -363,6 +380,7 @@ func AdminOnly() gin.HandlerFunc {
 // sendNotification is a helper to send notifications via Service Bus
 func (h *Handler) sendNotification(recipient, subject, body string, metadata map[string]string) {
 	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
+		log.Printf("[WARN] Service Bus not connected, skipping notification to %s: %s", recipient, subject)
 		return
 	}
 
@@ -378,6 +396,8 @@ func (h *Handler) sendNotification(recipient, subject, body string, metadata map
 	}
 
 	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
-		log.Printf("[WARN] Failed to send notification: %v", err)
+		log.Printf("[WARN] Failed to send notification to %s: %v", recipient, err)
+	} else {
+		log.Printf("[INFO] Notification sent to %s: %s", recipient, subject)
 	}
 }

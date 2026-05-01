@@ -75,6 +75,9 @@ services:
       <<: *common-env
       PORT: "8086"
       JWT_TTL_HOURS: "24"
+      SERVICE_BUS_CONNECTION: "${SERVICE_BUS_CONNECTION:-}"
+      SERVICE_BUS_NOTIFICATIONS_TOPIC: "notifications"
+      SERVICE_BUS_NOTIFICATION_RECIPIENT: "admin@agriwizard.local"
     networks:
       - agriwizard-net
     ports:
