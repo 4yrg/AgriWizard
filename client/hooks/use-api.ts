@@ -3,6 +3,7 @@ import {
   hardwareApi,
   analyticsApi,
   weatherApi,
+  notificationApi,
 } from "@/lib/api/client";
 import type {
   Equipment,
@@ -16,6 +17,8 @@ import type {
   WeatherForecast,
   WeatherAlert,
   IrrigationRecommendation,
+  Notification as NotificationType,
+  UnreadCountResponse,
 } from "@/types/api";
 
 function parseRefreshInterval(
@@ -63,6 +66,8 @@ const REFRESH_INTERVALS = {
     process.env.NEXT_PUBLIC_REFRESH_IRRIGATION_RECOMMENDATION_MS,
     300000
   ),
+  notifications: 30000,
+  unreadCount: 15000,
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -180,4 +185,36 @@ export function useIrrigationRecommendation() {
   }, {
     refreshInterval: REFRESH_INTERVALS.irrigationRecommendation,
   });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Notification Service Hooks
+// ════════════════════════════════════════════════════════════════════════════
+
+export function useNotifications(recipient: string | null) {
+  return useSWR<NotificationType[]>(
+    recipient ? `notifications-${recipient}` : null,
+    async () => {
+      const response = await notificationApi.listNotifications(recipient!, {
+        limit: 50,
+      });
+      return response.data;
+    },
+    {
+      refreshInterval: REFRESH_INTERVALS.notifications,
+    }
+  );
+}
+
+export function useUnreadCount(recipient: string | null) {
+  return useSWR<UnreadCountResponse>(
+    recipient ? `unread-count-${recipient}` : null,
+    async () => {
+      const response = await notificationApi.getUnreadCount(recipient!);
+      return response.data;
+    },
+    {
+      refreshInterval: REFRESH_INTERVALS.unreadCount,
+    }
+  );
 }

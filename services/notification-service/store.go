@@ -39,17 +39,42 @@ func (s *Store) UpdateStatus(id, status, errMsg string, sentAt *time.Time) error
 	return err
 }
 
+func (s *Store) MarkAsRead(id string) error {
+	_, err := s.db.Exec(`
+		UPDATE notifications.notifications
+		SET read_at = NOW()
+		WHERE id = $1`, id)
+	return err
+}
+
+func (s *Store) MarkAllAsRead(recipient string) error {
+	_, err := s.db.Exec(`
+		UPDATE notifications.notifications
+		SET read_at = NOW()
+		WHERE recipient = $1 AND read_at IS NULL`, recipient)
+	return err
+}
+
+func (s *Store) UnreadCount(recipient string) (int64, error) {
+	var count int64
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM notifications.notifications
+		WHERE recipient = $1 AND read_at IS NULL`, recipient).Scan(&count)
+	return count, err
+}
+
 func (s *Store) GetNotification(id string) (*Notification, error) {
 	n := &Notification{}
 	var metaJSON []byte
 	var errMsg sql.NullString
 	var sentAt sql.NullTime
+	var readAt sql.NullTime
 
 	err := s.db.QueryRow(`
-		SELECT id, channel, recipient, subject, body, status, error_msg, metadata, created_at, sent_at
+		SELECT id, channel, recipient, subject, body, status, error_msg, metadata, created_at, sent_at, read_at
 		FROM notifications.notifications WHERE id = $1`, id).
 		Scan(&n.ID, &n.Channel, &n.Recipient, &n.Subject, &n.Body, &n.Status,
-			&errMsg, &metaJSON, &n.CreatedAt, &sentAt)
+			&errMsg, &metaJSON, &n.CreatedAt, &sentAt, &readAt)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +84,9 @@ func (s *Store) GetNotification(id string) (*Notification, error) {
 	if sentAt.Valid {
 		n.SentAt = &sentAt.Time
 	}
+	if readAt.Valid {
+		n.ReadAt = &readAt.Time
+	}
 	if metaJSON != nil {
 		if err := json.Unmarshal(metaJSON, &n.Metadata); err != nil {
 			return nil, fmt.Errorf("decode notification metadata for %s: %w", n.ID, err)
@@ -67,12 +95,29 @@ func (s *Store) GetNotification(id string) (*Notification, error) {
 	return n, nil
 }
 
-func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
-	rows, err := s.db.Query(`
-		SELECT id, channel, recipient, subject, body, status, error_msg, metadata, created_at, sent_at
+func (s *Store) ListNotificationsFiltered(recipient, channel string, limit, offset int) ([]Notification, error) {
+	query := `
+		SELECT id, channel, recipient, subject, body, status, error_msg, metadata, created_at, sent_at, read_at
 		FROM notifications.notifications
-		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2`, limit, offset)
+		WHERE 1=1`
+	args := []interface{}{}
+	argIdx := 1
+
+	if recipient != "" {
+		query += fmt.Sprintf(" AND recipient = $%d", argIdx)
+		args = append(args, recipient)
+		argIdx++
+	}
+	if channel != "" {
+		query += fmt.Sprintf(" AND channel = $%d", argIdx)
+		args = append(args, channel)
+		argIdx++
+	}
+
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +129,10 @@ func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
 		var metaJSON []byte
 		var errMsg sql.NullString
 		var sentAt sql.NullTime
+		var readAt sql.NullTime
 
 		if err := rows.Scan(&n.ID, &n.Channel, &n.Recipient, &n.Subject, &n.Body, &n.Status,
-			&errMsg, &metaJSON, &n.CreatedAt, &sentAt); err != nil {
+			&errMsg, &metaJSON, &n.CreatedAt, &sentAt, &readAt); err != nil {
 			return nil, err
 		}
 		if errMsg.Valid {
@@ -94,6 +140,9 @@ func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
 		}
 		if sentAt.Valid {
 			n.SentAt = &sentAt.Time
+		}
+		if readAt.Valid {
+			n.ReadAt = &readAt.Time
 		}
 		if metaJSON != nil {
 			if err := json.Unmarshal(metaJSON, &n.Metadata); err != nil {
@@ -103,6 +152,10 @@ func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
 		list = append(list, n)
 	}
 	return list, nil
+}
+
+func (s *Store) ListNotifications(limit, offset int) ([]Notification, error) {
+	return s.ListNotificationsFiltered("", "", limit, offset)
 }
 
 // ---- Templates ----
@@ -209,7 +262,8 @@ func RunMigrations(db *sql.DB) error {
 		error_msg  TEXT DEFAULT '',
 		metadata   JSONB DEFAULT '{}',
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		sent_at    TIMESTAMPTZ
+		sent_at    TIMESTAMPTZ,
+		read_at    TIMESTAMPTZ
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_notifications_status
@@ -218,9 +272,15 @@ func RunMigrations(db *sql.DB) error {
 		ON notifications.notifications(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_notifications_recipient
 		ON notifications.notifications(recipient);
+	CREATE INDEX IF NOT EXISTS idx_notifications_read_at
+		ON notifications.notifications(read_at) WHERE read_at IS NULL;
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("notification migrations: %w", err)
+	}
+
+	if _, err := db.Exec(`ALTER TABLE notifications.notifications ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ`); err != nil {
+		log.Printf("[WARN] Could not add read_at column (may already exist): %v", err)
 	}
 	log.Println("[INFO] Migrations applied")
 	return nil

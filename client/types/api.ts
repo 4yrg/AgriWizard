@@ -239,3 +239,23 @@ export interface WeatherAlert {
   starts_at: string;
   ends_at: string;
 }
+
+// ── Notification Types ────────────────────────────────────────────────────
+
+export interface Notification {
+  id: string;
+  channel: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  error?: string;
+  metadata?: Record<string, string>;
+  created_at: string;
+  sent_at?: string;
+  read_at?: string;
+}
+
+export interface UnreadCountResponse {
+  count: number;
+}

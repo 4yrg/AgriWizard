@@ -29,6 +29,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/notifications/send", h.SendNotification)
 	mux.HandleFunc("GET /api/v1/notifications", h.ListNotifications)
 	mux.HandleFunc("GET /api/v1/notifications/{id}", h.GetNotification)
+	mux.HandleFunc("GET /api/v1/notifications/unread-count", h.UnreadCount)
+	mux.HandleFunc("PUT /api/v1/notifications/{id}/read", h.MarkAsRead)
+	mux.HandleFunc("PUT /api/v1/notifications/read-all", h.MarkAllAsRead)
 
 	// Templates
 	mux.HandleFunc("POST /api/v1/templates", h.CreateTemplate)
@@ -65,13 +68,15 @@ func (h *Handler) SendNotification(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
+	recipient := r.URL.Query().Get("recipient")
+	channel := r.URL.Query().Get("channel")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
-	list, err := h.store.ListNotifications(limit, offset)
+	list, err := h.store.ListNotificationsFiltered(recipient, channel, limit, offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
 		return
@@ -91,6 +96,42 @@ func (h *Handler) GetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, APIResponse{Data: n})
+}
+
+func (h *Handler) UnreadCount(w http.ResponseWriter, r *http.Request) {
+	recipient := r.URL.Query().Get("recipient")
+	if recipient == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "recipient query parameter is required"})
+		return
+	}
+	count, err := h.store.UnreadCount(recipient)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Data: map[string]int64{"count": count}})
+}
+
+func (h *Handler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.store.MarkAsRead(id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Message: "notification marked as read"})
+}
+
+func (h *Handler) MarkAllAsRead(w http.ResponseWriter, r *http.Request) {
+	recipient := r.URL.Query().Get("recipient")
+	if recipient == "" {
+		writeJSON(w, http.StatusBadRequest, APIResponse{Error: "recipient query parameter is required"})
+		return
+	}
+	if err := h.store.MarkAllAsRead(recipient); err != nil {
+		writeJSON(w, http.StatusInternalServerError, APIResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, APIResponse{Message: "all notifications marked as read"})
 }
 
 // ---- Templates ----
