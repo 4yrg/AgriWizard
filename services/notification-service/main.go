@@ -50,6 +50,8 @@ func main() {
 
 	store := NewStore(db)
 
+	SeedNotifications(store)
+
 	// ---- Template engine ----
 	engine := NewTemplateEngine(store)
 
