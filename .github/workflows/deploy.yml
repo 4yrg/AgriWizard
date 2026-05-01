@@ -538,13 +538,13 @@ jobs:
       DB_USER: ${{ needs.deploy-infra.outputs.db_user }}
       DB_NAME: ${{ needs.deploy-infra.outputs.db_name }}
       DB_SSLMODE: ${{ vars.DB_SSLMODE || 'require' }}
-      JWT_ISSUER: ${{ vars.JWT_ISSUER }}
-      OWM_BASE_URL: ${{ vars.OWM_BASE_URL }}
-      LOCATION_LAT: ${{ vars.LOCATION_LAT }}
-      LOCATION_LON: ${{ vars.LOCATION_LON }}
-      LOCATION_CITY: ${{ vars.LOCATION_CITY }}
-      USE_MOCK: ${{ vars.USE_MOCK }}
-      MQTT_BROKER: ${{ vars.MQTT_BROKER }}
+      JWT_ISSUER: ${{ vars.JWT_ISSUER || 'agriwizard-iam' }}
+      OWM_BASE_URL: ${{ vars.OWM_BASE_URL || 'https://api.openweathermap.org' }}
+      LOCATION_LAT: ${{ vars.LOCATION_LAT || '7.8731' }}
+      LOCATION_LON: ${{ vars.LOCATION_LON || '80.7718' }}
+      LOCATION_CITY: ${{ vars.LOCATION_CITY || 'Colombo' }}
+      USE_MOCK: ${{ vars.USE_MOCK || 'false' }}
+      MQTT_BROKER: ${{ vars.MQTT_BROKER || 'tcp://0844c36e03374e7682f81036bb673d45.s1.eu.hivemq.cloud:8883' }}
       MQTT_USERNAME: ${{ vars.MQTT_USERNAME }}
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH }}
@@ -614,6 +614,15 @@ jobs:
           IMAGE="${{ needs.deploy-bootstrap.outputs.acr_login_server }}/${{ matrix.image_name }}:${{ github.sha }}"
 
           SB_CONN_STR="${{ needs.deploy-bootstrap.outputs.service_bus_connection }}"
+          if [ -z "${SB_CONN_STR}" ]; then
+            echo "Service Bus connection empty, querying dynamically..."
+            SB_NAME=$(az servicebus namespace list --resource-group "${ACA_RESOURCE_GROUP}" --query '[0].name' -o tsv)
+            SB_CONN_STR=$(az servicebus namespace authorization-rule keys list \
+              --resource-group "${ACA_RESOURCE_GROUP}" \
+              --namespace-name "${SB_NAME}" \
+              --name "RootManageSharedAccessKey" \
+              --query primaryConnectionString -o tsv)
+          fi
 
           az containerapp secret set \
             --name "${APP_NAME}" \
@@ -684,9 +693,9 @@ jobs:
             --only-show-errors \
             --set-env-vars \
               JWT_ISSUER="${JWT_ISSUER}" \
-              ACA_FQDN_SUFFIX="${{ vars.ACA_FQDN_SUFFIX }}" \
-              KONG_JWT_SHARED_SECRET="${{ secrets.KONG_JWT_SHARED_SECRET }}" \
-              CORS_ALLOW_ORIGIN="${{ vars.CORS_ALLOW_ORIGIN }}"
+              ACA_FQDN_SUFFIX="${{ vars.ACA_FQDN_SUFFIX || 'centralindia.azurecontainerapps.io' }}" \
+              KONG_JWT_SHARED_SECRET="${{ secrets.KONG_JWT_SHARED_SECRET || 'agriwizard-kong-secret' }}" \
+              CORS_ALLOW_ORIGIN="${{ vars.CORS_ALLOW_ORIGIN || '*' }}"
 
           az containerapp ingress enable \
             --name "${{ steps.app.outputs.name }}" \
