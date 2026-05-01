@@ -104,7 +104,7 @@ func main() {
 
 	// ---- HTTP server ----
 	mux := http.NewServeMux()
-	handler := NewHandler(store, dispatcher)
+	handler := NewHandler(store, dispatcher, sbNotificationConsumer)
 	handler.RegisterRoutes(mux)
 
 	// CORS middleware
