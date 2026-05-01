@@ -13,7 +13,7 @@ type NotificationRequest struct {
 	TemplateID string            `json:"template_id,omitempty"` // render a stored template instead of raw content
 	Variables  map[string]string `json:"variables,omitempty"`   // template variables (e.g. {"name": "John"})
 	Subject    string            `json:"subject,omitempty"`     // raw subject (ignored when template_id is set)
-	Body       string            `json:"body,omitempty"`         // raw body (ignored when template_id is set)
+	Body       string            `json:"body,omitempty"`        // raw body (ignored when template_id is set)
 	Metadata   map[string]string `json:"metadata,omitempty"`    // arbitrary key-value pairs passed through to the record
 }
 
