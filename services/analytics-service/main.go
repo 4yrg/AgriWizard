@@ -318,8 +318,8 @@ func runMigrations(db *sql.DB) error {
 func seedDefaultThresholds(db *sql.DB) error {
 	defaultThresholds := []struct {
 		parameterID string
-		minValue     float64
-		maxValue     float64
+		minValue    float64
+		maxValue    float64
 	}{
 		{"air_temp_c", 20.0, 35.0},
 		{"air_humidity_pct", 40.0, 80.0},

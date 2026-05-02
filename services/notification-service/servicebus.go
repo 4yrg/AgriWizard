@@ -18,7 +18,7 @@ type AzureServiceBusNotificationConsumer struct {
 	dispatcher   *Dispatcher
 	connected    bool
 	ready        chan struct{}
-	receiver    *azservicebus.Receiver
+	receiver     *azservicebus.Receiver
 }
 
 func NewAzureServiceBusNotificationConsumer(connectionString, topicName, subscription string, dispatcher *Dispatcher) (*AzureServiceBusNotificationConsumer, error) {
