@@ -264,9 +264,12 @@ func runMigrations(db *sql.DB) error {
 		avg_value    DOUBLE PRECISION NOT NULL,
 		min_recorded DOUBLE PRECISION NOT NULL,
 		max_recorded DOUBLE PRECISION NOT NULL,
+		reading_count INTEGER NOT NULL DEFAULT 1,
 		date         DATE NOT NULL,
 		UNIQUE (parameter_id, date)
 	);
+
+	ALTER TABLE analytics.daily_summaries ADD COLUMN IF NOT EXISTS reading_count INTEGER NOT NULL DEFAULT 1;
 
 	CREATE INDEX IF NOT EXISTS idx_summaries_date ON analytics.daily_summaries(date DESC);
 

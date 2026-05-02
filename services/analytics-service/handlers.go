@@ -345,14 +345,19 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 	var decisions []AutomationDecision
 
 	for _, reading := range payload.Readings {
-		// Fetch the threshold for this parameter
+		// Always update daily summary regardless of threshold existence
+		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
+
+		// Fetch the threshold for this parameter to see if automation is needed
 		var t Threshold
 		err := h.db().QueryRow(
 			`SELECT id, min_value, max_value, is_enabled FROM analytics.thresholds WHERE parameter_id=$1 AND is_enabled=true`,
 			reading.ParameterID,
 		).Scan(&t.ID, &t.MinValue, &t.MaxValue, &t.IsEnabled)
+
 		if err != nil {
-			// No threshold defined — skip
+			// No threshold defined or disabled — skip automation logic but data was summarized
+			log.Printf("[DEBUG] ProcessIngest: no active threshold for %s", reading.ParameterID)
 			continue
 		}
 
@@ -369,7 +374,6 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 
 		if actionToTake == "" {
 			log.Printf("[INFO] Ingest: param=%s value=%.2f is NORMAL", reading.ParameterID, reading.Value)
-			h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
 			continue
 		}
 
@@ -377,15 +381,14 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 		scaleFactor := h.getWeatherScaleFactor()
 
 		// Fetch automation rules for this threshold
-		rules, _ := h.db().Query(
+		rules, err := h.db().Query(
 			`SELECT equipment_id, low_action, high_action FROM analytics.automation_rules WHERE threshold_id=$1`,
 			t.ID,
 		)
-		if rules != nil {
-			defer rules.Close()
+		if err == nil && rules != nil {
 			for rules.Next() {
 				var equipID, lowAction, highAction string
-				if rules.Scan(&equipID, &lowAction, &highAction) != nil {
+				if err := rules.Scan(&equipID, &lowAction, &highAction); err != nil {
 					continue
 				}
 				action := lowAction
@@ -402,9 +405,8 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 				// Publish notification for the event
 				go h.publishAutomationNotification(payload.SensorID, reading.ParameterID, equipID, reading.Value, action, reason, scaleFactor)
 			}
+			rules.Close() // Close immediately to avoid cursor leak
 		}
-
-		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
 	}
 
 	return decisions, nil
@@ -510,12 +512,13 @@ func (h *Handler) GetEquipmentAnalytics(c *gin.Context) {
 func (h *Handler) updateDailySummary(paramID string, value float64, ts time.Time) {
 	date := ts.UTC().Truncate(24 * time.Hour)
 	_, err := h.db().Exec(`
-		INSERT INTO analytics.daily_summaries (parameter_id, avg_value, min_recorded, max_recorded, date)
-		VALUES ($1, $2, $2, $2, $3)
+		INSERT INTO analytics.daily_summaries (parameter_id, avg_value, min_recorded, max_recorded, reading_count, date)
+		VALUES ($1, $2, $2, $2, 1, $3)
 		ON CONFLICT (parameter_id, date) DO UPDATE SET
-			avg_value    = (analytics.daily_summaries.avg_value + EXCLUDED.avg_value) / 2,
+			avg_value    = (analytics.daily_summaries.avg_value * analytics.daily_summaries.reading_count + EXCLUDED.avg_value) / (analytics.daily_summaries.reading_count + 1),
 			min_recorded = LEAST(analytics.daily_summaries.min_recorded, EXCLUDED.min_recorded),
-			max_recorded = GREATEST(analytics.daily_summaries.max_recorded, EXCLUDED.max_recorded)
+			max_recorded = GREATEST(analytics.daily_summaries.max_recorded, EXCLUDED.max_recorded),
+			reading_count = analytics.daily_summaries.reading_count + 1
 	`, paramID, value, date)
 	if err != nil {
 		log.Printf("[WARN] updateDailySummary: %v", err)

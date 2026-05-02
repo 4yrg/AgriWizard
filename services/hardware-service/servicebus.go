@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 )
@@ -21,27 +23,30 @@ func NewAzureServiceBusPublisher(connectionString, topicName string) (*AzureServ
 		return &AzureServiceBusPublisher{connected: false}, nil
 	}
 
-	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus client: %v", err)
-		return &AzureServiceBusPublisher{connected: false}, nil
+	var client *azservicebus.Client
+	var err error
+	for i := 0; i < 10; i++ {
+		client, err = azservicebus.NewClientFromConnectionString(connectionString, nil)
+		if err == nil {
+			sender, err := client.NewSender(topicName, nil)
+			if err == nil {
+				log.Printf("[INFO] Azure Service Bus publisher connected, topic: %s", topicName)
+				return &AzureServiceBusPublisher{
+					client:    client,
+					topicName: topicName,
+					sender:    sender,
+					connected: true,
+				}, nil
+			}
+			log.Printf("[WARN] Failed to create Service Bus sender (attempt %d/10): %v", i+1, err)
+			client.Close(context.TODO())
+		} else {
+			log.Printf("[WARN] Failed to create Service Bus client (attempt %d/10): %v", i+1, err)
+		}
+		time.Sleep(5 * time.Second)
 	}
 
-	sender, err := client.NewSender(topicName, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus sender: %v", err)
-		client.Close(context.TODO())
-		return &AzureServiceBusPublisher{connected: false}, nil
-	}
-
-	log.Printf("[INFO] Azure Service Bus publisher connected, topic: %s", topicName)
-
-	return &AzureServiceBusPublisher{
-		client:    client,
-		topicName: topicName,
-		sender:    sender,
-		connected: true,
-	}, nil
+	return &AzureServiceBusPublisher{connected: false}, fmt.Errorf("failed to connect to Azure Service Bus after 10 attempts: %v", err)
 }
 
 func (p *AzureServiceBusPublisher) PublishTelemetry(ctx context.Context, event TelemetryEvent) error {
@@ -121,27 +126,30 @@ func NewAzureServiceBusNotificationPublisher(connectionString, topicName string)
 		return &AzureServiceBusNotificationPublisher{connected: false}, nil
 	}
 
-	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus notification client: %v", err)
-		return &AzureServiceBusNotificationPublisher{connected: false}, nil
+	var client *azservicebus.Client
+	var err error
+	for i := 0; i < 10; i++ {
+		client, err = azservicebus.NewClientFromConnectionString(connectionString, nil)
+		if err == nil {
+			sender, err := client.NewSender(topicName, nil)
+			if err == nil {
+				log.Printf("[INFO] Azure Service Bus notification publisher ready, topic: %s", topicName)
+				return &AzureServiceBusNotificationPublisher{
+					client:    client,
+					topicName: topicName,
+					connected: true,
+					sender:    sender,
+				}, nil
+			}
+			log.Printf("[WARN] Failed to create Service Bus notification sender (attempt %d/10): %v", i+1, err)
+			client.Close(context.TODO())
+		} else {
+			log.Printf("[WARN] Failed to create Service Bus notification client (attempt %d/10): %v", i+1, err)
+		}
+		time.Sleep(5 * time.Second)
 	}
 
-	sender, err := client.NewSender(topicName, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus notification sender: %v", err)
-		client.Close(context.TODO())
-		return &AzureServiceBusNotificationPublisher{connected: false}, nil
-	}
-
-	log.Printf("[INFO] Azure Service Bus notification publisher ready, topic: %s", topicName)
-
-	return &AzureServiceBusNotificationPublisher{
-		client:    client,
-		topicName: topicName,
-		connected: true,
-		sender:    sender,
-	}, nil
+	return &AzureServiceBusNotificationPublisher{connected: false}, fmt.Errorf("failed to connect to Azure Service Bus notification after 10 attempts: %v", err)
 }
 
 func (p *AzureServiceBusNotificationPublisher) PublishNotification(ctx context.Context, req NotificationRequest) error {
