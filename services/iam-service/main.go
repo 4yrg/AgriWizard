@@ -25,6 +25,7 @@ type DBStatus struct {
 }
 
 var sbNotificationPublisher *AzureServiceBusNotificationPublisher
+var notificationServiceURL string
 
 func (s *DBStatus) GetDB() *sql.DB {
 	s.mu.RLock()
@@ -107,6 +108,7 @@ func main() {
 	// --- Service Bus Setup ---
 	serviceBusConnection := getServiceBusConnection()
 	serviceBusNotificationsTopic := getServiceBusNotificationsTopic()
+	notificationServiceURL = getEnv("NOTIFICATION_SERVICE_URL", "http://notification-service:8091")
 
 	sbNotificationPublisher, err = NewAzureServiceBusNotificationPublisher(serviceBusConnection, serviceBusNotificationsTopic)
 	if err != nil {

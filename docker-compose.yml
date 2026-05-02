@@ -78,6 +78,7 @@ services:
       SERVICE_BUS_CONNECTION: "${SERVICE_BUS_CONNECTION:-}"
       SERVICE_BUS_NOTIFICATIONS_TOPIC: "notifications"
       SERVICE_BUS_NOTIFICATION_RECIPIENT: "admin@agriwizard.local"
+      NOTIFICATION_SERVICE_URL: "http://notification-service:8091"
     networks:
       - agriwizard-net
     ports:

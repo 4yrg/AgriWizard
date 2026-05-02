@@ -664,6 +664,53 @@ jobs:
               smtp-username="${{ secrets.SMTP_USER }}" \
               service-bus-connection="${SB_CONN_STR}"
 
+          # Build per-service env vars
+          NOTIFICATION_SERVICE_FQDN="http://notification-prod.${FQDN_SUFFIX}"
+          EXTRA_ENV_VARS=""
+          case "${{ matrix.service }}" in
+            iam)
+              EXTRA_ENV_VARS="NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_FQDN}"
+              ;;
+            notification)
+              EXTRA_ENV_VARS="SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_FROM=jsamuditha@gmail.com"
+              ;;
+          esac
+
+          ENV_VARS="--set-env-vars \
+              PORT=${{ matrix.port }} \
+              DB_HOST=${DB_HOST} \
+              DB_PORT=${DB_PORT} \
+              DB_USER=${DB_USER} \
+              DB_NAME=${DB_NAME} \
+              DB_SSLMODE=${DB_SSLMODE} \
+              DB_PASSWORD=secretref:db-password \
+              JWT_SECRET=secretref:jwt-secret \
+              JWT_ISSUER=${JWT_ISSUER} \
+              MQTT_BROKER=${MQTT_BROKER} \
+              MQTT_USERNAME=${MQTT_USERNAME} \
+              MQTT_PASSWORD=secretref:mqtt-password \
+              OWM_BASE_URL=${OWM_BASE_URL} \
+              OWM_API_KEY=secretref:owm-api-key \
+              LOCATION_LAT=${LOCATION_LAT} \
+              LOCATION_LON=${LOCATION_LON} \
+              LOCATION_CITY=${LOCATION_CITY} \
+              USE_MOCK=${USE_MOCK} \
+              SERVICE_BUS_CONNECTION=secretref:service-bus-connection \
+              SMTP_PASSWORD=secretref:smtp-password \
+              SMTP_USERNAME=secretref:smtp-username \
+              NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+              NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH} \
+              IAM_SERVICE_HOST=iam-prod.${FQDN_SUFFIX} \
+              HARDWARE_SERVICE_HOST=hardware-prod.${FQDN_SUFFIX} \
+              ANALYTICS_SERVICE_HOST=analytics-prod.${FQDN_SUFFIX} \
+              WEATHER_SERVICE_HOST=weather-prod.${FQDN_SUFFIX} \
+              NOTIFICATION_SERVICE_HOST=notification-prod.${FQDN_SUFFIX}"
+
+          # Append per-service env vars if any
+          if [ -n "${EXTRA_ENV_VARS}" ]; then
+            ENV_VARS="${ENV_VARS} ${EXTRA_ENV_VARS}"
+          fi
+
           az containerapp update \
             --name "${APP_NAME}" \
             --resource-group "${ACA_RESOURCE_GROUP}" \
@@ -673,35 +720,7 @@ jobs:
             --min-replicas "${MIN_REPLICAS}" \
             --max-replicas "${MAX_REPLICAS}" \
             --only-show-errors \
-            --set-env-vars \
-              PORT="${{ matrix.port }}" \
-              DB_HOST="${DB_HOST}" \
-              DB_PORT="${DB_PORT}" \
-              DB_USER="${DB_USER}" \
-              DB_NAME="${DB_NAME}" \
-              DB_SSLMODE="${DB_SSLMODE}" \
-              JWT_ISSUER="${JWT_ISSUER}" \
-              OWM_BASE_URL="${OWM_BASE_URL}" \
-              LOCATION_LAT="${LOCATION_LAT}" \
-              LOCATION_LON="${LOCATION_LON}" \
-              LOCATION_CITY="${LOCATION_CITY}" \
-              USE_MOCK="${USE_MOCK}" \
-              MQTT_BROKER="${MQTT_BROKER}" \
-              MQTT_USERNAME="${MQTT_USERNAME}" \
-              NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
-              NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
-              DB_PASSWORD=secretref:db-password \
-              JWT_SECRET=secretref:jwt-secret \
-              MQTT_PASSWORD=secretref:mqtt-password \
-              OWM_API_KEY=secretref:owm-api-key \
-              SMTP_PASSWORD=secretref:smtp-password \
-              SMTP_USERNAME=secretref:smtp-username \
-              SERVICE_BUS_CONNECTION=secretref:service-bus-connection \
-              IAM_SERVICE_HOST="iam-prod.${FQDN_SUFFIX}" \
-              HARDWARE_SERVICE_HOST="hardware-prod.${FQDN_SUFFIX}" \
-              ANALYTICS_SERVICE_HOST="analytics-prod.${FQDN_SUFFIX}" \
-              WEATHER_SERVICE_HOST="weather-prod.${FQDN_SUFFIX}" \
-              NOTIFICATION_SERVICE_HOST="notification-prod.${FQDN_SUFFIX}"
+            ${ENV_VARS}
 
           INGRESS_TYPE="internal"
           if [ "${{ matrix.service }}" == "gateway" ]; then

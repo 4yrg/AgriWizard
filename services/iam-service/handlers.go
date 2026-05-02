@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -377,16 +379,10 @@ func AdminOnly() gin.HandlerFunc {
 	}
 }
 
-// sendNotification is a helper to send notifications via Service Bus
+// sendNotification sends a notification by calling the notification service
+// directly via HTTP. If the HTTP call fails and Service Bus is connected,
+// it falls back to publishing via Service Bus.
 func (h *Handler) sendNotification(recipient, subject, body string, metadata map[string]string) {
-	if h.sbNotificationPublisher == nil || !h.sbNotificationPublisher.IsConnected() {
-		log.Printf("[WARN] Service Bus not connected, skipping notification to %s: %s", recipient, subject)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	req := NotificationRequest{
 		Channel:   "email",
 		Recipient: recipient,
@@ -395,9 +391,49 @@ func (h *Handler) sendNotification(recipient, subject, body string, metadata map
 		Metadata:  metadata,
 	}
 
-	if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
-		log.Printf("[WARN] Failed to send notification to %s: %v", recipient, err)
+	if err := h.sendNotificationHTTP(req); err != nil {
+		log.Printf("[WARN] HTTP notification call failed for %s: %v", recipient, err)
+		if h.sbNotificationPublisher != nil && h.sbNotificationPublisher.IsConnected() {
+			log.Printf("[INFO] Falling back to Service Bus for notification to %s", recipient)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := h.sbNotificationPublisher.PublishNotification(ctx, req); err != nil {
+				log.Printf("[WARN] Service Bus fallback also failed for %s: %v", recipient, err)
+			} else {
+				log.Printf("[INFO] Service Bus fallback notification sent to %s: %s", recipient, subject)
+			}
+		} else {
+			log.Printf("[WARN] No Service Bus fallback available, notification to %s lost: %s", recipient, subject)
+		}
 	} else {
-		log.Printf("[INFO] Notification sent to %s: %s", recipient, subject)
+		log.Printf("[INFO] Notification sent via HTTP to %s: %s", recipient, subject)
 	}
+}
+
+func (h *Handler) sendNotificationHTTP(req NotificationRequest) error {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal notification: %w", err)
+	}
+
+	url := notificationServiceURL + "/api/v1/notifications/send"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("http call: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("notification service returned status %d", resp.StatusCode)
+	}
+	return nil
 }
