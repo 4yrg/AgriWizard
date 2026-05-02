@@ -33,7 +33,7 @@
             { "name": "PORT", "value": "8086" },
             { "name": "JWT_TTL_HOURS", "value": "24" },
             { "name": "DB_SSLMODE", "value": "require" },
-            { "name": "NOTIFICATION_SERVICE_URL", "value": "http://notification-prod:8091" }
+            { "name": "NOTIFICATION_SERVICE_URL", "value": "https://notification-prod:8091" }
           ]
         },
         {

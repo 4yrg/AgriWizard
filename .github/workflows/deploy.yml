@@ -665,7 +665,7 @@ jobs:
               service-bus-connection="${SB_CONN_STR}"
 
           # Build per-service env vars
-          NOTIFICATION_SERVICE_FQDN="http://notification-prod.${FQDN_SUFFIX}"
+          NOTIFICATION_SERVICE_FQDN="https://notification-prod.${FQDN_SUFFIX}"
           EXTRA_ENV_VARS=""
           case "${{ matrix.service }}" in
             iam)
