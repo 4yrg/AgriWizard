@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   Shield,
   ArrowRight,
 } from "lucide-react";
+import funnyPhoto from "../bilal.png";
 
 const features = [
   {
@@ -98,6 +100,15 @@ export default function LandingPage() {
             <Button size="lg" variant="outline" asChild>
               <Link href="/login">Sign in to Dashboard</Link>
             </Button>
+          </div>
+          <div className="mt-10 flex justify-center">
+            <Image
+              src={funnyPhoto}
+              alt="Funny team moment"
+              className="rounded-xl border"
+              width={260}
+              priority
+            />
           </div>
         </div>
       </section>
