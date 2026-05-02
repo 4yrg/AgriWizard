@@ -345,6 +345,11 @@ func (h *Handler) ProcessIngest(payload IngestPayload) ([]AutomationDecision, er
 	var decisions []AutomationDecision
 
 	for _, reading := range payload.Readings {
+		// Store telemetry to database for decision summary to show current values
+		if err := h.storeTelemetry(payload.SensorID, reading.ParameterID, reading.Value, payload.Timestamp); err != nil {
+			log.Printf("[WARN] ProcessIngest: failed to store telemetry: %v", err)
+		}
+
 		// Always update daily summary regardless of threshold existence
 		h.updateDailySummary(reading.ParameterID, reading.Value, payload.Timestamp)
 
@@ -523,6 +528,23 @@ func (h *Handler) updateDailySummary(paramID string, value float64, ts time.Time
 	if err != nil {
 		log.Printf("[WARN] updateDailySummary: %v", err)
 	}
+}
+
+// storeTelemetry stores raw sensor data to the hardware schema.
+// This enables the decision summary to show current values.
+func (h *Handler) storeTelemetry(sensorID, parameterID string, value float64, ts time.Time) error {
+	if ts.IsZero() {
+		ts = time.Now().UTC()
+	}
+	_, err := h.db().Exec(`
+		INSERT INTO hardware.raw_sensor_data (sensor_id, parameter_id, value, timestamp)
+		VALUES ($1, $2, $3, $4)
+	`, sensorID, parameterID, value, ts)
+	if err != nil {
+		return err
+	}
+	log.Printf("[DEBUG] storeTelemetry: stored sensor=%s param=%s value=%.2f", sensorID, parameterID, value)
+	return nil
 }
 
 // getWeatherScaleFactor calls the Weather service for an irrigation scale factor.

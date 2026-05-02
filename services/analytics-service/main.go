@@ -155,18 +155,7 @@ func main() {
 		}()
 	}
 
-	// Start Azure Service Bus consumer in background
-	if sbConsumer != nil && sbConsumer.IsConnected() {
-		go func() {
-			<-sbConsumer.Ready()
-			log.Println("[INFO] Azure Service Bus consumer ready")
-			if err := sbConsumer.Start(context.Background()); err != nil {
-				log.Printf("[ERROR] Azure Service Bus consumer error: %v", err)
-			}
-		}()
-	}
-
-	// Connect to database in background
+	// Connect to database in background, then start consumers AFTER DB is ready
 	go func() {
 		for {
 			db, err := connectDB(dsn)
@@ -188,6 +177,20 @@ func main() {
 			status.SetReady(db)
 			status.SetMigrated()
 			log.Println("[INFO] Analytics Service fully ready")
+
+			// Start Azure Service Bus consumer ONLY after DB is ready
+			log.Printf("[DEBUG] Starting SB consumer check: sbConsumer=%v, IsConnected=%v", sbConsumer != nil, sbConsumer != nil && sbConsumer.IsConnected())
+			if sbConsumer != nil && sbConsumer.IsConnected() {
+				log.Println("[DEBUG] Calling sbConsumer.Start() directly after DB is ready")
+				go func() {
+					if err := sbConsumer.Start(context.Background()); err != nil {
+						log.Printf("[ERROR] Azure Service Bus consumer error: %v", err)
+					}
+				}()
+			} else {
+				log.Println("[WARN] SB consumer not connected, skipping consumer start")
+			}
+
 			return
 		}
 	}()
@@ -285,11 +288,56 @@ func runMigrations(db *sql.DB) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_equip_analysis_date ON analytics.equipment_analysis(date DESC);
+
+	-- Hardware schema tables needed for analytics
+	CREATE SCHEMA IF NOT EXISTS hardware;
+
+	CREATE TABLE IF NOT EXISTS hardware.raw_sensor_data (
+		id          SERIAL PRIMARY KEY,
+		sensor_id   TEXT NOT NULL,
+		parameter_id TEXT NOT NULL,
+		value       DOUBLE PRECISION NOT NULL,
+		timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_raw_sensor_data_parameter_id ON hardware.raw_sensor_data(parameter_id);
+	CREATE INDEX IF NOT EXISTS idx_raw_sensor_data_timestamp ON hardware.raw_sensor_data(timestamp DESC);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return fmt.Errorf("analytics migration: %w", err)
 	}
 	log.Println("[INFO] Analytics migrations applied")
+
+	if err := seedDefaultThresholds(db); err != nil {
+		log.Printf("[WARN] Seed thresholds failed: %v (non-fatal)", err)
+	}
+
+	return nil
+}
+
+func seedDefaultThresholds(db *sql.DB) error {
+	defaultThresholds := []struct {
+		parameterID string
+		minValue     float64
+		maxValue     float64
+	}{
+		{"air_temp_c", 20.0, 35.0},
+		{"air_humidity_pct", 40.0, 80.0},
+		{"soil_moisture_pct", 30.0, 70.0},
+	}
+
+	for _, t := range defaultThresholds {
+		_, err := db.Exec(`
+			INSERT INTO analytics.thresholds (id, parameter_id, min_value, max_value, is_enabled, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, true, NOW(), NOW())
+			ON CONFLICT (parameter_id) DO NOTHING
+		`, "default-"+t.parameterID, t.parameterID, t.minValue, t.maxValue)
+		if err != nil {
+			return err
+		}
+		log.Printf("[INFO] Seeded threshold: %s (%.1f - %.1f)", t.parameterID, t.minValue, t.maxValue)
+	}
+
 	return nil
 }
 
