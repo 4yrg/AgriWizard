@@ -40,13 +40,9 @@ http {
             return 302 /health;
         }
 
-        location = /api/v1/iam {
-            return 301 /api/v1/iam/;
-        }
-
-        location ^~ /api/v1/iam/ {
+        location ^~ /api/v1/iam {
             rewrite ^/api/v1/iam/health/?$ /health break;
-            proxy_pass https://${IAM_SERVICE_HOST};
+            proxy_pass ${IAM_SERVICE_PROTOCOL}://${IAM_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
@@ -79,13 +75,9 @@ http {
             ${IAM_SSL_CONFIG}
         }
 
-        location = /api/v1/hardware {
-            return 301 /api/v1/hardware/;
-        }
-
-        location ^~ /api/v1/hardware/ {
+        location ^~ /api/v1/hardware {
             rewrite ^/api/v1/hardware/health/?$ /health break;
-            proxy_pass https://${HARDWARE_SERVICE_HOST};
+            proxy_pass ${HARDWARE_SERVICE_PROTOCOL}://${HARDWARE_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
@@ -118,13 +110,9 @@ http {
             ${HARDWARE_SSL_CONFIG}
         }
 
-        location = /api/v1/analytics {
-            return 301 /api/v1/analytics/;
-        }
-
-        location ^~ /api/v1/analytics/ {
+        location ^~ /api/v1/analytics {
             rewrite ^/api/v1/analytics/health/?$ /health break;
-            proxy_pass https://${ANALYTICS_SERVICE_HOST};
+            proxy_pass ${ANALYTICS_SERVICE_PROTOCOL}://${ANALYTICS_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
@@ -157,13 +145,9 @@ http {
             ${ANALYTICS_SSL_CONFIG}
         }
 
-        location = /api/v1/weather {
-            return 301 /api/v1/weather/;
-        }
-
-        location ^~ /api/v1/weather/ {
+        location ^~ /api/v1/weather {
             rewrite ^/api/v1/weather/health/?$ /health break;
-            proxy_pass https://${WEATHER_SERVICE_HOST};
+            proxy_pass ${WEATHER_SERVICE_PROTOCOL}://${WEATHER_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
@@ -196,13 +180,9 @@ http {
             ${WEATHER_SSL_CONFIG}
         }
 
-        location = /api/v1/notifications {
-            return 301 /api/v1/notifications/;
-        }
-
-        location ^~ /api/v1/notifications/ {
+        location ^~ /api/v1/notifications {
             rewrite ^/api/v1/notifications/health/?$ /health break;
-            proxy_pass https://${NOTIFICATION_SERVICE_HOST};
+            proxy_pass ${NOTIFICATION_SERVICE_PROTOCOL}://${NOTIFICATION_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
@@ -235,12 +215,8 @@ http {
             ${NOTIFICATION_SSL_CONFIG}
         }
 
-        location = /api/v1/templates {
-            return 301 /api/v1/templates/;
-        }
-
-        location ^~ /api/v1/templates/ {
-            proxy_pass https://${NOTIFICATION_SERVICE_HOST};
+        location ^~ /api/v1/templates {
+            proxy_pass ${NOTIFICATION_SERVICE_PROTOCOL}://${NOTIFICATION_SERVICE_HOST};
             proxy_ssl_verify off;
             proxy_ssl_server_name on;
             proxy_set_header Host $proxy_host;
