@@ -98,7 +98,7 @@ func main() {
 	}
 	if sbNotificationConsumer != nil && sbNotificationConsumer.IsConnected() {
 		go func() {
-			<-sbNotificationConsumer.Ready()
+			// Don't block on Ready() - start directly since connection already succeeded
 			log.Println("[INFO] Azure Service Bus notification consumer ready")
 			if err := sbNotificationConsumer.Start(context.Background()); err != nil {
 				log.Printf("[ERROR] Azure Service Bus notification consumer error: %v", err)

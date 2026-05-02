@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -17,7 +18,7 @@ type AzureServiceBusNotificationConsumer struct {
 	dispatcher   *Dispatcher
 	connected    bool
 	ready        chan struct{}
-	receiver     *azservicebus.Receiver
+	receiver    *azservicebus.Receiver
 }
 
 func NewAzureServiceBusNotificationConsumer(connectionString, topicName, subscription string, dispatcher *Dispatcher) (*AzureServiceBusNotificationConsumer, error) {
@@ -26,30 +27,34 @@ func NewAzureServiceBusNotificationConsumer(connectionString, topicName, subscri
 		return &AzureServiceBusNotificationConsumer{connected: false, ready: make(chan struct{})}, nil
 	}
 
-	client, err := azservicebus.NewClientFromConnectionString(connectionString, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus client: %v", err)
-		return &AzureServiceBusNotificationConsumer{connected: false, ready: make(chan struct{})}, nil
+	// Retry logic: Try 10 times with 5s backoff (matching analytics-service pattern)
+	var client *azservicebus.Client
+	var err error
+	for i := 0; i < 10; i++ {
+		client, err = azservicebus.NewClientFromConnectionString(connectionString, nil)
+		if err == nil {
+			receiver, err := client.NewReceiverForSubscription(topicName, subscription, nil)
+			if err == nil {
+				log.Printf("[INFO] Azure Service Bus notification consumer ready, topic: %s, subscription: %s", topicName, subscription)
+				return &AzureServiceBusNotificationConsumer{
+					client:       client,
+					topicName:    topicName,
+					subscription: subscription,
+					dispatcher:   dispatcher,
+					connected:    true,
+					ready:        make(chan struct{}),
+					receiver:     receiver,
+				}, nil
+			}
+			log.Printf("[WARN] Failed to create Service Bus receiver (attempt %d/10): %v", i+1, err)
+			client.Close(context.TODO())
+		} else {
+			log.Printf("[WARN] Failed to create Service Bus client (attempt %d/10): %v", i+1, err)
+		}
+		time.Sleep(5 * time.Second)
 	}
 
-	receiver, err := client.NewReceiverForSubscription(topicName, subscription, nil)
-	if err != nil {
-		log.Printf("[WARN] Failed to create Service Bus receiver: %v", err)
-		client.Close(context.TODO())
-		return &AzureServiceBusNotificationConsumer{connected: false, ready: make(chan struct{})}, nil
-	}
-
-	log.Printf("[INFO] Azure Service Bus notification consumer ready, topic: %s, subscription: %s", topicName, subscription)
-
-	return &AzureServiceBusNotificationConsumer{
-		client:       client,
-		topicName:    topicName,
-		subscription: subscription,
-		dispatcher:   dispatcher,
-		connected:    true,
-		ready:        make(chan struct{}),
-		receiver:     receiver,
-	}, nil
+	return &AzureServiceBusNotificationConsumer{connected: false, ready: make(chan struct{})}, fmt.Errorf("failed to connect to Azure Service Bus after 10 attempts: %v", err)
 }
 
 func (c *AzureServiceBusNotificationConsumer) Start(ctx context.Context) error {
@@ -59,6 +64,7 @@ func (c *AzureServiceBusNotificationConsumer) Start(ctx context.Context) error {
 		return nil
 	}
 
+	// Signal ready BEFORE entering the loop to avoid deadlock
 	close(c.ready)
 	log.Printf("[INFO] Azure Service Bus notification consumer started, listening on topic=%s subscription=%s", c.topicName, c.subscription)
 
