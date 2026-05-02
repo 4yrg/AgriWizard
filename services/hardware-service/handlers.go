@@ -689,6 +689,8 @@ func (h *Handler) handleTelemetry(_ mqtt.Client, msg mqtt.Message) {
 	if payload.Timestamp.IsZero() {
 		payload.Timestamp = time.Now().UTC()
 	}
+	// Log MQTT telemetry hit
+	log.Printf("[INFO] mqtt_telemetry_hit: sensor=%s topic=%s readings=%d", payload.SensorID, msg.Topic(), len(payload.Readings))
 	if err := h.storeTelemetry(payload); err != nil {
 		log.Printf("[ERROR] handleTelemetry: store error: %v", err)
 	}
@@ -712,11 +714,15 @@ func (h *Handler) publishTelemetryToRabbitMQ(payload TelemetryPayload) {
 		if h.rmqPublisher != nil && h.rmqPublisher.IsConnected() {
 			if err := h.rmqPublisher.PublishTelemetry(ctx, event); err != nil {
 				log.Printf("[WARN] Failed to publish telemetry to RabbitMQ: %v", err)
+			} else {
+				log.Printf("[INFO] published_to_rmq: sensor=%s param=%s value=%.2f", event.SensorID, event.ParameterID, event.Value)
 			}
 		}
 		if h.sbPublisher != nil && h.sbPublisher.IsConnected() {
 			if err := h.sbPublisher.PublishTelemetry(ctx, event); err != nil {
 				log.Printf("[WARN] Failed to publish telemetry to Service Bus: %v", err)
+			} else {
+				log.Printf("[INFO] published_to_sb: sensor=%s param=%s value=%.2f", event.SensorID, event.ParameterID, event.Value)
 			}
 		}
 	}
