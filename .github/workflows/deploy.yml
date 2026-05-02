@@ -674,6 +674,9 @@ jobs:
             notification)
               EXTRA_ENV_VARS="SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_FROM=jsamuditha@gmail.com"
               ;;
+            gateway)
+              EXTRA_ENV_VARS="IAM_SERVICE_PROTOCOL=https IAM_SSL_CONFIG= HARDWARE_SERVICE_PROTOCOL=https HARDWARE_SSL_CONFIG= ANALYTICS_SERVICE_PROTOCOL=https ANALYTICS_SSL_CONFIG= WEATHER_SERVICE_PROTOCOL=https WEATHER_SSL_CONFIG= NOTIFICATION_SERVICE_PROTOCOL=https NOTIFICATION_SSL_CONFIG="
+              ;;
           esac
 
           ENV_VARS="--set-env-vars \
