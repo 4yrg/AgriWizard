@@ -12,7 +12,6 @@ import {
   Shield,
   ArrowRight,
 } from "lucide-react";
-import funnyPhoto from "../bilal.png";
 
 const features = [
   {
@@ -101,14 +100,20 @@ export default function LandingPage() {
               <Link href="/login">Sign in to Dashboard</Link>
             </Button>
           </div>
-          <div className="mt-10 flex justify-center">
-            <Image
-              src={funnyPhoto}
-              alt="Funny team moment"
-              className="rounded-xl border"
-              width={260}
-              priority
-            />
+          <div className="mt-10 flex flex-col items-center justify-center">
+            <div className="w-[260px] h-[260px] rounded-full overflow-hidden border-4 border-primary shadow-xl">
+              <Image
+                src="/hasi.webp"
+                alt="Funny team moment"
+                className="w-full h-full object-cover animate-[spin_10s_linear_infinite]"
+                width={260}
+                height={260}
+                priority
+              />
+            </div>
+            <p className="mt-4 text-muted-foreground italic font-medium">
+              "Local toddler discovers keyboard, attempts to write code."
+            </p>
           </div>
         </div>
       </section>
