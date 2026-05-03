@@ -16,6 +16,8 @@ This document outlines the production CI/CD pipeline for the AgriWizard Smart Gr
 - **CI/CD**: GitHub Actions
 - **Auth**: OIDC Federated Identity (Secretless)
 
+# test
+
 ## Local Dev vs Production
 
 | Component | Local Development | Production (Azure) |
